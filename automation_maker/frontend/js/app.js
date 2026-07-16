@@ -4,6 +4,8 @@ import { showToast } from './components/toast.js';
 import { renderList } from './views/list.js';
 import { renderWizard } from './views/wizard.js';
 import { renderEditorForEdit } from './views/editor.js';
+import { renderRoutines } from './views/routines.js';
+import { renderSettings } from './views/settings.js';
 
 // el(tag, attrs, ...children): 유일한 DOM 생성 헬퍼.
 // 사용자 데이터는 항상 textContent(문자열 자식)로만 삽입한다(XSS 방지).
@@ -81,6 +83,18 @@ export function navigate(hash) {
   else location.hash = hash;
 }
 
+// 뷰 전환 시 정리 콜백(폴링 타이머 등)을 등록한다. 다음 라우팅 직전에 1회 호출.
+let viewCleanup = null;
+export function setViewCleanup(fn) { viewCleanup = fn; }
+
+function updateTabs(hash) {
+  const key = hash === '/settings' ? 'settings'
+    : (hash === '/ha' || hash === '/list' || hash === '/new' || hash.startsWith('/edit/')) ? 'ha'
+      : 'routines';
+  const tabs = document.querySelectorAll('#tab-bar .tab');
+  for (const a of tabs) a.classList.toggle('active', a.dataset.tab === key);
+}
+
 let bootstrapPromise = null;
 function ensureBootstrap() {
   if (store.state.bootstrap) return Promise.resolve();
@@ -101,17 +115,21 @@ function updateModeBadge() {
 
 function route() {
   const root = document.getElementById('app');
-  const hash = (location.hash || '#/list').replace(/^#/, '') || '/list';
+  const hash = (location.hash || '#/').replace(/^#/, '') || '/';
   ensureBootstrap().then(() => {
+    if (viewCleanup) { const fn = viewCleanup; viewCleanup = null; try { fn(); } catch (_) {} }
     updateModeBadge();
-    if (hash === '/list') renderList(root);
+    updateTabs(hash);
+    if (hash === '/' || hash === '') renderRoutines(root);
+    else if (hash === '/settings') renderSettings(root);
+    else if (hash === '/ha' || hash === '/list') renderList(root);
     else if (hash === '/new') renderWizard(root);
     else if (hash.startsWith('/edit/')) {
       let id;
       try { id = decodeURIComponent(hash.slice('/edit/'.length)); }
-      catch (_) { location.hash = '#/list'; return; }
+      catch (_) { location.hash = '#/ha'; return; }
       renderEditorForEdit(root, id);
-    } else { location.hash = '#/list'; }
+    } else { location.hash = '#/'; }
   }).catch(err => {
     console.error(err);
     bootstrapPromise = null;

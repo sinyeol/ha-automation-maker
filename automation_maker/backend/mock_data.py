@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import copy
+import logging
 from datetime import datetime, timezone
+
+log = logging.getLogger("automation_maker.mock")
 
 # ---------------------------------------------------------------------------
 # 레지스트리: areas (7개, area_id는 영문 slug)
@@ -85,6 +88,13 @@ _ENTITIES = [
     _ent("lock.entrance_door", "entrance", None, "현관 도어락"),
     # 사람/위치 1
     _ent("person.user", None, None, "나"),
+    # v2 골든 문장용 엔티티 (자연어 규칙 예시 문장에서 참조)
+    _ent("binary_sensor.bathroom_motion", "bathroom", None, "욕실 모션"),
+    _ent("binary_sensor.master_bedroom_motion", "master_bedroom", None, "안방 모션"),
+    _ent("fan.bathroom_fan", "bathroom", None, "욕실 환풍기"),
+    _ent("climate.living_room_ac", "living_room", None, "거실 에어컨"),
+    _ent("person.wife", None, None, "와이프"),
+    _ent("scene.sleep_mode", None, None, "슬립 모드"),
     # 미배정 엔티티 2 (area_id None, device 없음)
     _ent("switch.unassigned_relay", None, None, "미배정 릴레이"),
     _ent("sensor.unassigned_power", None, None, "미배정 전력"),
@@ -147,6 +157,17 @@ _STATES = [
     _st("cover.living_room_curtain", "closed", {"friendly_name": "거실 커튼"}),
     _st("lock.entrance_door", "locked", {"friendly_name": "현관 도어락"}),
     _st("person.user", "home", {"friendly_name": "나"}),
+    # v2 골든 문장용 엔티티 상태
+    _st("binary_sensor.bathroom_motion", "off",
+        {"friendly_name": "욕실 모션", "device_class": "motion"}),
+    _st("binary_sensor.master_bedroom_motion", "off",
+        {"friendly_name": "안방 모션", "device_class": "motion"}),
+    _st("fan.bathroom_fan", "off", {"friendly_name": "욕실 환풍기", "percentage": 0}),
+    _st("climate.living_room_ac", "off",
+        {"friendly_name": "거실 에어컨", "temperature": 24.0, "current_temperature": 26.0,
+         "fan_mode": "자동", "fan_modes": ["자동", "약풍", "강풍", "쿨파워"]}),
+    _st("person.wife", "not_home", {"friendly_name": "와이프"}),
+    _st("scene.sleep_mode", "unknown", {"friendly_name": "슬립 모드"}),
     # zone.*은 인벤토리에서 제외되지만 bootstrap의 zones 목록으로 내려간다.
     _st("zone.home", "1", {"friendly_name": "집"}),
     _st("zone.work", "0", {"friendly_name": "회사"}),
@@ -201,6 +222,9 @@ class MockHAClient:
         self._entities = copy.deepcopy(_ENTITIES)
         self._states = {s["entity_id"]: copy.deepcopy(s) for s in _STATES}
         self._automations = copy.deepcopy(_AUTOMATION_CONFIGS)
+        # v2 이벤트 소스(MockEventSource)가 구독하는 상태 변경 훅.
+        # 시그니처: (entity_id, old_state: dict|None, new_state: dict|None)
+        self.on_state_changed = None
 
     async def start(self) -> None:
         pass
@@ -248,20 +272,136 @@ class MockHAClient:
         if eid is not None:
             self._states.pop(eid, None)
 
+    # ------------------------------------------------------------------ v2 상태 훅
+    def _emit(self, entity_id: str, old_state: dict | None) -> None:
+        cb = self.on_state_changed
+        if cb is not None:
+            cb(entity_id, old_state, copy.deepcopy(self._states.get(entity_id)))
+
+    def set_state(self, entity_id: str, state: str, attributes: dict | None = None) -> None:
+        """상태 주입(§4.2). 기존 속성에 병합 후 on_state_changed 훅을 발생시킨다."""
+        prev = self._states.get(entity_id)
+        old_state = copy.deepcopy(prev) if prev is not None else None
+        attrs = dict(prev["attributes"]) if prev else {}
+        if attributes:
+            attrs.update(attributes)
+        now = datetime.now(timezone.utc).isoformat()
+        self._states[entity_id] = {
+            "entity_id": entity_id,
+            "state": state,
+            "attributes": attrs,
+            "last_changed": now,
+            "last_updated": now,
+        }
+        self._emit(entity_id, old_state)
+
     async def call_service(self, domain: str, service: str, data: dict) -> None:
-        targets = data.get("entity_id") if isinstance(data, dict) else None
+        data = data if isinstance(data, dict) else {}
+        targets = data.get("entity_id")
         if isinstance(targets, str):
             targets = [targets]
         if not targets:
+            if domain == "scene":  # target 없는 scene 호출도 로그만
+                log.info("mock scene 실행(대상 없음): %s.%s", domain, service)
             return
         for eid in targets:
             st = self._states.get(eid)
             if st is None:
                 continue
-            if domain == "automation":
-                if service == "turn_on":
-                    st["state"] = "on"
-                elif service == "turn_off":
-                    st["state"] = "off"
-                elif service == "trigger":
-                    st["attributes"]["last_triggered"] = datetime.now(timezone.utc).isoformat()
+            old_state = copy.deepcopy(st)
+            if self._reflect(domain, service, st, data):
+                now = datetime.now(timezone.utc).isoformat()
+                st["last_changed"] = now
+                st["last_updated"] = now
+                self._emit(eid, old_state)
+
+    @staticmethod
+    def _reflect(domain: str, service: str, st: dict, data: dict) -> bool:
+        """서비스 호출을 mock 상태에 반영. 상태/속성이 바뀌면 True(훅 발생)."""
+        attrs = st["attributes"]
+        if domain == "light":
+            if service == "turn_on":
+                st["state"] = "on"
+                if "brightness_pct" in data:
+                    attrs["brightness"] = round(float(data["brightness_pct"]) * 255 / 100)
+                elif "brightness" in data:
+                    attrs["brightness"] = data["brightness"]
+                return True
+            if service == "turn_off":
+                st["state"] = "off"
+                attrs["brightness"] = None
+                return True
+            if service == "toggle":
+                st["state"] = "off" if st["state"] == "on" else "on"
+                return True
+        elif domain == "switch":
+            if service in ("turn_on", "turn_off"):
+                st["state"] = "on" if service == "turn_on" else "off"
+                return True
+            if service == "toggle":
+                st["state"] = "off" if st["state"] == "on" else "on"
+                return True
+        elif domain == "fan":
+            if service in ("turn_on", "turn_off"):
+                st["state"] = "on" if service == "turn_on" else "off"
+                if service == "turn_off":
+                    attrs["percentage"] = 0
+                return True
+            if service == "toggle":
+                st["state"] = "off" if st["state"] == "on" else "on"
+                return True
+            if service == "set_percentage":
+                pct = data.get("percentage")
+                attrs["percentage"] = pct
+                st["state"] = "on" if (pct or 0) > 0 else "off"
+                return True
+        elif domain == "climate":
+            if service == "set_hvac_mode":
+                st["state"] = data.get("hvac_mode", st["state"])
+                return True
+            if service == "set_temperature" and "temperature" in data:
+                attrs["temperature"] = data["temperature"]
+                return True
+            if service == "set_fan_mode":
+                attrs["fan_mode"] = data.get("fan_mode")
+                return True
+            if service == "turn_off":
+                st["state"] = "off"
+                return True
+        elif domain == "media_player":
+            mapping = {"turn_on": "on", "turn_off": "off", "media_play": "playing",
+                       "media_pause": "paused", "media_stop": "idle"}
+            if service in mapping:
+                st["state"] = mapping[service]
+                return True
+            if service == "volume_set":
+                attrs["volume_level"] = data.get("volume_level")
+                return True
+        elif domain == "lock":
+            if service in ("lock", "unlock"):
+                st["state"] = "locked" if service == "lock" else "unlocked"
+                return True
+        elif domain == "cover":
+            if service in ("open_cover", "close_cover"):
+                st["state"] = "open" if service == "open_cover" else "closed"
+                return True
+            if service == "set_cover_position":
+                pos = data.get("position")
+                attrs["current_position"] = pos
+                st["state"] = "closed" if (pos or 0) == 0 else "open"
+                return True
+        elif domain == "scene":
+            # scene.turn_on 은 상태 반영 없이 로그만 (§8.2)
+            log.info("mock scene 실행: %s.%s", domain, service)
+            return False
+        elif domain == "automation":
+            if service == "turn_on":
+                st["state"] = "on"
+                return True
+            if service == "turn_off":
+                st["state"] = "off"
+                return True
+            if service == "trigger":
+                attrs["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                return True
+        return False

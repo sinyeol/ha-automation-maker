@@ -79,3 +79,163 @@ def valid_model_payload():
                       "target": {"entity_id": ["light.kitchen"]}}],
         )
     }
+
+
+# ===========================================================================
+# v2 픽스처 (SPEC-V2). 자체 규칙 엔진 + 한국어 파서용.
+#
+# 통합(app.py/mock_data.py) 이 아직 배선되지 않아도 v2 테스트가 폐루프로 돌 수 있도록,
+# §4.2/§8.2 훅(set_state·on_state_changed·call_service 상태 반영)을 구현한 테스트용
+# MockHAClient 확장과, register_v2_routes 로 배선한 aiohttp 앱 팩토리를 제공한다.
+# 통합 완료 후에는 실제 create_app 배선으로 교체 가능하다.
+# ===========================================================================
+import copy as _copy
+from datetime import datetime as _dt, timezone as _tz
+
+
+# v2 기본 설정 (persons/modes/near_home). 파서·gazetteer 가 공유한다.
+DEFAULT_V2_SETTINGS = {
+    "segments": {"dawn": "00:00", "morning": "06:00", "day": "09:00",
+                 "evening": "17:00", "night": "21:00"},
+    "persons": {"나": "person.user"},
+    "modes": {},
+    "near_home": {"zone_state": "home"},
+    "aliases": [],
+}
+
+
+def _v2_reflect(client, domain, service, eid, data):
+    """§8.2 표준 서비스 → mock 상태 반영. scene 은 no-op."""
+    if service in ("turn_on", "turn_off") and domain in (
+            "light", "switch", "fan", "media_player", "input_boolean"):
+        attrs = {}
+        if domain == "light" and service == "turn_on" and data.get("brightness_pct"):
+            attrs["brightness"] = round(data["brightness_pct"] * 255 / 100)
+        if domain == "fan" and service == "turn_on" and data.get("percentage") is not None:
+            attrs["percentage"] = data["percentage"]
+        client.set_state(eid, "on" if service == "turn_on" else "off", attrs or None)
+    elif domain == "climate" and service in ("turn_on", "turn_off"):
+        client.set_state(eid, "heat" if service == "turn_on" else "off")
+    elif domain == "cover":
+        client.set_state(eid, "open" if service == "open_cover" else "closed")
+    elif domain == "lock":
+        client.set_state(eid, "locked" if service == "lock" else "unlocked")
+
+
+def make_v2_client():
+    """§4.2/§8.2 훅을 구현한 테스트용 MockHAClient 확장 클래스 인스턴스."""
+    from backend.mock_data import MockHAClient
+
+    class V2TestHAClient(MockHAClient):
+        def __init__(self):
+            super().__init__()
+            self.on_state_changed = None
+            self.service_calls = []
+
+        def set_state(self, entity_id, state, attributes=None):
+            prev = self._states.get(entity_id)
+            old = _copy.deepcopy(prev) if prev else None
+            attrs = dict((prev or {}).get("attributes") or {})
+            if attributes:
+                attrs.update(attributes)
+            now = _dt.now(_tz.utc).isoformat()
+            new = {"entity_id": entity_id, "state": state, "attributes": attrs,
+                   "last_changed": now, "last_updated": now}
+            self._states[entity_id] = new
+            cb = self.on_state_changed
+            if cb is not None:
+                cb(entity_id, old, _copy.deepcopy(new))
+
+        async def call_service(self, domain, service, data):
+            self.service_calls.append((domain, service, dict(data or {})))
+            await super().call_service(domain, service, data)  # automation 도메인 처리
+            targets = data.get("entity_id") if isinstance(data, dict) else None
+            if isinstance(targets, str):
+                targets = [targets]
+            for eid in (targets or []):
+                _v2_reflect(self, domain, service, eid, data or {})
+
+    return V2TestHAClient()
+
+
+@pytest.fixture
+def v2_data_dir(tmp_path, monkeypatch):
+    """엔진/스토어가 쓰는 DATA_DIR 을 임시 디렉터리로 격리한다."""
+    d = tmp_path / "devdata"
+    d.mkdir()
+    monkeypatch.setenv("DATA_DIR", str(d))
+    return d
+
+
+@pytest.fixture
+def make_v2_app(v2_data_dir, monkeypatch):
+    """register_v2_routes 로 배선된 DEV 앱을 만드는 팩토리.
+
+    반환된 app 의 app["ha"] 로 V2TestHAClient 에 접근해 mock 상태를 검증할 수 있다.
+    """
+    def _make(settings=None):
+        from aiohttp import web
+        from backend.api_v2 import register_v2_routes
+        from backend.app import extract_zones
+        from backend.ha_client import merge_inventory
+        from backend.engine.storage import JsonStore
+        from backend.engine.state_cache import StateCache
+        from backend.engine.variables import GlobalVars
+        from backend.engine.rule_store import RuleStore
+        from backend.engine.runlog import RunLog
+        from backend.engine.engine import RuleEngine
+        from backend.engine.event_source import MockEventSource
+        from backend.nl.gazetteer import Gazetteer
+
+        monkeypatch.setenv("DEV_MODE", "1")
+        ha = make_v2_client()
+        cfg = _copy.deepcopy(settings) if settings is not None \
+            else _copy.deepcopy(DEFAULT_V2_SETTINGS)
+
+        app = web.Application()
+        app["ha"] = ha
+        app["dev_mode"] = True
+        app["mode"] = "dev"
+        app["inventory"] = {"areas": [], "entities": [], "zones": []}
+
+        settings_store = JsonStore(v2_data_dir / "settings.json", cfg)
+        app["settings_store"] = settings_store
+        global_vars = GlobalVars(settings_store.data)
+        app["global_vars"] = global_vars
+
+        def _gazetteer_fn():
+            # 시작된 앱의 상태 변경 경고를 피하려고 app[...] 대신 반환값만 사용한다.
+            return Gazetteer.build(app["inventory"], settings_store.data)
+        app["gazetteer_fn"] = _gazetteer_fn
+
+        rule_store = RuleStore(JsonStore(v2_data_dir / "rules.json", []))
+        runlog = RunLog(JsonStore(v2_data_dir / "runlog.json", []))
+        cache = StateCache()
+        app["rule_store"] = rule_store
+        app["runlog"] = runlog
+        engine = RuleEngine(rule_store, cache, global_vars, ha,
+                            lambda: app["inventory"], runlog)
+        app["engine"] = engine
+        event_source = MockEventSource(ha)
+        app["event_source"] = event_source
+
+        register_v2_routes(app)
+
+        async def _on_startup(app):
+            await ha.start()
+            reg = await ha.fetch_registries()
+            states = await ha.get_states()
+            inv = merge_inventory(reg["areas"], reg["devices"], reg["entities"], states)
+            app["inventory"] = {"areas": inv["areas"], "entities": inv["entities"],
+                                "zones": extract_zones(states)}
+            _gazetteer_fn()
+            await engine.start(event_source)
+
+        async def _on_cleanup(app):
+            await engine.stop()
+            await ha.close()
+
+        app.on_startup.append(_on_startup)
+        app.on_cleanup.append(_on_cleanup)
+        return app
+    return _make

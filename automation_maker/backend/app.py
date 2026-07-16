@@ -11,12 +11,21 @@ from uuid import uuid4
 import aiohttp
 from aiohttp import web
 
+from backend.api_v2 import register_v2_routes
 from backend.automation_builder import (
     KNOWN_SERVICES, ValidationError, build_automation, summarize, to_yaml, validate_model,
 )
+from backend.engine.engine import RuleEngine
+from backend.engine.event_source import HAEventSource, MockEventSource
+from backend.engine.rule_store import RuleStore
+from backend.engine.runlog import RunLog
+from backend.engine.state_cache import StateCache
+from backend.engine.storage import JsonStore, data_dir
+from backend.engine.variables import GlobalVars
 from backend.ha_client import HAClient, merge_inventory
+from backend.nl.gazetteer import Gazetteer
 
-VERSION = "1.0.0"
+VERSION = "2.0.0"
 FRONTEND = Path(__file__).parent.parent / "frontend"
 ALLOWED_REMOTES = {"172.30.32.2", "127.0.0.1"}
 
@@ -88,6 +97,43 @@ def extract_zones(states: list[dict]) -> list[dict]:
         out.append({"entity_id": eid, "name": attrs.get("friendly_name") or eid})
     out.sort(key=lambda z: z["name"])
     return out
+
+
+# ---------------------------------------------------------------------------
+# v2 엔진 배선 헬퍼 (§8)
+# ---------------------------------------------------------------------------
+def _default_settings() -> dict:
+    """settings.json 기본값 (§5). API 키는 환경에서만 읽으므로 여기 두지 않는다.
+
+    persons/modes 기본값은 DEV mock 인벤토리(person.wife·scene.sleep_mode)에 맞춰
+    두어 DEV_MODE에서 예시 문장이 즉시 동작하게 한다(§11). 실기기 사용자는 설정에서 수정.
+    """
+    return {
+        "segments": {"dawn": "00:00", "morning": "06:00", "day": "09:00",
+                     "evening": "17:00", "night": "21:00"},
+        "persons": {"나": "person.user", "와이프": "person.wife"},
+        "modes": {"슬립 모드": {"action": "scene.turn_on",
+                              "target": {"entity_id": ["scene.sleep_mode"]}}},
+        "near_home": {"zone_state": "home", "note": "사람 엔티티가 이 상태면 '집 근처'"},
+        "aliases": [],
+        "confirm_actions": ["lock", "valve"],
+        "llm": {"enabled": False},
+    }
+
+
+def _merge_settings_defaults(settings: dict) -> None:
+    """로드된 설정에 빠진 최상위 기본 키를 채운다(인플레이스)."""
+    for key, val in _default_settings().items():
+        settings.setdefault(key, val)
+
+
+async def _build_inventory(ha) -> dict:
+    """bootstrap 형태 인벤토리 {areas, entities, zones}. gazetteer·엔진 스코프 공용."""
+    reg = await ha.fetch_registries()
+    states = await ha.get_states()
+    inv = merge_inventory(reg["areas"], reg["devices"], reg["entities"], states)
+    inv["zones"] = extract_zones(states)
+    return inv
 
 
 # ---------------------------------------------------------------------------
@@ -270,11 +316,17 @@ async def handle_preview(request: web.Request) -> web.Response:
 # ---------------------------------------------------------------------------
 def create_app(ha: "HAClient") -> web.Application:
     dev_mode = os.environ.get("DEV_MODE") == "1"
+    # 실기기(SUPERVISOR_TOKEN 존재)가 아니면 /data 대신 ./devdata 를 쓴다
+    # (SPEC §0 DEV 기본값 + 테스트/개발 격리, .gitignore 대상).
+    if not os.environ.get("DATA_DIR") and not os.environ.get("SUPERVISOR_TOKEN"):
+        os.environ["DATA_DIR"] = os.path.abspath("devdata")
+
     app = web.Application(middlewares=[ingress_guard, error_middleware, static_cache])
     app["ha"] = ha
     app["dev_mode"] = dev_mode
     app["mode"] = "dev" if dev_mode else "ha"
 
+    # v1 라우트
     app.router.add_get("/api/health", handle_health)
     app.router.add_get("/api/bootstrap", handle_bootstrap)
     app.router.add_get("/api/automations", handle_list)
@@ -286,21 +338,90 @@ def create_app(ha: "HAClient") -> web.Application:
     app.router.add_post("/api/automations/{id}/run", handle_run)
     app.router.add_post("/api/preview", handle_preview)
 
+    # v2 라우트 (핸들러는 요청 시점에 app[...] 배선을 읽으므로 여기서 등록만)
+    register_v2_routes(app)
+
     app.router.add_get("/", handle_index)
     if (FRONTEND / "css").is_dir():
         app.router.add_static("/css/", FRONTEND / "css")
     if (FRONTEND / "js").is_dir():
         app.router.add_static("/js/", FRONTEND / "js")
 
-    async def _on_startup(app):
-        await app["ha"].start()
-
-    async def _on_cleanup(app):
-        await app["ha"].close()
-
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
     return app
+
+
+# ---------------------------------------------------------------------------
+# 수명주기: v2 엔진 구성요소 생성·배선·기동/정리
+# ---------------------------------------------------------------------------
+async def _on_startup(app: web.Application) -> None:
+    await app["ha"].start()
+    ha = app["ha"]
+    ddir = data_dir()
+
+    # 설정
+    settings_store = JsonStore(ddir / "settings.json", _default_settings())
+    if isinstance(settings_store.data, dict):
+        _merge_settings_defaults(settings_store.data)
+    else:
+        settings_store.data = _default_settings()
+    app["settings_store"] = settings_store
+
+    # 인벤토리(기동 시 1회) — 실패해도 엔진은 기동한다(빈 인벤토리).
+    try:
+        inventory = await _build_inventory(ha)
+    except Exception:
+        log.exception("인벤토리 초기화 실패 — 빈 인벤토리로 시작")
+        inventory = {"areas": [], "entities": [], "zones": []}
+    app["_inventory"] = inventory
+
+    # gazetteer 는 매 호출마다 현재 인벤토리+설정으로 재빌드(설정 변경 즉시 반영)
+    def gazetteer_fn():
+        return Gazetteer.build(app["_inventory"], settings_store.data)
+    app["gazetteer_fn"] = gazetteer_fn
+
+    # 전역 변수는 settings dict 참조를 공유(인플레이스 병합으로 갱신)
+    app["global_vars"] = GlobalVars(settings_store.data)
+
+    rules_json = JsonStore(ddir / "rules.json", [])
+    rule_store = RuleStore(rules_json)
+    app["rule_store"] = rule_store
+
+    runlog_json = JsonStore(ddir / "runlog.json", [])
+    runlog = RunLog(runlog_json)
+    app["runlog"] = runlog
+    app["_json_stores"] = [settings_store, rules_json, runlog_json]
+
+    state_cache = StateCache()
+
+    def inventory_fn():
+        return app["_inventory"]
+
+    engine = RuleEngine(rule_store, state_cache, app["global_vars"], ha,
+                        inventory_fn, runlog)
+    app["engine"] = engine
+
+    event_source = MockEventSource(ha) if app["dev_mode"] else HAEventSource()
+    app["event_source"] = event_source
+
+    await engine.start(event_source)
+    log.info("v2 엔진 시작: rules=%d", len(rule_store.all()))
+
+
+async def _on_cleanup(app: web.Application) -> None:
+    engine = app.get("engine")
+    if engine is not None:
+        try:
+            await engine.stop()
+        except Exception:
+            log.exception("엔진 종료 중 오류")
+    for js in app.get("_json_stores", []):
+        try:
+            await js.flush()
+        except Exception:
+            log.exception("저장 flush 중 오류")
+    await app["ha"].close()
 
 
 def main() -> None:

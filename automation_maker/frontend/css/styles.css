@@ -10,6 +10,16 @@
   --border: #e2e5e9;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   --radius: 12px;
+  --ok: #43a047;
+  --chip-trigger: #1e88e5;
+  --chip-trigger-bg: rgba(30, 136, 229, 0.14);
+  --chip-condition: #7e57c2;
+  --chip-condition-bg: rgba(126, 87, 194, 0.14);
+  --chip-target: #43a047;
+  --chip-target-bg: rgba(67, 160, 71, 0.14);
+  --chip-value: #fb8c00;
+  --chip-value-bg: rgba(251, 140, 0, 0.16);
+  --chip-warn: #f5a623;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,6 +34,16 @@
     --danger: #ef5350;
     --border: #313840;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --ok: #66bb6a;
+    --chip-trigger: #64b5f6;
+    --chip-trigger-bg: rgba(100, 181, 246, 0.2);
+    --chip-condition: #b39ddb;
+    --chip-condition-bg: rgba(179, 157, 219, 0.2);
+    --chip-target: #81c784;
+    --chip-target-bg: rgba(129, 199, 132, 0.2);
+    --chip-value: #ffb74d;
+    --chip-value-bg: rgba(255, 183, 77, 0.2);
+    --chip-warn: #ffca28;
   }
 }
 
@@ -621,3 +641,208 @@ select.input { appearance: none; }
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast-error { background: var(--danger); color: #fff; }
+
+/* --- 탭 바 (v2) --- */
+.tab-bar {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 0 8px;
+}
+.tab {
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 8px;
+  border-bottom: 2px solid transparent;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* --- 루틴 화면 (v2) --- */
+.engine-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.status-dot.on { background: var(--ok); }
+.status-dot.off { background: var(--danger); }
+.seg-now { font-weight: 600; }
+
+.routine-compose { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.routine-textarea { min-height: 64px; }
+.compose-actions { display: flex; gap: 8px; }
+.compose-actions .btn { flex: 1; }
+.example-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip.example {
+  font-weight: 500;
+  font-size: 12px;
+  min-height: 34px;
+  padding: 6px 12px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.routines-list-title { margin: 4px 0 12px; font-size: 16px; }
+.rule-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.rule-toolbar .segment { margin-bottom: 0; }
+.rule-search { flex: 1; min-width: 150px; }
+
+.rule-group { margin-top: 18px; }
+.rule-group:first-child { margin-top: 0; }
+.rule-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0 0 8px;
+  padding: 0 2px;
+}
+.rule-group .auto-list { margin-bottom: 4px; }
+
+.routine-card { gap: 8px; }
+.routine-top { display: flex; align-items: flex-start; gap: 12px; }
+.routine-head { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.routine-title-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.routine-title-btn:active { opacity: 0.7; }
+.routine-meta { display: flex; flex-direction: column; gap: 2px; }
+.badge.danger { background: rgba(229, 57, 53, 0.12); color: var(--danger); }
+
+/* --- 해석 확인 카드 (v2) --- */
+.parse-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.parse-card.is-busy { opacity: 0.6; pointer-events: none; }
+.parse-sentence { line-height: 2.1; font-size: 15px; word-break: keep-all; }
+
+.chip-token {
+  border-radius: 6px;
+  padding: 2px 5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.chip-token.role-trigger { color: var(--chip-trigger); background: var(--chip-trigger-bg); }
+.chip-token.role-condition { color: var(--chip-condition); background: var(--chip-condition-bg); }
+.chip-token.role-target,
+.chip-token.role-action { color: var(--chip-target); background: var(--chip-target-bg); }
+.chip-token.role-value { color: var(--chip-value); background: var(--chip-value-bg); }
+.chip-token.status-uncertain {
+  border-style: solid;
+  border-color: var(--chip-warn);
+  cursor: pointer;
+}
+.chip-token.status-unresolved {
+  border-style: dashed;
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+  cursor: pointer;
+}
+
+.chip-dropdown {
+  position: absolute;
+  z-index: 50;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  padding: 6px;
+  min-width: 200px;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chip-cand {
+  appearance: none;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.chip-cand:hover { background: var(--card-2); }
+.cand-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cand-label { font-weight: 600; }
+.cand-sub { font-size: 12px; color: var(--muted); }
+.cand-score { font-size: 11px; color: var(--muted); flex: none; }
+.chip-cand.none { color: var(--accent); font-weight: 600; justify-content: center; }
+
+.parse-summary {
+  font-size: 14px;
+  background: var(--card-2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+.parse-warnings { display: flex; flex-direction: column; gap: 4px; }
+.parse-caption { font-size: 12px; color: var(--muted); }
+.parse-actions { display: flex; gap: 10px; }
+.parse-actions .btn { flex: 1; }
+
+/* --- 설정 화면 (v2) --- */
+.settings-body { display: flex; flex-direction: column; gap: 16px; }
+.settings-section { padding: 16px; }
+.section-hint { margin: -4px 0 10px; }
+.seg-time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+.map-list { display: flex; flex-direction: column; gap: 8px; }
+.map-row { display: flex; gap: 8px; align-items: center; }
+.map-row .input,
+.map-row .entity-select { flex: 1; min-width: 0; }
+.map-fixed {
+  flex: 1;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 4px;
+  min-width: 0;
+}
+.map-row .icon-btn { flex: none; }
+.settings-save { margin-top: 4px; }
