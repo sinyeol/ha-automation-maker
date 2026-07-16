@@ -1,14 +1,22 @@
-"""§6.4 선택 기능: Anthropic Messages API로 로컬 파서 결과 보조.
+"""SPEC-V3 §4.2 — LLM 해석 백엔드 디스패치(off / api / cli).
 
-로컬 confidence < 0.6 이거나 unresolved 스팬이 있을 때만 api_v2가 호출한다.
-실패는 조용히 None을 돌려주고 로컬 결과를 쓴다. API 키는 로그에 남기지 않는다.
-aiohttp 만 외부 의존(다른 nl 모듈은 표준 라이브러리만).
+로컬 파서의 confidence < 0.6 이거나 unresolved 스팬이 있을 때만 api_v2가 호출한다.
+백엔드는 세 가지:
+  - off: 항상 None(로컬 파서 결과만 사용).
+  - api: Anthropic Messages HTTP(aiohttp). api_key 없으면 None.
+  - cli: 구독 Claude Code CLI 헤드리스 호출(cli_client). 토큰/바이너리 없으면 None.
+
+세 백엔드 모두 성공 시 통일 계약 `{"model":..., "warnings":[...]}` 또는 None을 돌려준다.
+실패는 조용히 None(로컬 결과 사용). API 키/토큰은 로그에 절대 남기지 않는다.
+aiohttp만 외부 의존(api 경로에서만 import). cli 경로는 표준 라이브러리(subprocess)만.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 from typing import Optional
+
+from backend.nl import cli_client
 
 _API_URL = "https://api.anthropic.com/v1/messages"
 _MODEL = "claude-haiku-4-5-20251001"
@@ -39,13 +47,24 @@ _TOOL = {
 }
 
 _SYSTEM = (
-    "너는 홈어시스턴트 자동화를 만드는 한국어 파서다. 주어진 문장을 RuleModel(JSON)로 바꾼다. "
+    "너는 홈어시스턴트 자동화를 만드는 한국어 파서다. 주어진 한국어 스마트홈 문장을 "
+    "RuleModel(JSON)로 바꾼다. "
     "트리거 타입: state{entity_id,to}, state_held{entity_id,to,for}, "
-    "group_held{scope,to,for}, numeric_state{entity_id,above,below}, zone{entity_id,zone,event}. "
-    "조건 타입: state, numeric_state, time{after,before}, time_segment{segments}, day_type, season. "
-    "액션: service{action,target:{entity_id:[...]},data}. Duration은 {hours,minutes,seconds}. "
-    "entity_id 는 반드시 제공된 인벤토리의 실제 id만 쓴다. 모르면 비운다. "
-    "sun/template 은 쓰지 않는다. 반드시 emit_rule 도구로만 답한다."
+    "group_held{scope,to,for}, numeric_state{entity_id,above,below}, zone{entity_id,zone,event}, "
+    "mode{mode,to}. "
+    "조건 타입: state, numeric_state, time{after,before}, time_segment{segments}, day_type, "
+    "season, mode{mode,state}. "
+    "액션: service{action,target:{entity_id:[...]},data}, set_mode{mode,to}. "
+    "Duration은 {hours,minutes,seconds}. "
+    "entity_id는 반드시 아래 제공된 인벤토리(digest)에 실존하는 id만 쓴다. 모르면 비운다. "
+    "모드 이름은 제공된 모드 목록에서만 쓴다. sun/template은 쓰지 않는다."
+)
+
+# cli 백엔드용 시스템 프롬프트: 구조화 출력(model/warnings)만 요구.
+_CLI_SYSTEM = (
+    _SYSTEM
+    + " 반드시 지정된 JSON 스키마의 구조화 출력만 낸다. 다른 설명·코드펜스·마크다운은 금지한다. "
+    "출력 객체는 {\"model\": RuleModel, \"warnings\": [문자열]} 형태다."
 )
 
 
@@ -71,8 +90,35 @@ def _digest_text(inventory_digest: dict, sentence: str) -> str:
     return "\n".join(lines) + extra
 
 
-async def llm_parse(sentence: str, inventory_digest: dict, settings: dict,
-                    api_key: str) -> Optional[dict]:
+def _user_prompt(inventory_digest: dict, sentence: str) -> str:
+    digest = _digest_text(inventory_digest, sentence)
+    return (f"인벤토리:\n{digest}\n\n문장: {sentence}\n\n"
+            "이 문장을 RuleModel로 변환해줘.")
+
+
+async def llm_parse(sentence: str, inventory_digest: dict, settings: dict, *,
+                    backend: str, api_key: str = "",
+                    oauth_token: str = "") -> Optional[dict]:
+    """백엔드(off/api/cli)를 디스패치. 통일 계약 {"model",...,"warnings":[...]} 또는 None."""
+    if backend == "api":
+        return await _parse_api(sentence, inventory_digest, api_key)
+    if backend == "cli":
+        return await _parse_cli(sentence, inventory_digest, oauth_token)
+    # off 또는 알 수 없는 백엔드
+    return None
+
+
+async def _parse_cli(sentence: str, inventory_digest: dict,
+                     oauth_token: str) -> Optional[dict]:
+    prompt = _user_prompt(inventory_digest, sentence)
+    raw = await cli_client.cli_parse(prompt, _CLI_SYSTEM, oauth_token=oauth_token)
+    if not raw or not isinstance(raw.get("model"), dict):
+        return None
+    return _validate_entities(raw, inventory_digest)
+
+
+async def _parse_api(sentence: str, inventory_digest: dict,
+                     api_key: str) -> Optional[dict]:
     if not api_key:
         return None
     try:
@@ -80,9 +126,7 @@ async def llm_parse(sentence: str, inventory_digest: dict, settings: dict,
     except ImportError:
         return None
 
-    digest = _digest_text(inventory_digest, sentence)
-    user = (f"인벤토리:\n{digest}\n\n문장: {sentence}\n\n"
-            "이 문장을 RuleModel로 변환해줘.")
+    user = _user_prompt(inventory_digest, sentence)
     payload = {
         "model": _MODEL,
         "max_tokens": 2000,
@@ -112,11 +156,10 @@ async def llm_parse(sentence: str, inventory_digest: dict, settings: dict,
         if block.get("type") == "tool_use" and block.get("name") == "emit_rule":
             tool_input = block.get("input")
             break
-    if not tool_input:
+    if not tool_input or not isinstance(tool_input.get("model"), dict):
         return None
 
-    result = _validate_entities(tool_input, inventory_digest)
-    return result
+    return _validate_entities(tool_input, inventory_digest)
 
 
 def _validate_entities(tool_input: dict, inventory_digest: dict) -> dict:
@@ -129,22 +172,33 @@ def _validate_entities(tool_input: dict, inventory_digest: dict) -> dict:
     warnings = []
 
     def check_node(node):
+        if not isinstance(node, dict):
+            return
         eid = node.get("entity_id")
         if eid and eid not in valid_ids:
             warnings.append(f"존재하지 않는 엔티티: {eid}")
             node["entity_id"] = None
-        tgt = node.get("target") or {}
-        ids = tgt.get("entity_id")
-        if isinstance(ids, list):
-            filtered = [i for i in ids if i in valid_ids or i.startswith("scene.")]
-            if len(filtered) != len(ids):
+        tgt = node.get("target")
+        if isinstance(tgt, dict) and "entity_id" in tgt:
+            ids = tgt.get("entity_id")
+            # 스칼라 문자열/리스트를 모두 리스트로 정규화한 뒤 인벤토리에 실존하는 id 만
+            # 남긴다. scene.*/script.* 도 예외 없이 실존하는 것만 통과(무조건 허용 금지).
+            as_list = ids if isinstance(ids, list) else ([ids] if ids else [])
+            filtered = [i for i in as_list if i in valid_ids]
+            if len(filtered) != len(as_list):
                 warnings.append("일부 액션 대상이 인벤토리에 없어 제외했어요.")
             tgt["entity_id"] = filtered
 
     model = tool_input.get("model", {})
-    for key in ("triggers", "conditions", "actions"):
-        for node in model.get(key, []) or []:
-            check_node(node)
+    # subrules(SPEC-V3 §2.2) 또는 최상위 4필드 모두 순회.
+    subrules = model.get("subrules")
+    scopes = subrules if isinstance(subrules, list) else [model]
+    for sub in scopes:
+        if not isinstance(sub, dict):
+            continue
+        for key in ("triggers", "conditions", "actions"):
+            for node in sub.get(key, []) or []:
+                check_node(node)
 
     tool_input.setdefault("warnings", [])
     tool_input["warnings"].extend(warnings)

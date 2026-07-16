@@ -2,6 +2,10 @@
 import { el } from '../app.js';
 import { parseSentence } from '../api2.js';
 import { openEntityPicker } from './entity-picker.js';
+import { createManualMap } from './manual-map.js';
+
+// used_llm 캡션의 백엔드 표기(§8).
+const LLM_BACKEND_LABEL = { api: 'API', cli: '구독 CLI' };
 
 // role → CSS 클래스(색상). action은 target과 같은 초록 계열.
 function roleClass(role) {
@@ -44,6 +48,8 @@ export function createParseCard({ sentence, pins, result, onSave }) {
   let busy = false;
   let dropdown = null;      // 현재 열린 후보 드롭다운
   let onDocClick = null;
+  let manualOpen = false;   // "직접 지정" 에디터 표시 여부
+  let manualNode = null;    // 재해석 사이에도 편집 상태를 유지하기 위해 1회 생성 후 보관
 
   const root = el('div', { class: 'parse-card' });
 
@@ -202,7 +208,11 @@ export function createParseCard({ sentence, pins, result, onSave }) {
     }
 
     if (cur.used_llm) {
-      root.appendChild(el('div', { class: 'parse-caption' }, 'AI 도움으로 해석했어요.'));
+      const backend = LLM_BACKEND_LABEL[cur.llm_backend];
+      const text = backend
+        ? `AI 도움으로 해석했어요. (${backend})`
+        : 'AI 도움으로 해석했어요.';
+      root.appendChild(el('div', { class: 'parse-caption' }, text));
     }
 
     const hasUnresolved = (cur.chips || []).some(c => c.status === 'unresolved');
@@ -224,6 +234,21 @@ export function createParseCard({ sentence, pins, result, onSave }) {
 
     if (hasUnresolved) {
       root.appendChild(el('p', { class: 'form-hint' }, '빨간 점선으로 표시된 부분을 선택하면 저장할 수 있어요.'));
+    }
+
+    // 하단 "직접 지정" 토글 → 수동 매핑 에디터를 인라인 표시(§3.3).
+    const manualToggle = el('button', {
+      class: 'btn small mm-toggle' + (manualOpen ? ' active' : ''),
+      'aria-expanded': manualOpen ? 'true' : 'false',
+      onClick: () => { manualOpen = !manualOpen; render(); },
+    }, manualOpen ? '직접 지정 닫기' : '직접 지정');
+    root.appendChild(el('div', { class: 'mm-toggle-row' }, manualToggle));
+
+    if (manualOpen) {
+      if (!manualNode) {
+        manualNode = createManualMap({ sentence, onSave });
+      }
+      root.appendChild(manualNode);
     }
   }
 

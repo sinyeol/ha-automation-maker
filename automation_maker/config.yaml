@@ -1,5 +1,5 @@
 name: "HA Automation Maker"
-version: "2.0.0"
+version: "3.0.0"
 slug: automation_maker
 description: "방별·센서별 엔티티 탐색으로 자동화를 쉽게 만드는 UI (Korean-first automation builder)"
 url: "https://github.com/sinyeol/ha-automation-maker"
@@ -14,6 +14,9 @@ startup: application
 boot: auto
 options:
   log_level: "info"
+  llm_backend: "off"
 schema:
   log_level: "list(debug|info|warning|error)"
+  llm_backend: "list(off|api|cli)"
   anthropic_api_key: "password?"
+  claude_code_oauth_token: "password?"

@@ -1,4 +1,8 @@
-"""RuleModel 검증 (§6.3). v1 검증에 §3 확장 노드 포함, sun/template 거부."""
+"""RuleModel 검증 (§6.3 + SPEC-V3 §1.3·§2.3).
+
+v1 검증에 §3 확장 노드를 포함하고 sun/template 을 거부한다. SPEC-V3 에서
+subrules 순회와 mode 트리거/조건/set_mode 액션 검증을 추가한다.
+"""
 from __future__ import annotations
 
 import re
@@ -11,6 +15,7 @@ _HHMM_RE = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d$")
 _DAY_TYPES = {"weekday", "weekend", "holiday"}
 _SEASONS = {"spring", "summer", "autumn", "winter"}
 _SEGMENT_KEYS = {"dawn", "morning", "day", "evening", "night"}
+_MODE_STATES = {"on", "off"}
 
 # v2 엔진이 미지원하는 유형(파서가 생성 금지, 검증에서 거부)
 _UNSUPPORTED = {"sun", "template"}
@@ -20,6 +25,10 @@ _UNSUPPORTED = {"sun", "template"}
 # KNOWN_SERVICES 의 도메인 + scene/script/input_boolean/notify.
 _ALLOWED_ACTION_DOMAINS = set(KNOWN_SERVICES) | {
     "scene", "script", "input_boolean", "notify"}
+
+
+def _p(prefix: str, key: str) -> str:
+    return f"{prefix}.{key}" if prefix else key
 
 
 def _entity_ids(inventory) -> set[str]:
@@ -52,7 +61,18 @@ def _check_scope(scope, path, errors) -> None:
         errors.append({"path": path, "message": "대상 범위를 지정해 주세요."})
 
 
-def _validate_trigger(t, path, errors, valid_ids) -> None:
+def _check_mode_ref(node, path, errors, mode_names, key) -> None:
+    """mode 트리거/조건/set_mode 공통 검증. key = 상태 필드명("to"|"state")."""
+    mode = node.get("mode")
+    if not isinstance(mode, str) or not mode:
+        errors.append({"path": path + ".mode", "message": "모드 이름을 지정해 주세요."})
+    elif mode_names is not None and mode not in mode_names:
+        errors.append({"path": path + ".mode", "message": f"설정에 없는 모드예요: {mode}"})
+    if node.get(key) not in _MODE_STATES:
+        errors.append({"path": _p(path, key), "message": "모드 상태는 켬(on) 또는 끔(off)이어야 해요."})
+
+
+def _validate_trigger(t, path, errors, valid_ids, mode_names=None) -> None:
     if not isinstance(t, dict):
         errors.append({"path": path, "message": "트리거 형식이 올바르지 않습니다."})
         return
@@ -82,6 +102,8 @@ def _validate_trigger(t, path, errors, valid_ids) -> None:
     elif typ == "segment":
         if t.get("to") not in _SEGMENT_KEYS:
             errors.append({"path": path + ".to", "message": "시간대 값이 올바르지 않습니다."})
+    elif typ == "mode":
+        _check_mode_ref(t, path, errors, mode_names, "to")
     elif typ == "time":
         if not _TIME_RE.match(str(t.get("at") or "")):
             errors.append({"path": path + ".at", "message": "시각을 HH:MM 형식으로 입력해 주세요."})
@@ -93,7 +115,7 @@ def _validate_trigger(t, path, errors, valid_ids) -> None:
         errors.append({"path": path + ".type", "message": "지원하지 않는 트리거 유형입니다."})
 
 
-def _validate_condition(c, path, errors, valid_ids, n_triggers) -> None:
+def _validate_condition(c, path, errors, valid_ids, n_triggers, mode_names=None) -> None:
     if not isinstance(c, dict):
         errors.append({"path": path, "message": "조건 형식이 올바르지 않습니다."})
         return
@@ -119,6 +141,8 @@ def _validate_condition(c, path, errors, valid_ids, n_triggers) -> None:
         _need_list(c.get("types"), _DAY_TYPES, path + ".types", errors, "요일 구분")
     elif typ == "season":
         _need_list(c.get("seasons"), _SEASONS, path + ".seasons", errors, "계절")
+    elif typ == "mode":
+        _check_mode_ref(c, path, errors, mode_names, "state")
     elif typ == "held":
         _need_entity(c, path, errors, valid_ids)
         if c.get("state") in (None, ""):
@@ -144,7 +168,8 @@ def _validate_condition(c, path, errors, valid_ids, n_triggers) -> None:
             errors.append({"path": path + ".conditions", "message": "하위 조건을 추가해 주세요."})
         else:
             for i, s in enumerate(subs):
-                _validate_condition(s, f"{path}.conditions[{i}]", errors, valid_ids, n_triggers)
+                _validate_condition(s, f"{path}.conditions[{i}]", errors, valid_ids,
+                                    n_triggers, mode_names)
     else:
         errors.append({"path": path + ".type", "message": "지원하지 않는 조건 유형입니다."})
 
@@ -164,50 +189,95 @@ def _need_list(vals, allowed, path, errors, label) -> None:
         errors.append({"path": path, "message": f"{label} 값이 올바르지 않습니다."})
 
 
-def validate_rule_model(model: dict, inventory) -> list[dict]:
+def _validate_action_node(a, path, errors, n_triggers, mode_names) -> None:
+    """set_mode 는 엔진 전용 액션이라 별도 검증, 나머지는 v1 검증기로 위임한다."""
+    if isinstance(a, dict) and a.get("type") == "set_mode":
+        _check_mode_ref(a, path, errors, mode_names, "to")
+        return
+    _validate_action(a, path, errors, n_triggers)
+
+
+def _scan_service_actions(actions, base_path, errors, valid_ids) -> None:
+    """중첩 액션(choose/if/repeat/parallel 등)까지 훑어 service 액션을 검사한다.
+
+    - 미허용 도메인의 service 액션을 거부(보안 화이트리스트).
+    - target.entity_id(리스트/스칼라 모두)가 인벤토리에 실존하는지 검증(SPEC-V3 §4.2).
+      로컬/LLM/수동 모든 저장 경로가 존재하지 않는 대상을 저장하지 못하게 막는다.
+      valid_ids 가 비어 있으면(인벤토리 미제공) 실존 검사는 건너뛴다 — _need_entity 규약과 동일.
+    """
+    stack = list(actions)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if node.get("type") == "service":
+                action = str(node.get("action") or "")
+                domain = action.split(".", 1)[0] if "." in action else ""
+                if domain and domain not in _ALLOWED_ACTION_DOMAINS:
+                    errors.append({"path": base_path, "message": f"지원하지 않는 동작이에요: {action}"})
+                if valid_ids:
+                    tgt = node.get("target")
+                    ids = tgt.get("entity_id") if isinstance(tgt, dict) else None
+                    as_list = ids if isinstance(ids, list) else ([ids] if ids else [])
+                    missing = [i for i in as_list if i and i not in valid_ids]
+                    if missing:
+                        errors.append({"path": base_path + ".target.entity_id",
+                                       "message": "존재하지 않는 엔티티입니다: " + ", ".join(missing)})
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+
+
+def _validate_subrule(sub, prefix, errors, valid_ids, mode_names) -> None:
+    if not isinstance(sub, dict):
+        errors.append({"path": prefix or "subrule", "message": "규칙 형식이 올바르지 않습니다."})
+        return
+
+    if sub.get("condition_mode", "and") not in ("and", "or"):
+        errors.append({"path": _p(prefix, "condition_mode"),
+                       "message": "조건 결합 방식이 올바르지 않습니다."})
+
+    triggers = sub.get("triggers")
+    n_triggers = len(triggers) if isinstance(triggers, list) else 0
+    tbase = _p(prefix, "triggers")
+    if not isinstance(triggers, list) or not triggers:
+        errors.append({"path": tbase, "message": "트리거를 하나 이상 추가해 주세요."})
+    else:
+        for i, t in enumerate(triggers):
+            _validate_trigger(t, f"{tbase}[{i}]", errors, valid_ids, mode_names)
+
+    conditions = sub.get("conditions", [])
+    cbase = _p(prefix, "conditions")
+    if isinstance(conditions, list):
+        for i, c in enumerate(conditions):
+            _validate_condition(c, f"{cbase}[{i}]", errors, valid_ids, n_triggers, mode_names)
+
+    actions = sub.get("actions")
+    abase = _p(prefix, "actions")
+    if not isinstance(actions, list) or not actions:
+        errors.append({"path": abase, "message": "실행할 동작을 하나 이상 추가해 주세요."})
+    else:
+        for i, a in enumerate(actions):
+            _validate_action_node(a, f"{abase}[{i}]", errors, n_triggers, mode_names)
+        _scan_service_actions(actions, abase, errors, valid_ids)
+
+
+def validate_rule_model(model: dict, inventory, mode_names=None) -> list[dict]:
+    """RuleModel 검증. mode_names 가 주어지면 mode 노드가 참조하는 모드 존재까지 확인한다
+    (None 이면 존재 검증은 건너뛴다 — 자동 등록은 api_v2 담당, SPEC-V3 §1.3)."""
     errors: list[dict] = []
     if not isinstance(model, dict):
         return [{"path": "", "message": "규칙 모델 형식이 올바르지 않습니다."}]
 
     valid_ids = _entity_ids(inventory)
 
-    if model.get("condition_mode", "and") not in ("and", "or"):
-        errors.append({"path": "condition_mode", "message": "조건 결합 방식이 올바르지 않습니다."})
-
-    triggers = model.get("triggers")
-    n_triggers = len(triggers) if isinstance(triggers, list) else 0
-    if not isinstance(triggers, list) or not triggers:
-        errors.append({"path": "triggers", "message": "트리거를 하나 이상 추가해 주세요."})
+    subrules = model.get("subrules")
+    if isinstance(subrules, list):
+        if not subrules:
+            errors.append({"path": "subrules", "message": "규칙을 하나 이상 추가해 주세요."})
+        for si, sub in enumerate(subrules):
+            _validate_subrule(sub, f"subrules[{si}]", errors, valid_ids, mode_names)
     else:
-        for i, t in enumerate(triggers):
-            _validate_trigger(t, f"triggers[{i}]", errors, valid_ids)
-
-    conditions = model.get("conditions", [])
-    if isinstance(conditions, list):
-        for i, c in enumerate(conditions):
-            _validate_condition(c, f"conditions[{i}]", errors, valid_ids, n_triggers)
-
-    actions = model.get("actions")
-    if not isinstance(actions, list) or not actions:
-        errors.append({"path": "actions", "message": "실행할 동작을 하나 이상 추가해 주세요."})
-    else:
-        for i, a in enumerate(actions):
-            _validate_action(a, f"actions[{i}]", errors, n_triggers)
-        # 서비스 도메인 화이트리스트(보안): 중첩 액션(choose/if/repeat/parallel 등)까지
-        # 훑어 미허용 도메인(hassio.* 등)의 service 액션을 거부한다.
-        stack = list(actions)
-        while stack:
-            node = stack.pop()
-            if isinstance(node, dict):
-                if node.get("type") == "service":
-                    action = str(node.get("action") or "")
-                    domain = action.split(".", 1)[0] if "." in action else ""
-                    if domain and domain not in _ALLOWED_ACTION_DOMAINS:
-                        errors.append({
-                            "path": "actions",
-                            "message": f"지원하지 않는 동작이에요: {action}"})
-                stack.extend(node.values())
-            elif isinstance(node, list):
-                stack.extend(node)
+        # 하위호환: subrules 가 없으면 최상위 4필드를 단일 서브룰로 검증(경로 접두사 없음)
+        _validate_subrule(model, "", errors, valid_ids, mode_names)
 
     return errors

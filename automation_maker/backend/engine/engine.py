@@ -1,4 +1,10 @@
-"""규칙 엔진 (§4.3). 트리거 인덱싱·에지 평가·for 타이머·경계 스케줄·오류 격리."""
+"""규칙 엔진 (§4.3 + SPEC-V3 §2.3·§1.2). 트리거 인덱싱·에지 평가·for 타이머·경계 스케줄·오류 격리.
+
+SPEC-V3: 규칙 로드/인덱싱/발화가 서브룰(_subrules)을 순회하도록 일반화되고, 상태 모드
+변수(ModeState)와 mode 트리거/조건/set_mode 액션을 처리한다. 타이머/인덱스 키는
+(rule_id, flat_index) — flat_index 는 서브룰을 가로질러 트리거를 0부터 센 값이라 단일
+서브룰(레거시) 규칙에서는 기존 (rule_id, trigger_index) 와 그대로 일치한다.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -13,10 +19,11 @@ from .storage import JsonStore, data_dir
 
 log = logging.getLogger("automation_maker.engine")
 
-_COOLDOWN = 5.0          # 같은 규칙 재발화 최소 간격(초)
+_COOLDOWN = 5.0          # 같은 서브룰 재발화 최소 간격(초)
 _ERROR_LIMIT = 3         # 연속 오류 시 auto_disable
 _MAX_REPEAT = 1000       # repeat 무한루프 방지 상한
 _HOLD_EPS = 0.05         # 재검증 시 타이머 재장전 판단 허용오차(초)
+_MODE_MAX_DEPTH = 8      # set_mode → mode 트리거 → set_mode 재귀 깊이 제한
 
 # for 타이머를 갖는 트리거 유형
 _HELD_TYPES = ("state_held", "group_held")
@@ -24,6 +31,44 @@ _HELD_TYPES = ("state_held", "group_held")
 
 def _utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _subrules(model: dict) -> list[dict]:
+    """모델의 서브룰 목록. subrules 가 없으면 최상위 4필드를 단일 서브룰로 취급(하위호환)."""
+    subs = model.get("subrules") if isinstance(model, dict) else None
+    if isinstance(subs, list) and subs:
+        return subs
+    return [{
+        "triggers": model.get("triggers") or [],
+        "conditions": model.get("conditions") or [],
+        "condition_mode": model.get("condition_mode", "and"),
+        "actions": model.get("actions") or [],
+    }]
+
+
+def _iter_triggers(model: dict):
+    """(flat_index, subrule_index, trigger_index, trigger_node) 를 순회한다.
+
+    flat_index 는 서브룰을 가로질러 트리거를 0부터 세며, 타이머/인덱스 키로 쓰인다.
+    """
+    flat = 0
+    for si, sub in enumerate(_subrules(model)):
+        for ti, t in enumerate(sub.get("triggers") or []):
+            yield flat, si, ti, t
+            flat += 1
+
+
+def _locate(model: dict, flat: int):
+    """flat_index → (subrule_index, trigger_index, trigger_node) 또는 None."""
+    for f, si, ti, t in _iter_triggers(model):
+        if f == flat:
+            return si, ti, t
+    return None
+
+
+def _subrule_at(model: dict, si: int):
+    subs = _subrules(model)
+    return subs[si] if 0 <= si < len(subs) else None
 
 
 def _held_spec(node: dict):
@@ -42,7 +87,7 @@ def _held_spec(node: dict):
 
 class RuleEngine:
     def __init__(self, rule_store, state_cache, global_vars, ha, inventory_fn, runlog,
-                 now_fn=None, loop=None):
+                 now_fn=None, loop=None, mode_state=None):
         self._rule_store = rule_store
         self._cache = state_cache
         self._gvars = global_vars
@@ -51,14 +96,16 @@ class RuleEngine:
         self._runlog = runlog
         self._now_fn = now_fn or (lambda: datetime.now())  # 벽시계(스케줄용, gvars와 동일)
         self._loop = loop
+        self._mode_state = mode_state                       # SPEC-V3 §1.2 (없으면 모드 비활성)
 
         self._index: dict[str, set[str]] = {}          # entity_id → rule_ids
+        self._mode_index: dict[str, set[tuple]] = {}    # mode 이름 → {(rid, si, ti)}
         self._rules: dict[str, dict] = {}               # 활성 규칙 rule_id → rule
         self._for_timers: dict[tuple, asyncio.TimerHandle] = {}
         self._daily_timers: dict[tuple, asyncio.TimerHandle] = {}
         self._boundary_timer: asyncio.TimerHandle | None = None
         self._error_streak: dict[str, int] = {}
-        self._last_fired: dict[str, float] = {}
+        self._last_fired: dict[tuple, float] = {}        # (rid, subrule_index) → loop time
         self._tasks: set = set()
         self._exec_tasks: dict[str, set] = {}           # rule_id → 진행 중 실행 태스크(fix 4)
         self._connected = False
@@ -87,6 +134,8 @@ class RuleEngine:
         self._save_pending()
         if self._pending_store is not None:
             await self._pending_store.flush()
+        if self._mode_state is not None:
+            self._mode_state.save()
         for h in list(self._for_timers.values()):
             h.cancel()
         self._for_timers.clear()
@@ -109,6 +158,7 @@ class RuleEngine:
             "rules": len(self._rules),
             "active_timers": len(self._for_timers),
             "vars": self._gvars.snapshot(),
+            "modes": self._mode_state.snapshot() if self._mode_state is not None else {},
         }
 
     def _on_connect(self) -> None:
@@ -129,6 +179,57 @@ class RuleEngine:
         if self._loop is not None:
             self._schedule_boundary()
 
+    # ------------------------------------------------------------------ 모드 (SPEC-V3 §1.2)
+    def set_mode(self, name: str, on: bool, context: str = "manual", depth: int = 0) -> bool:
+        """모드 상태를 설정한다. 상태 변경 → persist → side-effect → mode 트리거 pubsub.
+
+        실제로 상태가 바뀌었으면 True. mode 트리거의 액션이 다시 set_mode 를 호출하는
+        재귀는 depth 로 제한한다(_MODE_MAX_DEPTH).
+        """
+        if self._mode_state is None or not name:
+            return False
+        changed = self._mode_state.set(name, bool(on))
+        if not changed:
+            return False
+        self._mode_state.save()
+        new_state = "on" if on else "off"
+        self._run_mode_side_effect(name, new_state)
+        if depth > _MODE_MAX_DEPTH:
+            log.warning("모드 전이 재귀 깊이 초과로 트리거를 건너뜁니다: %s", name)
+            return True
+        self._fire_mode_triggers(name, new_state, depth)
+        return True
+
+    def _run_mode_side_effect(self, name: str, state: str) -> None:
+        action_def = self._mode_state.side_effect(name, state)
+        if not isinstance(action_def, dict) or not action_def.get("action") or self._loop is None:
+            return
+        task = self._loop.create_task(self._run_side_effect(action_def))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def _run_side_effect(self, action_def) -> None:
+        try:
+            await self._call_service(action_def)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("모드 side-effect 실행 오류")
+
+    def _fire_mode_triggers(self, name: str, new_state: str, depth: int) -> None:
+        for (rid, si, ti) in list(self._mode_index.get(name, ())):
+            rule = self._rules.get(rid)
+            if rule is None:
+                continue
+            sub = _subrule_at(rule.get("model") or {}, si)
+            trigs = (sub.get("triggers") if sub else None) or []
+            if ti >= len(trigs):
+                continue
+            t = trigs[ti]
+            if (t.get("type") == "mode" and t.get("mode") == name
+                    and t.get("to") == new_state):
+                self._try_fire(rule, si, ti, depth=depth, context="mode")
+
     # ------------------------------------------------------------------ 컴파일/인덱스
     def _compile_all(self) -> None:
         for h in list(self._for_timers.values()):
@@ -138,6 +239,7 @@ class RuleEngine:
         self._for_timers.clear()
         self._daily_timers.clear()
         self._index.clear()
+        self._mode_index.clear()
         self._rules.clear()
         for rule in self._rule_store.all():
             if not rule.get("enabled"):
@@ -149,10 +251,9 @@ class RuleEngine:
     def _index_rule(self, rule: dict) -> None:
         rid = rule["id"]
         model = rule.get("model") or {}
-        triggers = model.get("triggers") or []
         targets: set[str] = set()
         has_trigger = False
-        for i, t in enumerate(triggers):
+        for flat, si, ti, t in _iter_triggers(model):
             typ = t.get("type")
             if typ in ("state", "numeric_state", "state_held", "zone"):
                 eid = t.get("entity_id")
@@ -164,10 +265,15 @@ class RuleEngine:
                     targets.add(eid)
                 has_trigger = True
             elif typ == "daily":
-                self._schedule_daily(rid, i, t)
+                self._schedule_daily(rid, flat, t)
                 has_trigger = True
             elif typ == "segment":
                 has_trigger = True
+            elif typ == "mode":
+                mode = t.get("mode")
+                if mode:
+                    self._mode_index.setdefault(mode, set()).add((rid, si, ti))
+                    has_trigger = True
         if not has_trigger:
             self._mark_no_trigger(rule)
             return
@@ -179,6 +285,9 @@ class RuleEngine:
         self._rules.pop(rid, None)
         for s in self._index.values():
             s.discard(rid)
+        for s in self._mode_index.values():
+            for key in [k for k in s if k[0] == rid]:
+                s.discard(key)
         for key in [k for k in self._for_timers if k[0] == rid]:
             self._for_timers.pop(key).cancel()
         for key in [k for k in self._daily_timers if k[0] == rid]:
@@ -188,7 +297,8 @@ class RuleEngine:
             task.cancel()
         self._exec_tasks.pop(rid, None)
         self._error_streak.pop(rid, None)
-        self._last_fired.pop(rid, None)
+        for key in [k for k in self._last_fired if k[0] == rid]:
+            self._last_fired.pop(key, None)
 
     def reload_rule(self, rule_id: str) -> None:
         self._unindex_rule(rule_id)
@@ -221,8 +331,8 @@ class RuleEngine:
         # 조용히 캐시 교체 + held 타이머 재평가(발화 금지). §4.2 재연결 의미론.
         # 1) 기존 held 타이머의 유지 연속성 재검증 (fix 2)
         for key in list(self._for_timers.keys()):
-            rid, i = key
-            spec = self._held_spec_of(self._rules.get(rid), i)
+            rid, flat = key
+            spec = self._held_spec_of(self._rules.get(rid), flat)
             if spec is None:
                 self._cancel_key(key)
                 continue
@@ -233,13 +343,13 @@ class RuleEngine:
         if self._pending_expired:
             self._flush_expired_pending()
 
-    def _held_spec_of(self, rule, i):
+    def _held_spec_of(self, rule, flat):
         if rule is None:
             return None
-        triggers = (rule.get("model") or {}).get("triggers") or []
-        if i >= len(triggers):
+        loc = _locate(rule.get("model") or {}, flat)
+        if loc is None:
             return None
-        return _held_spec(triggers[i])
+        return _held_spec(loc[2])
 
     def _held_remaining(self, spec) -> float | None:
         """held 트리거의 for 완료까지 남은 초. 유지 중이 아니면 None(음수면 이미 초과)."""
@@ -284,12 +394,11 @@ class RuleEngine:
         """
         for rule in list(self._rules.values()):
             rid = rule["id"]
-            triggers = (rule.get("model") or {}).get("triggers") or []
-            for i, t in enumerate(triggers):
+            for flat, si, ti, t in _iter_triggers(rule.get("model") or {}):
                 spec = _held_spec(t)
                 if spec is None:
                     continue
-                key = (rid, i)
+                key = (rid, flat)
                 if key in self._for_timers or key in self._pending_expired:
                     continue  # 이미 타이머가 있거나, 재시작 pending 소유(아래 flush 담당)
                 remaining = self._held_remaining(spec)
@@ -297,20 +406,19 @@ class RuleEngine:
                     self._arm_timer(key, remaining)
 
     def _eval_rule_triggers(self, rule, entity_id, old_state, new_state) -> None:
-        model = rule.get("model") or {}
-        for i, t in enumerate(model.get("triggers") or []):
+        for flat, si, ti, t in _iter_triggers(rule.get("model") or {}):
             typ = t.get("type")
             if typ == "state" and t.get("for"):
                 if t.get("entity_id") == entity_id:
-                    self._handle_held(rule, i, t)
+                    self._handle_held(rule, flat, t)
             elif typ in ("state", "numeric_state", "zone"):
                 if t.get("entity_id") == entity_id and self._immediate_edge(t, old_state, new_state):
-                    self._try_fire(rule, i)
+                    self._try_fire(rule, si, ti)
             elif typ == "state_held":
                 if t.get("entity_id") == entity_id:
-                    self._handle_held(rule, i, t)
+                    self._handle_held(rule, flat, t)
             elif typ == "group_held":
-                self._handle_group_held(rule, i, t)
+                self._handle_group_held(rule, flat, t)
 
     @staticmethod
     def _immediate_edge(t, old_state, new_state) -> bool:
@@ -337,16 +445,16 @@ class RuleEngine:
         return False
 
     # ------------------------------------------------------------------ for 타이머
-    def _handle_held(self, rule, i, t) -> None:
-        key = (rule["id"], i)
+    def _handle_held(self, rule, flat, t) -> None:
+        key = (rule["id"], flat)
         entry = self._cache.get(t.get("entity_id"))
         if entry is not None and entry.get("state") == t.get("to"):
             self._arm_timer(key, duration_to_seconds(t.get("for")))
         else:
             self._cancel_key(key)
 
-    def _handle_group_held(self, rule, i, t) -> None:
-        key = (rule["id"], i)
+    def _handle_group_held(self, rule, flat, t) -> None:
+        key = (rule["id"], flat)
         if scope_all_state(t.get("scope"), t.get("to"), self._ctx()):
             if key not in self._for_timers:  # 그룹 유지 중엔 재설정하지 않음
                 self._arm_timer(key, duration_to_seconds(t.get("for")))
@@ -363,23 +471,23 @@ class RuleEngine:
         if h is not None:
             h.cancel()
 
-    def _on_hold_expire(self, rid, i) -> None:
-        self._for_timers.pop((rid, i), None)
+    def _on_hold_expire(self, rid, flat) -> None:
+        self._for_timers.pop((rid, flat), None)
         rule = self._rules.get(rid)
         if rule is None:
             return
         try:
-            triggers = (rule.get("model") or {}).get("triggers") or []
-            if i >= len(triggers):
+            loc = _locate(rule.get("model") or {}, flat)
+            if loc is None:
                 return
-            t = triggers[i]
+            si, ti, t = loc
             if t.get("type") == "group_held":
                 if scope_all_state(t.get("scope"), t.get("to"), self._ctx()):
-                    self._try_fire(rule, i)
+                    self._try_fire(rule, si, ti)
             else:
                 entry = self._cache.get(t.get("entity_id"))
                 if entry is not None and entry.get("state") == t.get("to"):
-                    self._try_fire(rule, i)
+                    self._try_fire(rule, si, ti)
         except Exception:
             log.exception("for 타이머 만료 처리 오류")
 
@@ -398,9 +506,9 @@ class RuleEngine:
             if new_seg != self._last_segment:  # 세그먼트 실제 전환 시에만(fix 5)
                 self._last_segment = new_seg
                 for rule in list(self._rules.values()):
-                    for i, t in enumerate((rule.get("model") or {}).get("triggers") or []):
+                    for flat, si, ti, t in _iter_triggers(rule.get("model") or {}):
                         if t.get("type") == "segment" and t.get("to") == new_seg:
-                            self._try_fire(rule, i)
+                            self._try_fire(rule, si, ti)
                 self._reeval_time_segment(new_seg)  # 경계 time_segment 조건 재평가(fix 6)
         except Exception:
             log.exception("시간대 경계 처리 오류")
@@ -408,17 +516,18 @@ class RuleEngine:
             self._schedule_boundary()  # 벽시계 기준 self-rescheduling
 
     def _reeval_time_segment(self, new_seg) -> None:
-        """새 세그먼트 진입 시, time_segment 조건을 가진 규칙 중 트리거가 '현재 성립 중'인
-        규칙을 재평가해 조건 통과 시 발화한다(EventRunner 구간 경계 의미론, fix 6)."""
+        """새 세그먼트 진입 시, time_segment 조건을 가진 서브룰 중 트리거가 '현재 성립 중'인
+        것을 재평가해 조건 통과 시 발화한다(EventRunner 구간 경계 의미론, fix 6)."""
         for rule in list(self._rules.values()):
             model = rule.get("model") or {}
-            conds = model.get("conditions") or []
-            if not any(c.get("type") == "time_segment" for c in conds):
-                continue
-            for i, t in enumerate(model.get("triggers") or []):
-                if self._trigger_currently_true(t):
-                    self._try_fire(rule, i)  # 조건은 _try_fire 가 재평가
-                    break
+            for si, sub in enumerate(_subrules(model)):
+                conds = sub.get("conditions") or []
+                if not any(c.get("type") == "time_segment" for c in conds):
+                    continue
+                for ti, t in enumerate(sub.get("triggers") or []):
+                    if self._trigger_currently_true(t):
+                        self._try_fire(rule, si, ti)  # 조건은 _try_fire 가 재평가
+                        break
 
     def _trigger_currently_true(self, t) -> bool:
         """트리거가 지금 성립 중인가 — state: 현재 상태==to, held: 유지 완료 상태."""
@@ -432,7 +541,7 @@ class RuleEngine:
             return r is not None and r <= 0  # 유지 완료(for 경과)
         return False
 
-    def _schedule_daily(self, rid, i, t) -> None:
+    def _schedule_daily(self, rid, flat, t) -> None:
         at = str(t.get("at") or "00:00")
         try:
             h, m = int(at.split(":")[0]), int(at.split(":")[1])
@@ -443,43 +552,48 @@ class RuleEngine:
         if cand <= now:
             cand += timedelta(days=1)
         delay = (cand - now).total_seconds()
-        self._daily_timers[(rid, i)] = self._loop.call_later(
-            max(1.0, delay), self._on_daily, rid, i)
+        self._daily_timers[(rid, flat)] = self._loop.call_later(
+            max(1.0, delay), self._on_daily, rid, flat)
 
-    def _on_daily(self, rid, i) -> None:
-        self._daily_timers.pop((rid, i), None)
+    def _on_daily(self, rid, flat) -> None:
+        self._daily_timers.pop((rid, flat), None)
         rule = self._rules.get(rid)
         if rule is None:
             return
+        loc = _locate(rule.get("model") or {}, flat)
         try:
-            self._try_fire(rule, i)
+            if loc is not None:
+                self._try_fire(rule, loc[0], loc[1])
         except Exception:
             log.exception("daily 트리거 처리 오류")
         finally:
-            triggers = (rule.get("model") or {}).get("triggers") or []
-            if i < len(triggers):
-                self._schedule_daily(rid, i, triggers[i])
+            if loc is not None:
+                self._schedule_daily(rid, flat, loc[2])
 
     # ------------------------------------------------------------------ 발화
     def _ctx(self, fired_index=None) -> EvalContext:
-        return EvalContext(self._cache, self._gvars, self._now_fn, self._inventory_fn, fired_index)
+        return EvalContext(self._cache, self._gvars, self._now_fn, self._inventory_fn,
+                           fired_index, self._mode_state)
 
-    def _try_fire(self, rule, fired_index) -> None:
+    def _try_fire(self, rule, si, ti, depth=0, context="trigger") -> None:
         rid = rule["id"]
         now_t = self._loop.time()
-        last = self._last_fired.get(rid)
+        last = self._last_fired.get((rid, si))
         if last is not None and (now_t - last) < _COOLDOWN:
             return
-        ctx = self._ctx(fired_index)
-        if not evaluate_conditions(rule.get("model") or {}, ctx):
+        sub = _subrule_at(rule.get("model") or {}, si)
+        if sub is None:
+            return
+        ctx = self._ctx(ti)
+        if not evaluate_conditions(sub, ctx):
             self._runlog.add(rid, self._sentence(rule), "skipped_condition", "조건 불충족")
             return
-        self._last_fired[rid] = now_t
-        self._launch(rule, "trigger")
+        self._last_fired[(rid, si)] = now_t
+        self._launch(rule, si, context, depth)
 
-    def _launch(self, rule, context) -> None:
+    def _launch(self, rule, si, context, depth=0) -> None:
         rid = rule["id"]
-        task = self._loop.create_task(self._execute(rule, context))
+        task = self._loop.create_task(self._execute(rule, si, context, depth))
         self._tasks.add(task)  # 강참조 보관
         self._exec_tasks.setdefault(rid, set()).add(task)  # rule 별 추적(fix 4)
 
@@ -493,13 +607,15 @@ class RuleEngine:
         task.add_done_callback(_done)
 
     async def fire_rule(self, rule: dict, context: str) -> None:
-        """조건 무시하고 액션 실행(수동 'run'). 규칙의 top-level conditions는 평가하지 않는다."""
-        await self._execute(rule, context)
+        """조건 무시하고 액션 실행(수동 'run'). 모든 서브룰의 액션을 순차 실행한다."""
+        for si, _sub in enumerate(_subrules(rule.get("model") or {})):
+            await self._execute(rule, si, context)
 
-    async def _execute(self, rule, context) -> None:
-        rid = rule["id"]
+    async def _execute(self, rule, si, context, depth=0) -> None:
         try:
-            await self._run_sequence((rule.get("model") or {}).get("actions") or [], self._ctx())
+            sub = _subrule_at(rule.get("model") or {}, si)
+            actions = (sub.get("actions") if sub else None) or []
+            await self._run_sequence(actions, self._ctx(), depth)
             self._on_success(rule, context)
         except asyncio.CancelledError:
             raise
@@ -532,16 +648,19 @@ class RuleEngine:
         return rule.get("sentence") or rule.get("name") or rule.get("id") or ""
 
     # ------------------------------------------------------------------ 액션 실행
-    async def _run_sequence(self, actions, ctx) -> bool:
+    async def _run_sequence(self, actions, ctx, depth=0) -> bool:
         for a in actions:
-            if await self._run_action(a, ctx) is False:
+            if await self._run_action(a, ctx, depth) is False:
                 return False
         return True
 
-    async def _run_action(self, a, ctx) -> bool:
+    async def _run_action(self, a, ctx, depth=0) -> bool:
         typ = a.get("type")
         if typ == "service":
             await self._call_service(a)
+            return True
+        if typ == "set_mode":
+            self.set_mode(a.get("mode"), a.get("to") == "on", "action", depth + 1)
             return True
         if typ == "delay":
             await asyncio.sleep(duration_to_seconds(a.get("duration")))
@@ -553,41 +672,41 @@ class RuleEngine:
         if typ == "if":
             ok = all(evaluate_condition(c, ctx) for c in (a.get("if") or []))
             seq = a.get("then") if ok else (a.get("else") or [])
-            return await self._run_sequence(seq or [], ctx)
+            return await self._run_sequence(seq or [], ctx, depth)
         if typ == "choose":
             for opt in a.get("options") or []:
                 if all(evaluate_condition(c, ctx) for c in (opt.get("conditions") or [])):
-                    return await self._run_sequence(opt.get("sequence") or [], ctx)
-            return await self._run_sequence(a.get("default") or [], ctx)
+                    return await self._run_sequence(opt.get("sequence") or [], ctx, depth)
+            return await self._run_sequence(a.get("default") or [], ctx, depth)
         if typ == "repeat":
-            return await self._run_repeat(a, ctx)
+            return await self._run_repeat(a, ctx, depth)
         if typ == "parallel":
             await asyncio.gather(*[
-                self._run_sequence(br, ctx) for br in (a.get("branches") or [])])
+                self._run_sequence(br, ctx, depth) for br in (a.get("branches") or [])])
             return True
         if typ in ("wait_template", "wait_for_trigger"):
             return True  # 엔진 미구현(파서 미생성) — no-op
         log.debug("미지원 액션 유형: %s", typ)
         return True
 
-    async def _run_repeat(self, a, ctx) -> bool:
+    async def _run_repeat(self, a, ctx, depth=0) -> bool:
         kind = a.get("kind")
         seq = a.get("sequence") or []
         if kind == "count":
             for _ in range(int(a.get("count") or 0)):
-                if await self._run_sequence(seq, ctx) is False:
+                if await self._run_sequence(seq, ctx, depth) is False:
                     return False
         elif kind == "while":
             n = 0
             while n < _MAX_REPEAT and all(
                     evaluate_condition(c, ctx) for c in (a.get("conditions") or [])):
-                if await self._run_sequence(seq, ctx) is False:
+                if await self._run_sequence(seq, ctx, depth) is False:
                     return False
                 n += 1
         elif kind == "until":
             n = 0
             while n < _MAX_REPEAT:
-                if await self._run_sequence(seq, ctx) is False:
+                if await self._run_sequence(seq, ctx, depth) is False:
                     return False
                 if all(evaluate_condition(c, ctx) for c in (a.get("conditions") or [])):
                     break
@@ -610,10 +729,10 @@ class RuleEngine:
         if self._pending_store is None:
             return
         pending = []
-        for (rid, i), handle in self._for_timers.items():
+        for (rid, flat), handle in self._for_timers.items():
             remaining = handle.when() - self._loop.time()
             expiry = self._now_fn() + timedelta(seconds=max(0.0, remaining))
-            pending.append({"rule_id": rid, "node_index": i, "expiry": expiry.isoformat()})
+            pending.append({"rule_id": rid, "node_index": flat, "expiry": expiry.isoformat()})
         self._pending_store.data = pending
         self._pending_store.save_soon()
 
@@ -631,7 +750,7 @@ class RuleEngine:
         now = self._now_fn()
         self._pending_expired = []
         for e in entries:
-            rid, i = e.get("rule_id"), e.get("node_index")
+            rid, flat = e.get("rule_id"), e.get("node_index")
             if self._rules.get(rid) is None:
                 continue
             try:
@@ -640,10 +759,10 @@ class RuleEngine:
                 continue
             remaining = (expiry - now).total_seconds()
             if remaining <= 0:
-                self._pending_expired.append((rid, i))  # 첫 resync 이후 처리
+                self._pending_expired.append((rid, flat))  # 첫 resync 이후 처리
             else:
-                self._for_timers[(rid, i)] = self._loop.call_later(
-                    remaining, self._on_hold_expire, rid, i)
+                self._for_timers[(rid, flat)] = self._loop.call_later(
+                    remaining, self._on_hold_expire, rid, flat)
         self._pending_store.data = []
         self._pending_store.save_soon()
 
@@ -655,8 +774,8 @@ class RuleEngine:
         """
         pend = self._pending_expired
         self._pending_expired = []
-        for rid, i in pend:
+        for rid, flat in pend:
             try:
-                self._on_hold_expire(rid, i)  # 콜백이 조건(상태==to)을 재확인 후 발화
+                self._on_hold_expire(rid, flat)  # 콜백이 조건(상태==to)을 재확인 후 발화
             except Exception:
                 log.exception("복원 pending 만료 처리 오류")

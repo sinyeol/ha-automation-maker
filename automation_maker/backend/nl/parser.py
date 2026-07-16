@@ -25,6 +25,7 @@ VERB_STEMS = [
     "바뀌", "올라가", "내려가", "넘", "떨어지", "켜지", "꺼지", "오", "가",
     "들어오", "나가", "유지", "풀리", "잠기", "울리", "닿", "생기", "뜨", "지",
     "오르", "내리", "낮아지", "높아지", "많아지", "적어지", "왔", "왔었",
+    "아니",  # 모드 부정 조건('슬립모드가 아니면')의 '면' 경계 인식용(§6)
 ]
 # 이벤트(→트리거) 키워드
 EVENT_KEYWORDS = ["도착", "열리", "열림", "열려", "닫히", "닫힘", "감지", "눌리",
@@ -234,6 +235,13 @@ class _Parser:
         self.default_target: Optional[dict] = None  # concept for topic target
         self.rule_area: Optional[str] = None
         self.ante_text: str = ""  # 트리거/조건 존(액션 존 제외) — '다른' 판정용
+        # 다중 서브룰 컨텍스트 상속(§2.1): 앞 서브룰의 방·액션 대상을 뒤 서브룰이 물려받는다.
+        self.inh_area: Optional[str] = None
+        self.inh_action_entity: Optional[str] = None
+        # §2.1 조건 엔티티 재참조: 앞 서브룰에서 마지막으로 언급된 트리거/조건 센서(및 그 방).
+        # 액션 대상 area(inh_area) 상속과 분리 — 생략된 "모션이 없으면"은 이 센서를 재사용한다.
+        self.inh_trigger_entity: Optional[str] = None
+        self.inh_trigger_area: Optional[str] = None
 
     # ---- 스팬 계산(칩용): 원문에서 부분문자열 위치 ----
     def _span_of(self, sub: str) -> list[int]:
@@ -305,10 +313,28 @@ class _Parser:
         return antecedent
 
     # ================================================================
+    def _find_pivots(self, text: str, frames) -> list[int]:
+        """동사-검증된 '면' 종결어미 + 경계 센티넬 위치를 모두 찾는다(§2.1 1단계)."""
+        tokens = text.split()
+        pivots = []
+        for i, tok in enumerate(tokens):
+            m = _SENTINEL_RE.search(tok)
+            if m and frames[int(m.group(1))]["boundary"]:
+                pivots.append(i)
+            elif _is_myeon_boundary(tok):
+                pivots.append(i)
+        return pivots
+
     def parse(self):
         text = normalize_ws(self.sentence)
         # 2) 지속시간 선추출
         text, frames = _duration_frames(text)
+
+        # §2.1: 조건 종결어미('면'/경계 센티넬) pivot 을 모두 찾는다. 2개 이상이면 다중
+        # 규칙쌍(subrules) 문법으로, 1개 이하면 기존 단일 규칙 경로로 처리한다(하위호환).
+        pivots = self._find_pivots(text, frames)
+        if len(pivots) >= 2:
+            return self._parse_multi(text, frames, pivots)
 
         # 3) 마지막 '면' 경계 찾기 (센티넬 우선)
         tokens = text.split()
@@ -371,6 +397,137 @@ class _Parser:
                 clauses.extend(_split_clauses(self.gz, p))
         return clauses
 
+    # ================================================================
+    # 다중 규칙쌍(subrules) 경로 (§2.1)
+    # ================================================================
+    def _find_action_boundary(self, region: list[str]) -> int:
+        """pivot 사이 구간에서 규칙 경계(명령동사+'-고/-며')의 인덱스를 찾는다.
+
+        경계까지(포함) = 앞 서브룰 액션존, 그 뒤 = 다음 서브룰 조건존. 경계가 없으면
+        구간 전체를 액션으로 본다(마지막 인덱스 반환).
+        """
+        if not region:
+            return -1
+        for j in range(len(region) - 1, -1, -1):
+            tok = region[j]
+            if not ((tok.endswith("고") or tok.endswith("며"))
+                    and any(h in tok for h in COMMAND_HINTS)):
+                continue
+            # §결함3: 바로 앞 토큰이 주격 조사(이/가)로 끝나는 '주어'면, 이 '-고/-며'는 다음
+            # 서브룰 '조건'의 서술어(예: "환풍기가 가동하고")이지 액션 경계가 아니다. 목적격
+            # (을/를) 등 비주격일 때만 액션 연결로 본다("거실조명을 … 켜주고"는 액션 유지).
+            if j > 0 and self._is_subject_token(region[j - 1]):
+                continue
+            return j
+        return len(region) - 1
+
+    def _is_subject_token(self, tok: str) -> bool:
+        """토큰이 주격 조사(이/가)로 끝나는 체언(주어)인가 — 조사 제거 후 명사 표면형 확인."""
+        if not (tok.endswith("이") or tok.endswith("가")):
+            return False
+        return _is_noun_surface(self.gz, tok[:-1])
+
+    def _parse_multi(self, text: str, frames, pivots):
+        tokens = text.split()
+        n = len(pivots)
+        cond_zones: list[list[str]] = [[] for _ in range(n)]
+        act_zones: list[list[str]] = [[] for _ in range(n)]
+
+        # 주제절(맨 앞 X는/은) 추출 → default_area/default_target (모든 서브룰 공용 후보)
+        first_ante = " ".join(tokens[: pivots[0] + 1])
+        first_ante = self._extract_topic(first_ante)
+        cond_zones[0] = first_ante.split()
+
+        for i in range(1, n):
+            region = tokens[pivots[i - 1] + 1: pivots[i]]
+            b = self._find_action_boundary(region)
+            act_zones[i - 1] = region[: b + 1] if region else []
+            after = region[b + 1:] if region else []
+            cond_zones[i] = after + [tokens[pivots[i]]]
+        act_zones[n - 1] = tokens[pivots[n - 1] + 1:]
+
+        subrules = []
+        summaries = []
+        first_area: Optional[str] = None
+        self.inh_area = self.default_area  # 주제절 방을 상속 시드로
+        for i in range(n):
+            self.triggers = []
+            self.conditions = []
+            self.actions = []
+            self.condition_mode = "and"
+            self.rule_area = None
+            if i > 0:
+                self.default_area = self.inh_area
+            chip_start = len(self.chips)
+            ante = " ".join(cond_zones[i])
+            self.ante_text = ante
+            ante_clauses = self._split_by_sentinel(ante, frames) if ante.strip() else []
+            self._process_antecedent(ante_clauses, frames)
+            cons = " ".join(act_zones[i]).strip()
+            cons_clauses = _split_clauses(self.gz, cons) if cons else []
+            self._process_consequent(cons_clauses)
+            # 이 서브룰에서 만든 칩의 slot_key 를 subrule 인덱스로 접두(충돌 방지)
+            for c in self.chips[chip_start:]:
+                if c.slot_key:
+                    c.slot_key = f"subrules[{i}].{c.slot_key}"
+            summaries.append(self._summary())
+            if self.rule_area:
+                if first_area is None:
+                    first_area = self.rule_area
+                self.inh_area = self.rule_area
+            # §2.1: 이 서브룰의 (주) 트리거/조건 센서를 저장 → 뒤 서브룰의 생략된 조건이 재참조.
+            # 액션 대상 area(inh_area)와 분리해, 트리거 센서 자체를 물려준다.
+            sensor_eid = next(
+                (nd.get("entity_id")
+                 for nd in list(self.triggers) + list(self.conditions)
+                 if nd.get("type") in ("state", "state_held", "numeric_state")
+                 and nd.get("entity_id")), None)
+            if sensor_eid:
+                self.inh_trigger_entity = sensor_eid
+                se = self.gz.entity(sensor_eid)
+                self.inh_trigger_area = se.get("area_id") if se else None
+            subrules.append({"triggers": self.triggers,
+                             "condition_mode": self.condition_mode,
+                             "conditions": self.conditions,
+                             "actions": self.actions})
+        self._assign_spans()
+        return self._emit_multi(subrules, summaries, first_area)
+
+    def _emit_multi(self, subrules, summaries, area_id):
+        model = {"alias": self.sentence.strip(), "description": "",
+                 "mode": "single", "subrules": subrules}
+        errors = self._light_validate_subrules(subrules)
+        has_unresolved = any(c.status == "unresolved" for c in self.chips)
+        ok = (not errors) and (not has_unresolved)
+        scores = [c.candidates[0]["score"] for c in self.chips if c.candidates]
+        base = sum(scores) / len(scores) if scores else 0.0
+        if has_unresolved:
+            base *= 0.4
+        n_uncertain = sum(1 for c in self.chips if c.status == "uncertain")
+        base *= (0.9 ** n_uncertain)
+        confidence = round(min(base, 1.0), 3) if scores else 0.0
+        category = self._category_of([a for sr in subrules for a in sr["actions"]])
+        summary = " 그리고 ".join(s for s in summaries if s)
+        for e in errors:
+            self.warnings.append(e)
+        return {"ok": ok, "model": model, "chips": [c.as_dict() for c in self.chips],
+                "summary": summary, "area_id": area_id, "category": category,
+                "unmatched": self.unmatched, "confidence": confidence,
+                "warnings": self.warnings, "subrules_count": len(subrules)}
+
+    def _light_validate_subrules(self, subrules) -> list[str]:
+        errs = []
+        for i, sr in enumerate(subrules):
+            if not sr["triggers"]:
+                errs.append(f"{i+1}번째 규칙의 실행 조건(트리거)을 찾지 못했어요.")
+            if not sr["actions"]:
+                errs.append(f"{i+1}번째 규칙의 실행할 동작을 찾지 못했어요.")
+            for t in sr["triggers"]:
+                if t.get("type") in ("state", "state_held", "numeric_state", "zone") \
+                        and not t.get("entity_id") and "scope" not in t:
+                    errs.append(f"{i+1}번째 규칙의 트리거 대상을 확정하지 못했어요.")
+        return errs
+
     # ---- 절이 이벤트(→트리거 후보)인가 ----
     def _clause_is_event(self, clause: str) -> bool:
         if any(k in clause for k in EVENT_KEYWORDS):
@@ -381,6 +538,50 @@ class _Parser:
             return True
         return False
 
+    # ---- 모드 표면형 탐지(§6): 트리거 mode(to) / 조건 mode(state) ----
+    def _detect_mode(self, clause: str):
+        """절에서 모드 표면형을 찾아 (kind, canonical_name, on/off) 반환. 없으면 None.
+
+        '슬립모드가 켜지면'→(trigger,이름,on), '꺼지면'→(trigger,이름,off),
+        '슬립모드이고/면/일 때'→(condition,이름,on), '아니면/아니고'→(condition,이름,off).
+        """
+        best = None
+        best_len = 0
+        best_end = 0
+        for surf in self.gz.mode_surfaces:
+            idx = clause.find(surf)
+            if idx >= 0 and len(surf) > best_len:
+                best, best_len, best_end = surf, len(surf), idx + len(surf)
+        if not best:
+            return None
+        name = self.gz.mode_canonical.get(best, best)
+        tail = clause[best_end:]
+        if "꺼지" in tail:
+            return ("trigger", name, "off")
+        if "켜지" in tail:
+            return ("trigger", name, "on")
+        if "아니" in tail:
+            return ("condition", name, "off")
+        return ("condition", name, "on")
+
+    def _emit_mode_trigger(self, name, state, clause):
+        self.triggers.append({"type": "mode", "mode": name, "to": state})
+        label = f"{name} 켜지면" if state == "on" else f"{name} 꺼지면"
+        self.chips.append(_Chip(name, "trigger",
+                                f"triggers[{len(self.triggers)-1}]",
+                                [{"id": f"mode:{name}", "label": label,
+                                  "sublabel": "모드 전환", "score": 1.0}],
+                                self._span_of(name)))
+
+    def _emit_mode_condition(self, name, state, clause):
+        self.conditions.append({"type": "mode", "mode": name, "state": state})
+        label = f"{name} 켜짐" if state == "on" else f"{name} 꺼짐"
+        self.chips.append(_Chip(name, "condition",
+                                f"conditions[{len(self.conditions)-1}]",
+                                [{"id": f"mode:{name}", "label": label,
+                                  "sublabel": "모드 조건", "score": 1.0}],
+                                self._span_of(name)))
+
     def _process_antecedent(self, clauses, frames):
         held = [c for c in clauses if _SENTINEL_RE.fullmatch(c.strip())]
         other = [c for c in clauses if not _SENTINEL_RE.fullmatch(c.strip())]
@@ -388,16 +589,27 @@ class _Parser:
         for c in held:
             self._build_held(c, frames)
 
-        event_clauses = [c for c in other if self._clause_is_event(c)]
-        has_primary = bool(held) or bool(event_clauses)
+        modes = [self._detect_mode(c) for c in other]
+        # 트리거-모드 절은 그 자체가 트리거이므로 이벤트(상태) 처리에서 제외한다.
+        event_clauses = [c for c, mi in zip(other, modes)
+                         if self._clause_is_event(c) and not (mi and mi[0] == "trigger")]
+        has_primary = bool(held) or bool(event_clauses) \
+            or any(mi and mi[0] == "trigger" for mi in modes)
         boundary_clause = other[-1] if other else None
 
-        # 각 절의 달력/시간/수치 측면. 수치 비교는 다른 트리거가 없고 경계 절이면 트리거로 승격.
-        for c in other:
+        # 각 절의 달력/시간/모드조건/수치 측면. 수치 비교는 트리거가 없고 경계 절이면 승격.
+        for c, mi in zip(other, modes):
             self._emit_calendar_aspect(c)
             self._emit_time_aspect(c)
+            if mi and mi[0] == "condition":
+                self._emit_mode_condition(mi[1], mi[2], c)
             promote = (c is boundary_clause) and not has_primary and not self.triggers
             self._emit_numeric_aspect(c, as_trigger=promote)
+
+        # 트리거-모드 절 → mode 트리거
+        for c, mi in zip(other, modes):
+            if mi and mi[0] == "trigger":
+                self._emit_mode_trigger(mi[1], mi[2], c)
 
         # 이벤트 절: held 가 있으면 전부 조건, 없으면 마지막 절이 트리거
         for i, c in enumerate(event_clauses):
@@ -493,15 +705,46 @@ class _Parser:
                                     [{"id": "scope:motion", "label": label,
                                       "sublabel": "모션 센서 전체", "score": 0.85}]))
         else:
-            area = _find_area(self.gz, fr.get("loc", "")) or self.default_area \
+            explicit_area = _find_area(self.gz, fr.get("loc", "")) \
                 or _find_area(self.gz, subj)
             concept = motion or MOTION_CONCEPT
-            cands = self.gz.resolve_concept(concept, area, subj)
             slot = f"triggers[{len(self.triggers)}].entity_id"
-            chip = self._chip(subj, "trigger", slot, cands)
-            eid = chip.chosen
+            # §2.1: 방이 명시되지 않은 생략형 조건("모션이 없으면")은 앞 서브룰에서 언급된
+            # 트리거/조건 센서 엔티티를 그대로 재참조한다(액션 대상 area 상속과 분리).
+            reuse = self._inherited_sensor(concept) if explicit_area is None else None
+            if reuse:
+                e = self.gz.entity(reuse)
+                nm = (e.get("name") if e else None) or subj
+                self.chips.append(_Chip(nm, "trigger", slot,
+                                        [{"id": reuse, "label": nm,
+                                          "sublabel": "앞 규칙 센서", "score": 0.9}],
+                                        self._span_of(subj)))
+                eid = reuse
+            else:
+                area = explicit_area or self.default_area
+                cands = self.gz.resolve_concept(concept, area, subj)
+                chip = self._chip(subj, "trigger", slot, cands)
+                eid = chip.chosen
             node = {"type": "state_held", "entity_id": eid, "to": to, "for": dur}
             self.triggers.append(node)
+
+    def _inherited_sensor(self, concept) -> Optional[str]:
+        """앞 서브룰의 트리거/조건 센서 중 개념(device_class)이 맞으면 그 entity_id 재참조(§2.1).
+
+        생략된 조건 절이 앞 절에서 실제 등장한 센서를 다시 가리키게 한다. 개념이 맞지 않으면
+        (예: 앞은 도어센서, 여기선 모션) 재참조하지 않고 None → area 기반 해석으로 폴백.
+        """
+        eid = self.inh_trigger_entity
+        if not eid:
+            return None
+        e = self.gz.entity(eid)
+        if not e:
+            return None
+        dc = concept.get("device_class")
+        dc_set = set(dc) if isinstance(dc, list) else ({dc} if dc else None)
+        if dc_set is not None and e.get("device_class") not in dc_set:
+            return None
+        return eid
 
     def _context_area_for_group(self):
         # 문장 안의 방 표면형 중 '다른 곳'이 아닌 실제 방 → except_area
@@ -695,19 +938,30 @@ class _Parser:
             self._build_action(clause)
 
     def _build_action(self, clause):
-        # 모드 전환("슬립 모드로 바꿔")
+        # 모드 전환("슬립 모드로 바꿔/켜/꺼")
         for name, spec in self.gz.mode_surfaces.items():
             if name in clause:
-                node = {"type": "service", "action": spec.get("action")}
-                if spec.get("target"):
-                    node["target"] = spec["target"]
-                if spec.get("data"):
-                    node["data"] = spec["data"]
-                self.actions.append(node)
+                canon = self.gz.mode_canonical.get(name, name)
+                to = "off" if re.search(r"꺼|끄|해제|off", clause) else "on"
+                # v3 신형 모드 스펙(initial/on_action/off_action) → set_mode 노드(side-effect는
+                # 엔진 담당). 구형 스펙({action,target,data})은 하위호환으로 service 노드 유지.
+                is_v3 = isinstance(spec, dict) and any(
+                    k in spec for k in ("initial", "on_action", "off_action"))
+                if is_v3:
+                    self.actions.append({"type": "set_mode", "mode": canon, "to": to})
+                    label = f"{canon} 켜기" if to == "on" else f"{canon} 끄기"
+                else:
+                    node = {"type": "service", "action": spec.get("action")}
+                    if spec.get("target"):
+                        node["target"] = spec["target"]
+                    if spec.get("data"):
+                        node["data"] = spec["data"]
+                    self.actions.append(node)
+                    label = name
                 self.chips.append(_Chip(name, "action",
                                         f"actions[{len(self.actions)-1}]",
-                                        [{"id": name, "label": name, "sublabel": "모드 전환",
-                                          "score": 1.0}]))
+                                        [{"id": f"mode:{canon}", "label": label,
+                                          "sublabel": "모드 전환", "score": 1.0}]))
                 return
 
         # 지연: "N(초|분|시간) (뒤|후|있다가|이따가)에" → delay 액션을 먼저 삽입(§3).
@@ -737,9 +991,19 @@ class _Parser:
                 preset = cand
 
         # 대상들(체언 병렬: 와/과/하고/,)
-        targets = self._split_targets(clause)
+        targets, unresolved_targets = self._split_targets(clause)
+        # §결함2: 대상이 명시됐지만(목적격) 어휘에 없으면 → 조용히 앞 서브룰 대상으로 상속하지
+        # 말고 unresolved 로 내려 사용자 확정을 유도한다(상속은 대상 명사가 전혀 없을 때만).
+        if not targets and unresolved_targets:
+            for u in unresolved_targets:
+                self._emit_unresolved_target(u)
+            return
         if not targets and self.default_target:
             targets = [self.default_target.get("text", "")]
+        # §2.1 컨텍스트 상속: 대상이 생략되면 앞 서브룰의 마지막 액션 대상을 물려받는다.
+        if not targets and self.inh_action_entity and (turn_on or turn_off):
+            self._emit_inherited_action(clause, turn_on, turn_off, pct)
+            return
 
         made = False
         for t in targets:
@@ -748,11 +1012,35 @@ class _Parser:
         if not made:
             self.unmatched.append(clause.strip())
 
+    def _emit_inherited_action(self, clause, turn_on, turn_off, pct):
+        """대상 생략 액션이 앞 서브룰의 액션 대상을 물려받아 서비스를 방출(§2.1)."""
+        eid = self.inh_action_entity
+        e = self.gz.entity(eid)
+        domain = e["domain"] if e else eid.split(".", 1)[0]
+        self._domain_service(domain, eid, turn_on, turn_off, pct, None, clause)
+        nm = (e.get("name") if e else None) or eid
+        self.chips.append(_Chip(nm, "action",
+                                f"actions[{len(self.actions)-1}].target",
+                                [{"id": eid, "label": nm, "sublabel": "앞 규칙 대상",
+                                  "score": 0.8}]))
+
+    def _emit_unresolved_target(self, text: str):
+        """대상으로 명시됐으나 미해석된 토큰 → unresolved 칩 + unmatched(ok=False 유도, §결함2)."""
+        slot = f"actions[{len(self.actions)}].target"
+        self.chips.append(_Chip(text, "action", slot, []))
+        self.unmatched.append(text)
+
     def _split_targets(self, clause: str):
-        """액션 절에서 표적 명사들 추출(병렬 조사로 분리)."""
+        """액션 절에서 표적 명사들 추출(병렬 조사로 분리). 반환 (resolved, unresolved).
+
+        - resolved: 어휘에 매칭된 대상 표면형.
+        - unresolved: 대상 자리에 명시됐지만(목적격 을/를) 어휘에 없는 토큰(§결함2). 이게 있고
+          resolved 가 비면 앞 서브룰 대상 상속을 막고 사용자 확정을 유도한다. '대상 토큰 없음'
+          (병렬 분리 결과가 전부 빈/조사)과 '토큰 있으나 미해석'을 이렇게 구분한다.
+        """
         # '모든 X'
         if "모든" in clause:
-            return [clause[clause.find("모든"):]]
+            return [clause[clause.find("모든"):]], []
         # 조사로 분리
         body = clause
         for cmd in COMMAND_HINTS:
@@ -760,15 +1048,27 @@ class _Parser:
         # 병렬: 와/과/하고/이랑/랑/, 로 분리
         parts = re.split(r"(?:와|과|하고|이랑|랑|,)\s*", body)
         out = []
-        for p in parts:
-            p = strip_particles_simple(p.strip())
+        unresolved = []
+        for raw in parts:
+            raw = raw.strip()
+            if not raw:
+                continue
+            p = strip_particles_simple(raw)
             if not p:
                 continue
             # 방/기기/엔티티가 있는지
             if _find_concept(p) or self.gz.resolve_name(strip_particles_simple(p)) \
                     or _find_area(self.gz, p):
                 out.append(p)
-        return out
+            elif self._looks_like_target(raw):
+                # 목적격으로 명시된 대상인데 어휘에 없음 → 조용히 버리지 말 것(§결함2).
+                unresolved.append(p)
+        return out, unresolved
+
+    @staticmethod
+    def _looks_like_target(raw: str) -> bool:
+        """토큰이 '대상 자리'의 명사인가 — 목적격 표지(을/를)가 있으면 명시된 대상으로 본다."""
+        return raw.endswith("을") or raw.endswith("를")
 
     def _emit_service(self, target_text, clause, turn_on, turn_off, pct, preset):
         area = _find_area(self.gz, target_text) or self.default_area
@@ -848,6 +1148,7 @@ class _Parser:
             self.unmatched.append(target_text.strip() or clause.strip())
             return
         self._domain_service(domain, eid, turn_on, turn_off, pct, preset, clause)
+        self.inh_action_entity = eid  # 다음 서브룰 대상 상속용(§2.1)
         if self.rule_area is None and e and e.get("area_id"):
             self.rule_area = e["area_id"]
 
@@ -949,15 +1250,19 @@ class _Parser:
                 errs.append("트리거 대상을 확정하지 못했어요.")
         return errs
 
+    _CAT_MAP = {"light": "lighting", "switch": "switch", "fan": "fan",
+                "cover": "cover", "climate": "climate", "media_player": "media",
+                "lock": "lock", "scene": "etc"}
+
     def _category(self):
-        cat_map = {"light": "lighting", "switch": "switch", "fan": "fan",
-                   "cover": "cover", "climate": "climate", "media_player": "media",
-                   "lock": "lock", "scene": "etc"}
-        for a in self.actions:
+        return self._category_of(self.actions)
+
+    def _category_of(self, actions):
+        for a in actions:
             act = a.get("action") or ""
             dom = act.split(".", 1)[0]
-            if dom in cat_map:
-                return cat_map[dom]
+            if dom in self._CAT_MAP:
+                return self._CAT_MAP[dom]
         return "etc"
 
     _DAY_TYPE_LABELS = {"weekday": "평일", "weekend": "주말", "holiday": "공휴일"}
@@ -972,6 +1277,10 @@ class _Parser:
             typ = t.get("type")
             if typ == "zone":
                 zone_persons.append(self._nm(t.get("entity_id")))
+                continue
+            if typ == "mode":
+                tdesc.append(f"{t.get('mode')}{josa_i_ga(t.get('mode') or '')} "
+                             f"{'켜지면' if t.get('to') == 'on' else '꺼지면'}")
                 continue
             if typ == "state":
                 nm = self._nm(t.get("entity_id"))
@@ -1030,11 +1339,18 @@ class _Parser:
             elif typ == "state":
                 nm = self._nm(c.get("entity_id"))
                 cdesc.append(f"{nm} 상태가 {c.get('state')}")
+            elif typ == "mode":
+                cdesc.append(f"{c.get('mode')} "
+                             f"{'켜짐' if c.get('state') == 'on' else '꺼짐'}")
         # 액션
         adesc = []
         for a in self.actions:
             if a.get("type") == "delay":
                 adesc.append(f"{self._dur(a.get('duration', {}))} 뒤에")
+                continue
+            if a.get("type") == "set_mode":
+                adesc.append(f"{a.get('mode')}{josa_eul_reul(a.get('mode') or '')} "
+                             f"{'켭니다' if a.get('to') == 'on' else '끕니다'}")
                 continue
             act = a.get("action", "")
             tgt = a.get("target", {}).get("entity_id", [])

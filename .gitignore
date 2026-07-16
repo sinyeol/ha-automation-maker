@@ -3,5 +3,9 @@ __pycache__/
 .pytest_cache/
 venv/
 devdata/
+claude-work/
 .DS_Store
 ._*
+.claude/worktrees/
+devdata/
+claude-work/

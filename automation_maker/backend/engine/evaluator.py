@@ -43,12 +43,13 @@ def _parse_clock(s) -> dtime | None:
 class EvalContext:
     """조건 평가에 필요한 런타임 참조 묶음."""
 
-    def __init__(self, cache, gvars, now_fn, inventory_fn, fired_index=None):
+    def __init__(self, cache, gvars, now_fn, inventory_fn, fired_index=None, mode_state=None):
         self.cache = cache
         self.gvars = gvars
         self.now = now_fn
         self.inventory_fn = inventory_fn
         self.fired_index = fired_index
+        self.mode_state = mode_state  # SPEC-V3 §1.3 mode 조건 평가용(없으면 off 취급)
 
 
 def scope_all_state(scope, state, ctx, duration=None) -> bool:
@@ -106,6 +107,10 @@ def evaluate_condition(cond: dict, ctx: EvalContext) -> bool:
 
     if typ == "season":
         return ctx.gvars.season() in (cond.get("seasons") or [])
+
+    if typ == "mode":
+        current = ctx.mode_state.get(cond.get("mode")) if ctx.mode_state is not None else "off"
+        return current == cond.get("state")
 
     if typ == "held":
         return cache.held_for(cond.get("entity_id"), cond.get("state"),

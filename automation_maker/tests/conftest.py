@@ -167,6 +167,97 @@ def v2_data_dir(tmp_path, monkeypatch):
     return d
 
 
+# ===========================================================================
+# v3 엔진 헬퍼 (SPEC-V3). mode_state 배선 + 서브룰 발화 검증용.
+#
+# now_fn/loop 주입 없이 실루프 + 짧은 실시간 타이머로 결정적으로 검증한다.
+# test_modes.py / test_multiclause.py 가 공유한다.
+# ===========================================================================
+class V3Source:
+    """on_event/on_resync 를 직접 구동하는 모의 이벤트 소스(상시 연결)."""
+
+    def __init__(self, initial=None):
+        self.initial = initial or []
+        self._on_event = None
+
+    async def start(self, on_event, on_resync, on_connect=None, on_disconnect=None):
+        self._on_event = on_event
+        on_resync(self.initial)
+        if on_connect is not None:
+            on_connect()
+
+    async def stop(self):
+        self._on_event = None
+
+    def inject(self, entity_id, new_state, old_state="off", attributes=None):
+        old = {"entity_id": entity_id, "state": old_state, "attributes": {}}
+        new = {"entity_id": entity_id, "state": new_state,
+               "attributes": attributes or {}}
+        self._on_event(entity_id, old, new)
+
+
+class V3RecordingHA:
+    """call_service 호출을 (domain, service, data) 튜플로 기록한다."""
+
+    def __init__(self):
+        self.calls = []
+
+    async def call_service(self, domain, service, data):
+        self.calls.append((domain, service, dict(data or {})))
+
+
+def v3_seed(*entity_states):
+    return [{"entity_id": eid, "state": st, "attributes": {}}
+            for eid, st in entity_states]
+
+
+V3_INVENTORY = {
+    "areas": [{"area_id": "living_room", "name": "거실"}],
+    "entities": [
+        {"entity_id": "binary_sensor.living_room_motion", "domain": "binary_sensor",
+         "name": "거실 모션", "area_id": "living_room", "device_class": "motion",
+         "state": "off"},
+        {"entity_id": "light.living_room_main", "domain": "light",
+         "name": "거실 메인등", "area_id": "living_room", "state": "off"},
+    ],
+    "zones": [],
+}
+
+
+@pytest.fixture
+def make_v3_engine(v2_data_dir):
+    """mode_state 를 배선한 RuleEngine + 구동 소스 + 기록 HA 를 만드는 팩토리.
+
+    반환: async _make(settings=None, seed=()) -> (engine, rule_store, runlog, ha, source, mode_state)
+    """
+    import asyncio as _asyncio
+    from backend.engine.engine import RuleEngine
+    from backend.engine.modes import ModeState
+    from backend.engine.rule_store import RuleStore
+    from backend.engine.runlog import RunLog
+    from backend.engine.state_cache import StateCache
+    from backend.engine.storage import JsonStore
+    from backend.engine.variables import GlobalVars
+
+    async def _make(settings=None, seed=(), inventory=None):
+        loop = _asyncio.get_running_loop()
+        cfg = _copy.deepcopy(settings) if settings is not None \
+            else _copy.deepcopy(DEFAULT_V2_SETTINGS)
+        rs = RuleStore(JsonStore(v2_data_dir / "rules.json", [], loop=loop))
+        rl = RunLog(JsonStore(v2_data_dir / "runlog.json", [], loop=loop))
+        cache = StateCache()
+        gvars = GlobalVars(cfg)
+        ms = ModeState(cfg, JsonStore(v2_data_dir / "modes_state.json", {}, loop=loop))
+        ha = V3RecordingHA()
+        inv = inventory if inventory is not None else V3_INVENTORY
+        engine = RuleEngine(rs, cache, gvars, ha, lambda: inv, rl,
+                            loop=loop, mode_state=ms)
+        src = V3Source(list(seed))
+        await engine.start(src)
+        return engine, rs, rl, ha, src, ms
+    return _make
+
+
 @pytest.fixture
 def make_v2_app(v2_data_dir, monkeypatch):
     """register_v2_routes 로 배선된 DEV 앱을 만드는 팩토리.
@@ -185,6 +276,7 @@ def make_v2_app(v2_data_dir, monkeypatch):
         from backend.engine.runlog import RunLog
         from backend.engine.engine import RuleEngine
         from backend.engine.event_source import MockEventSource
+        from backend.engine.modes import ModeState
         from backend.nl.gazetteer import Gazetteer
 
         monkeypatch.setenv("DEV_MODE", "1")
@@ -213,8 +305,13 @@ def make_v2_app(v2_data_dir, monkeypatch):
         cache = StateCache()
         app["rule_store"] = rule_store
         app["runlog"] = runlog
+        # SPEC-V3 §1.2: ModeState 를 엔진에 배선한다. settings.modes 정의를 공유
+        # 참조하므로 설정의 모드가 그대로 반영된다(생성자 인자 추가 흡수).
+        mode_state = ModeState(settings_store.data,
+                               JsonStore(v2_data_dir / "modes_state.json", {}))
+        app["mode_state"] = mode_state
         engine = RuleEngine(rule_store, cache, global_vars, ha,
-                            lambda: app["inventory"], runlog)
+                            lambda: app["inventory"], runlog, mode_state=mode_state)
         app["engine"] = engine
         event_source = MockEventSource(ha)
         app["event_source"] = event_source

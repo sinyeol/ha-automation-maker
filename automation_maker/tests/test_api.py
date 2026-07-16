@@ -30,7 +30,7 @@ async def test_health(aiohttp_client, make_app):
     resp = await client.get("/api/health")
     assert resp.status == 200
     body = await resp.json()
-    assert body == {"ok": True, "mode": "dev", "version": "2.0.0"}
+    assert body == {"ok": True, "mode": "dev", "version": "3.0.0"}
 
 
 @pytest.mark.asyncio

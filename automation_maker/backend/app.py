@@ -17,6 +17,7 @@ from backend.automation_builder import (
 )
 from backend.engine.engine import RuleEngine
 from backend.engine.event_source import HAEventSource, MockEventSource
+from backend.engine.modes import ModeState
 from backend.engine.rule_store import RuleStore
 from backend.engine.runlog import RunLog
 from backend.engine.state_cache import StateCache
@@ -25,7 +26,7 @@ from backend.engine.variables import GlobalVars
 from backend.ha_client import HAClient, merge_inventory
 from backend.nl.gazetteer import Gazetteer
 
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 FRONTEND = Path(__file__).parent.parent / "frontend"
 ALLOWED_REMOTES = {"172.30.32.2", "127.0.0.1"}
 
@@ -112,12 +113,17 @@ def _default_settings() -> dict:
         "segments": {"dawn": "00:00", "morning": "06:00", "day": "09:00",
                      "evening": "17:00", "night": "21:00"},
         "persons": {"나": "person.user", "와이프": "person.wife"},
-        "modes": {"슬립 모드": {"action": "scene.turn_on",
-                              "target": {"entity_id": ["scene.sleep_mode"]}}},
+        # SPEC-V3 §1.1·§7: 신형 모드 정의(initial/on_action/off_action). 슬립 모드는
+        # 켜질 때 scene.sleep_mode 를 실행하고, 꺼질 때 side-effect 없음.
+        "modes": {"슬립 모드": {"initial": "off",
+                              "on_action": {"action": "scene.turn_on",
+                                            "target": {"entity_id": ["scene.sleep_mode"]}},
+                              "off_action": None}},
         "near_home": {"zone_state": "home", "note": "사람 엔티티가 이 상태면 '집 근처'"},
         "aliases": [],
         "confirm_actions": ["lock", "valve"],
-        "llm": {"enabled": False},
+        # SPEC-V3 §4.1: LLM 해석 백엔드 선택(off|api|cli). 키/토큰은 환경에서만 읽는다.
+        "llm": {"backend": "off"},
     }
 
 
@@ -391,7 +397,16 @@ async def _on_startup(app: web.Application) -> None:
     runlog_json = JsonStore(ddir / "runlog.json", [])
     runlog = RunLog(runlog_json)
     app["runlog"] = runlog
-    app["_json_stores"] = [settings_store, rules_json, runlog_json]
+
+    # 상태 모드 변수(SPEC-V3 §1.2·§7): 정의는 settings.modes, 런타임 상태는
+    # modes_state.json. ModeState 생성이 settings.modes 를 v3 형식으로 제자리
+    # 마이그레이션(v2 {action,target,data} → on_action/off_action/initial)한다.
+    modes_json = JsonStore(ddir / "modes_state.json", {})
+    mode_state = ModeState(settings_store.data, modes_json)
+    app["mode_state"] = mode_state
+
+    # modes_json 도 종료 flush 대상에 포함(engine.stop → mode_state.save 예약분 확정).
+    app["_json_stores"] = [settings_store, rules_json, runlog_json, modes_json]
 
     state_cache = StateCache()
 
@@ -399,7 +414,7 @@ async def _on_startup(app: web.Application) -> None:
         return app["_inventory"]
 
     engine = RuleEngine(rule_store, state_cache, app["global_vars"], ha,
-                        inventory_fn, runlog)
+                        inventory_fn, runlog, mode_state=mode_state)
     app["engine"] = engine
 
     event_source = MockEventSource(ha) if app["dev_mode"] else HAEventSource()

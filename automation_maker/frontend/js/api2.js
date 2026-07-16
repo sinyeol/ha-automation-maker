@@ -28,3 +28,13 @@ export const runRule = (id) => post(P + 'rules/' + encodeURIComponent(id) + '/ru
 export const getRunlog = () => get(P + 'runlog');
 export const getSettings = () => get(P + 'settings');
 export const putSettings = (body) => put(P + 'settings', body);
+
+// v3 — 모드 상태
+export const getModes = () => get(P + 'modes');
+export const toggleMode = (name, on) =>
+  post(P + 'modes/' + encodeURIComponent(name), { on });
+
+// v3 — 수동 단어 매핑
+export const tokenizeSentence = (sentence) => post(P + 'tokenize', { sentence });
+export const buildFromTokens = (sentence, assignments) =>
+  post(P + 'build', { sentence, assignments });

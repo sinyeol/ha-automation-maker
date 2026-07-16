@@ -30,18 +30,43 @@ function formatLastFired(iso) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// subrules(다중 조건-액션 쌍)가 있으면 순회, 없으면 최상위 4필드를 단일 서브룰로 취급(하위호환, §2.2).
+function subrulesOf(model) {
+  const subs = model && model.subrules;
+  if (Array.isArray(subs) && subs.length) return subs;
+  return [{
+    triggers: (model && model.triggers) || [],
+    conditions: (model && model.conditions) || [],
+    actions: (model && model.actions) || [],
+  }];
+}
+
 function ruleIcon(model) {
-  const trigs = (model && model.triggers) || [];
-  return trigs.some(t => TIME_TRIGGERS.has(t.type)) ? '⏰' : '📡';
+  const subs = subrulesOf(model);
+  let hasTime = false;
+  for (const sr of subs) {
+    for (const t of sr.triggers || []) {
+      if (t.type === 'mode') return '🌙';   // 모드 트리거 우선 표시
+      if (TIME_TRIGGERS.has(t.type)) hasTime = true;
+    }
+  }
+  return hasTime ? '⏰' : '📡';
+}
+
+function subruleCount(model) {
+  const subs = model && model.subrules;
+  return Array.isArray(subs) ? subs.length : 1;
 }
 
 function targetCount(model) {
   const ids = new Set();
-  for (const a of (model && model.actions) || []) {
-    const t = a.target || {};
-    const e = t.entity_id != null ? t.entity_id : a.entity_id;
-    if (typeof e === 'string') ids.add(e);
-    else if (Array.isArray(e)) e.forEach(x => ids.add(x));
+  for (const sr of subrulesOf(model)) {
+    for (const a of sr.actions || []) {
+      const t = a.target || {};
+      const e = t.entity_id != null ? t.entity_id : a.entity_id;
+      if (typeof e === 'string') ids.add(e);
+      else if (Array.isArray(e)) e.forEach(x => ids.add(x));
+    }
   }
   return ids.size;
 }
@@ -246,6 +271,8 @@ export function renderRoutines(root) {
 
     const areaName = r.area_id ? (store.getArea(r.area_id) || {}).name || r.area_id : '미배정';
     const subParts = [ruleIcon(model) + ' ' + areaName, `대상 ${targetCount(model)}개`];
+    const nSub = subruleCount(model);
+    if (nSub > 1) subParts.push(`규칙 ${nSub}개`);
 
     const title = el('button', {
       class: 'routine-title-btn', onClick: () => startEdit(r),

@@ -97,11 +97,14 @@ class Gazetteer:
         for surf, pid in (self.settings.get("persons") or {}).items():
             if pid:
                 self.person_surfaces[surf] = pid
-        # 모드: settings.modes
+        # 모드: settings.modes. 표면형(공백 유무 이형태) → spec, 그리고 → 정규명(canonical).
         self.mode_surfaces: dict[str, dict] = {}
+        self.mode_canonical: dict[str, str] = {}
         for name, spec in (self.settings.get("modes") or {}).items():
             self.mode_surfaces[name] = spec
             self.mode_surfaces.setdefault(name.replace(" ", ""), spec)
+            self.mode_canonical[name] = name
+            self.mode_canonical.setdefault(name.replace(" ", ""), name)
         # 별칭: settings.aliases 오버레이(항상 우선)
         self.alias_surfaces: dict[str, str] = {}
         for al in (self.settings.get("aliases") or []):
