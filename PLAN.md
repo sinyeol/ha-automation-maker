@@ -106,11 +106,11 @@ subscribe_events+재연결·/data 영속화·holidays(KR) 확정 / 형태소 분
 |---|---|---|---|
 | v3-1 | 리서치(Claude CLI 헤드리스) + 기존 모드 처리 파악 | Fable | ✅ |
 | v3-2 | SPEC-V3 계약 + 다중 조건-액션 문법 확정 | Fable | ✅ |
-| v3-3 | 구현: 모드/파서/LLM백엔드/API/프론트/통합/테스트 | Opus×7 | |
-| v3-4 | 문서 갱신 | Sonnet | |
-| v3-5 | 검증: pytest + 골든2문장 + CLI 실검증 + E2E | Fable | |
-| v3-6 | 다차원 리뷰 + 적대적 검증 + 수정 | Fable + Opus | |
-| v3-7 | 커밋/푸시 + 보고 | Fable | |
+| v3-3 | 구현: 모드/파서/LLM백엔드/API/프론트/통합/테스트 | Opus×7 | ✅ |
+| v3-4 | 문서 갱신 | Sonnet | ✅ |
+| v3-5 | 검증: pytest 321 + 골든2문장 + CLI 실검증(Max 구독) + E2E + Docker(claude 설치 확인) | Fable | ✅ |
+| v3-6 | 다차원 리뷰(4관점) + 적대적 검증 + 확정 결함 4건 + 방어 5건 수정 | Fable + Opus×3 | ✅ |
+| v3-7 | 커밋/푸시(6a22e38) + 보고 | Fable | ✅ |
 
 ## 4. 저장소 구조
 
