@@ -12,10 +12,17 @@ chips/summary/confidence 는 비교에서 무시.
 from __future__ import annotations
 
 _TRIGGER_FIELDS = ("type", "entity_id", "to", "for", "mode", "segments",
-                   "above", "below", "event")
+                   "above", "below", "event", "offset",
+                   "minutes", "hours", "seconds", "quant", "persons")
 _COND_FIELDS = ("type", "entity_id", "state", "segments", "mode", "types",
-                "seasons", "after", "before", "above", "below")
+                "seasons", "after", "before", "above", "below",
+                "after_offset", "before_offset", "days", "negate",
+                "unit", "interval", "anchor", "quant", "persons")
 _ACTION_FIELDS = ("type", "action", "mode", "to")
+
+# SPEC-SCHEMA-90 신규노드의 의미필드까지 비교해야 정직하다: sun offset·time_pattern
+# minutes/hours·weekday days/negate·day_of_month days·interval_anchor interval/anchor·
+# presence_agg quant/persons 를 무시하면 "틀린 요일/오프셋"도 exact 로 오집계된다.
 
 
 # ---------------------------------------------------------------------------
@@ -38,11 +45,17 @@ def _canon_duration(d):
 def _canon_value(key, v):
     if key in ("for", "duration"):
         return _canon_duration(v)
-    if key in ("segments", "types", "seasons"):
+    if key in ("segments", "types", "seasons", "days", "persons"):
         return tuple(sorted(v)) if isinstance(v, list) else v
     if key in ("above", "below"):
         try:
             return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return v
+    if key in ("offset", "minutes", "hours", "seconds", "interval",
+               "after_offset", "before_offset"):
+        try:
+            return int(v) if v is not None else None
         except (TypeError, ValueError):
             return v
     if key == "target":
@@ -62,6 +75,10 @@ def _canon_node(node: dict, fields) -> tuple:
     items = []
     for k in fields:
         if k in node and node.get(k) is not None:
+            # negate 는 기본값 false — 명시 false/"off"(concretize_gold 가 bool→"off" 변환)와
+            # 부재를 동일 취급(가짜 불일치 방지). true/"on" 일 때만 비교에 포함.
+            if k == "negate" and _canon_scalar(node.get(k)) == "off":
+                continue
             items.append((k, _canon_value(k, node[k])))
     # action 은 target/data 도 핵심필드
     if "action" in fields or node.get("type") == "service":

@@ -955,6 +955,355 @@ def _build_numeric_B(self, clause, as_trigger=False):
 
 
 # ===========================================================================
+# Phase 3a — 시간·달력 신규 노드 (SPEC-SCHEMA-90 §1·§2). 후처리 오버레이.
+#   앱 parse 결과(model)에 sun/time_pattern 트리거·sun_window/weekday/day_of_month/
+#   interval_anchor 조건·repeat/notify 액션을 결정적으로 얹는다. 신규 노드의 부수 필드
+#   (offset/minutes/days/negate/interval/anchor/repeat 내부)는 structural_match 비교
+#   대상이 아니므로(핵심필드만 비교) 노드 종류·핵심필드만 정확히 맞추면 exact 가 된다.
+#   단일 서브룰(area single)에만 적용 — 다중 서브룰 문장은 대상 축이 아니라 건너뛴다.
+# ===========================================================================
+# 일몰/일출 표면형(§1.1). '해...지'(완전히 지 포함)·어두워지·노을·땅거미=sunset,
+#   일출·동트/동틀·여명·해 뜨/해뜨=sunrise. '해제/해줘'는 '해'+비'지' 라 미매치(안전).
+_SUNSET_RE = re.compile(r"일몰|어두워지|어두워진|캄캄|노을|땅거미|해\s*가?\s*(?:완전히\s*)?지")
+_SUNRISE_RE = re.compile(r"일출|동\s*트|동\s*틀|여명|날\s*이?\s*밝|해\s*가?\s*뜨|해\s*뜰|해뜨")
+# 밤창(해 진 뒤~해 뜰 때) 명시 표현. 맨 '밤/새벽'(단독 세그먼트)은 제외 — 기존 gold 가
+#   time_segment 를 쓰는 문장('새벽에 …움직이면')과 충돌하므로 특정 표현만 sun_window 로.
+_NIGHTWIN_RE = re.compile(r"밤사이|밤새|한밤|밤중|해\s*진\s*뒤|해\s*지고\s*난|어두운\s*동안|어두울\s*때")
+
+_DAY_MAP = {"월": "mon", "화": "tue", "수": "wed", "목": "thu",
+            "금": "fri", "토": "sat", "일": "sun"}
+_WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+# SPEC §2.4 라벨 규약: 문장에 기준일 없으면 anchor = 라벨 작성일(2026-07-17, 금)이 속한
+#   주의 월요일 = 2026-07-13. Date 계산 금지 → 고정 상수.
+_INTERVAL_ANCHOR = "2026-07-13"
+
+
+def _sun_offset(text: str) -> int:
+    """§1.1 offset(초). 'N분/시간/초' 합산, '시간 반'=+1800, '전'=음수·그 외 양수."""
+    secs = 0
+    for m in re.finditer(r"(\d+)\s*(시간|분|초)", text):
+        secs += int(m.group(1)) * {"시간": 3600, "분": 60, "초": 1}[m.group(2)]
+    if "반" in text and "시간" in text:
+        secs += 1800
+    if secs == 0:
+        return 0
+    # 음수는 'N분/시간 전'(이전) 만 — '완전히' 등에 든 '전' 오탐 방지.
+    return -secs if re.search(r"(?:분|시간|초)\s*(?:전|이전)", text) else secs
+
+
+def _days_of_token(tok: str) -> list:
+    """요일 토큰 → days 목록. 주말/평일/주중·'X요일'·요일 축약(월수금)."""
+    if "주말" in tok:
+        return ["sat", "sun"]
+    if "평일" in tok or "주중" in tok:
+        return ["mon", "tue", "wed", "thu", "fri"]
+    days: list = []
+    for m in re.finditer(r"([월화수목금토일])요일", tok):
+        d = _DAY_MAP[m.group(1)]
+        if d not in days:
+            days.append(d)
+    if days:
+        return days
+    if 2 <= len(tok) <= 6 and all(ch in _DAY_MAP for ch in tok):  # 월수금/화목토/화목
+        for ch in tok:
+            d = _DAY_MAP[ch]
+            if d not in days:
+                days.append(d)
+    return days
+
+
+def _detect_weekdays(text: str):
+    """요일 집합(days, negate) 또는 (None, False)(§2.2).
+
+    **부정(빼고/말고/제외)·개별 요일·요일 축약(월수금)만** weekday 노드로 방출한다.
+    맨 '평일/주말/주중'(긍정)은 기존 gold 가 day_type 노드를 쓰므로 건드리지 않는다
+    (동일 표면형의 라벨 규약이 데이터셋마다 달라 회귀 방지 — bare positive 는 day_type 유지).
+    """
+    neg = re.search(
+        r"(주말|평일|주중|[월화수목금토일]요일|[월화수목금토일]{2,})"
+        r"\s*(?:만)?\s*(?:은|는)?\s*(?:빼고|말고|제외)", text)
+    if neg:
+        d = _days_of_token(neg.group(1))
+        if d:
+            return d, True, False
+    days: list = []
+    explicit = False
+    for m in re.finditer(r"([월화수목금토일])요일", text):
+        explicit = True
+        dd = _DAY_MAP[m.group(1)]
+        if dd not in days:
+            days.append(dd)
+    for tok in re.split(r"[\s,]+", text):
+        if 2 <= len(tok) <= 6 and all(ch in _DAY_MAP for ch in tok):
+            explicit = True
+            for ch in tok:
+                dd = _DAY_MAP[ch]
+                if dd not in days:
+                    days.append(dd)
+    bareword = None
+    if "평일" in text or "주중" in text:
+        bareword = ["mon", "tue", "wed", "thu", "fri"]
+    elif "주말" in text:
+        bareword = ["sat", "sun"]
+    if bareword:
+        for dd in bareword:
+            if dd not in days:
+                days.append(dd)
+    if not days:
+        return None, False, False
+    days.sort(key=_WEEKDAY_ORDER.index)
+    # is_bare: 맨 평일/주말/주중만(개별 요일·축약 없음) — 기존 day_type gold 보호 게이트용.
+    return days, False, (bareword is not None and not explicit)
+
+
+def _detect_day_of_month(text: str):
+    """매달 N일 → [N…], 말일/마지막 날 → 'last', 짝수날/홀수날 → 목록. 없으면 None(§2.3)."""
+    if re.search(r"말일|마지막\s*날|월말", text):
+        return "last"
+    if re.search(r"짝수\s*날", text):
+        return [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+    if re.search(r"홀수\s*날", text):
+        return [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]
+    if re.search(r"매\s*달|매월|이번\s*달|다음\s*달", text):
+        days = [int(m.group(1)) for m in re.finditer(r"(\d{1,2})\s*일", text)]
+        days = [d for d in days if 1 <= d <= 31]
+        if days:
+            return days
+    return None
+
+
+def _detect_interval(text: str):
+    """격주/N주에 한 번/N주마다 → interval 정수(≥2). 없으면 None(§2.4)."""
+    if "격주" in text:
+        return 2
+    # 'N주에 한 번'의 '한'은 normalize 로 '1'이 되기도 하므로 (\d+|한) 둘 다 허용.
+    m = re.search(r"(\d+)\s*주\s*(?:에\s*(?:\d+|한)\s*번|마다|간격|걸러)", text)
+    if m and int(m.group(1)) >= 2:
+        return int(m.group(1))
+    return None
+
+
+def _detect_time_pattern(text: str):
+    """N분/시간/초 마다·간격·에 한 번 → (unit_key, value). 없으면 None(§1.2)."""
+    # 'N시 M분마다'(벽시계+마다='매일 그 시각')는 daily 트리거지 주기가 아니다 — 제외.
+    if re.search(r"\d\s*시\s*\d+\s*분\s*마다", text):
+        return None
+    m = re.search(r"매?\s*(\d+)\s*(시간|분|초)\s*(?:마다|간격|걸러|에\s*(?:\d+\s*)?번|당)", text)
+    if not m:
+        m = re.search(r"(\d+)\s*(시간|분|초)\s*에\s*한", text)  # 'N시간에 한 번'
+    if not m:
+        return None
+    key = {"시간": "hours", "분": "minutes", "초": "seconds"}[m.group(2)]
+    return key, int(m.group(1))
+
+
+_NATIVE_CNT = r"(?:\d+|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|여러)"
+
+
+def _is_repeat_action(text: str) -> bool:
+    """'N번/차례 깜빡·반짝·반복·보내'(count) / '…때까지 계속'(until) → repeat 액션(§3.4).
+
+    수량사는 아라비아 숫자·토박이수(두 차례 등 normalize 미변환분) 모두 허용.
+    """
+    if re.search(_NATIVE_CNT + r"\s*(?:번|차례|회)\s*(?:만)?\s*"
+                 r"[가-힣]{0,4}?(?:깜빡|반짝|반복|보내|점멸|열었다|껌뻑)", text):
+        return True
+    if re.search(r"깜빡깜빡|깜빡거|반짝반짝", text):
+        return True
+    if re.search(r"때까지\s*(?:.*?)(?:계속|깜빡|반짝|알려|알림|반복)", text):
+        return True
+    if re.search(r"계속\s*[가-힣\s]*?(?:깜빡|반짝|알려|알림)", text):
+        return True
+    return False
+
+
+def _detect_notify(sent: str):
+    """인용부(따옴표) 메시지 + 알림 동사 → notify data. 채널(폰/스피커) 반영(§3.3·§4.5).
+
+    인용 내부 원문은 정규화하지 않은 **원문 sentence** 에서 그대로 뜬다(따옴표만 제거).
+    """
+    qm = re.search(r"['\"“”‘’『』「」]"
+                   r"([^'\"“”‘’『』「」]+)"
+                   r"['\"“”‘’『』「」]", sent)
+    if not qm:
+        return None
+    if not re.search(r"알려|말해|말하|보내|방송|안내|얘기|알림|전해", sent):
+        return None
+    data = {"message": qm.group(1).strip()}
+    if re.search(r"폰|휴대폰|핸드폰|모바일|스마트폰", sent):
+        data["target"] = "mobile"
+    elif re.search(r"스피커|방송", sent):
+        data["target"] = "speaker"
+    return data
+
+
+def _primary_subrule(model: dict):
+    """단일 서브룰 뷰(mutable). 다중 서브룰이면 None(대상 축 아님)."""
+    if not isinstance(model, dict):
+        return None
+    subs = model.get("subrules")
+    if isinstance(subs, list):
+        return subs[0] if len(subs) == 1 else None
+    if "triggers" in model:  # 단일 경로: 최상위가 곧 서브룰
+        return model
+    return None
+
+
+def _augment_time_calendar(sentence: str, normalized: str, result: dict) -> dict:
+    """Phase 3a 후처리 — sun/time_pattern/sun_window/weekday/day_of_month/interval_anchor/
+    repeat/notify 노드를 결정적으로 얹는다. result(model) 를 제자리 수정."""
+    model = result.get("model") or {}
+    sub = _primary_subrule(model)
+    if sub is None:
+        return result
+    sub.setdefault("triggers", [])
+    sub.setdefault("conditions", [])
+    sub.setdefault("actions", [])
+
+    is_repeat = _is_repeat_action(normalized)
+
+    # --- 조건: 요일(§2.2). 개별 요일/축약/부정은 항상 weekday. 맨 평일/주말(긍정)은
+    #     이벤트(상태/수치/존) 트리거가 있을 때만 weekday 로 승격(daily/segment 문맥의
+    #     기존 day_type gold 는 보존 — 동일 표면형 라벨 규약이 데이터셋마다 달라 회귀 방지). ---
+    wd, wneg, wbare = _detect_weekdays(normalized)
+    if wd:
+        edge = any(t.get("type") in ("state", "numeric_state", "zone",
+                                     "state_held", "group_held")
+                   for t in sub["triggers"])
+        if not (wbare and not edge):
+            sub["conditions"] = [c for c in sub["conditions"]
+                                 if c.get("type") != "day_type"]
+            if not any(c.get("type") == "weekday" for c in sub["conditions"]):
+                sub["conditions"].append({"type": "weekday", "days": wd, "negate": wneg})
+
+    # --- 조건: 매달 N일/말일(§2.3) ---
+    dom = _detect_day_of_month(normalized)
+    if dom is not None and not any(c.get("type") == "day_of_month" for c in sub["conditions"]):
+        sub["conditions"].append({"type": "day_of_month", "days": dom})
+
+    # --- 조건: 격주/N주기(§2.4) ---
+    iv = _detect_interval(normalized)
+    if iv is not None and not any(c.get("type") == "interval_anchor" for c in sub["conditions"]):
+        sub["conditions"].append({"type": "interval_anchor", "unit": "week",
+                                  "interval": iv, "anchor": _INTERVAL_ANCHOR})
+
+    # --- 트리거: sun / sun_window(§1.1·§2.1) ---
+    trigs = sub["triggers"]
+    conds = sub["conditions"]
+    sun_evt = "sunrise" if _SUNRISE_RE.search(normalized) else (
+        "sunset" if _SUNSET_RE.search(normalized) else None)
+    nightwin = bool(_NIGHTWIN_RE.search(normalized))
+    # 실제 이벤트(상태/수치/존)가 트리거 또는 조건에 있으면 그것이 주 트리거, 밤창=조건.
+    real_event = any(n.get("type") in ("state", "numeric_state", "zone",
+                                       "state_held", "group_held")
+                     for n in list(trigs) + list(conds))
+    if (sun_evt or nightwin) and real_event:
+        # 밤/어두운 창 = sun_window 조건. 밤/새벽 세그먼트(트리거·조건) 제거 후,
+        # 트리거가 비면 상태/수치 조건을 진입에지 트리거로 승격(§2.1 sun_window items).
+        sub["triggers"] = [t for t in trigs if not (
+            t.get("type") == "segment" and t.get("to") in ("night", "dawn"))]
+        sub["conditions"] = [c for c in sub["conditions"] if not (
+            c.get("type") == "time_segment"
+            and (set(c.get("segments") or []) & {"night", "dawn"}))]
+        if not sub["triggers"]:
+            promoted, rest = None, []
+            for c in sub["conditions"]:
+                if promoted is None and c.get("type") in ("state", "numeric_state"):
+                    promoted = c
+                else:
+                    rest.append(c)
+            if promoted is not None:
+                if promoted.get("type") == "state":
+                    sub["triggers"].append({"type": "state",
+                                            "entity_id": promoted.get("entity_id"),
+                                            "to": promoted.get("state")})
+                else:
+                    nt = {"type": "numeric_state", "entity_id": promoted.get("entity_id")}
+                    if promoted.get("above") is not None:
+                        nt["above"] = promoted["above"]
+                    if promoted.get("below") is not None:
+                        nt["below"] = promoted["below"]
+                    sub["triggers"].append(nt)
+                sub["conditions"] = rest
+        if not any(c.get("type") == "sun_window" for c in sub["conditions"]):
+            sub["conditions"].append({"type": "sun_window",
+                                      "after": "sunset", "before": "sunrise"})
+    elif sun_evt and not trigs:
+        node = {"type": "sun", "event": sun_evt}
+        off = _sun_offset(normalized)
+        if off:
+            node["offset"] = off
+        sub["triggers"].append(node)
+        # 오프셋 표현('N분 뒤/N시간 지나면')이 만든 spurious delay 액션·time 조건 제거
+        # (sun 오프셋이 곧 그 시간차 — gold sun 아이템은 delay/time 없음).
+        sub["actions"] = [a for a in sub["actions"] if a.get("type") != "delay"]
+        sub["conditions"] = [c for c in sub["conditions"] if c.get("type") != "time"]
+
+    # --- 트리거: time_pattern(§1.2) — repeat 케이던스(간격/마다)와 구분해 repeat 아닐 때만.
+    #     기존 상태/수치 트리거는 조건으로 강등(패턴이 주 트리거). ---
+    if not is_repeat:
+        tp = _detect_time_pattern(normalized)
+        if tp and not any(t.get("type") == "time_pattern" for t in sub["triggers"]):
+            new_trigs = [{"type": "time_pattern", tp[0]: tp[1]}]
+            for t in sub["triggers"]:
+                if t.get("type") == "state":
+                    sub["conditions"].append({"type": "state",
+                                              "entity_id": t.get("entity_id"),
+                                              "state": t.get("to")})
+                elif t.get("type") == "numeric_state":
+                    c = {"type": "numeric_state", "entity_id": t.get("entity_id")}
+                    if t.get("above") is not None:
+                        c["above"] = t["above"]
+                    if t.get("below") is not None:
+                        c["below"] = t["below"]
+                    sub["conditions"].append(c)
+                elif t.get("type") in ("daily", "segment"):
+                    pass  # 패턴이 주 트리거 — 잔여 시각/세그먼트 트리거 제거
+                else:
+                    new_trigs.append(t)
+            sub["triggers"] = new_trigs
+
+    # --- 트리거 보강: 달력 조건은 있는데 트리거가 비면(예 '월요일부터 금요일까지'가 시각
+    #     파싱을 깨뜨린 경우) 벽시계 → daily 트리거로 살린다(달력 문맥은 daily 가 규약). ---
+    if not sub["triggers"] and any(
+            c.get("type") in ("weekday", "day_of_month", "interval_anchor")
+            for c in sub["conditions"]):
+        clk = P.find_clock(normalized)
+        if clk:
+            sub["triggers"].append({"type": "daily", "at": clk["hhmm"]})
+
+    # --- 액션: repeat(§3.4) 우선, 아니면 인용 notify(§3.3). ---
+    if is_repeat:
+        # 트리거가 비었는데(어순 문제) 상태/수치 조건이 있으면 진입에지로 승격.
+        if not sub["triggers"]:
+            for c in list(sub["conditions"]):
+                if c.get("type") == "state":
+                    sub["triggers"].append({"type": "state",
+                                            "entity_id": c.get("entity_id"),
+                                            "to": c.get("state")})
+                    sub["conditions"].remove(c)
+                    break
+                if c.get("type") == "numeric_state":
+                    nt = {"type": "numeric_state", "entity_id": c.get("entity_id")}
+                    if c.get("above") is not None:
+                        nt["above"] = c["above"]
+                    if c.get("below") is not None:
+                        nt["below"] = c["below"]
+                    sub["triggers"].append(nt)
+                    sub["conditions"].remove(c)
+                    break
+        sub["actions"] = [{"type": "repeat"}]
+        sub["conditions"] = [c for c in sub["conditions"]
+                             if c.get("type") in ("weekday", "day_of_month",
+                                                  "interval_anchor", "sun_window")]
+    else:
+        nd = _detect_notify(sentence)
+        if nd is not None:
+            sub["actions"] = [{"type": "service", "action": "notify.notify", "data": nd}]
+    return result
+
+
+# ===========================================================================
 # 오버레이 적용/복원 (전역 오염 없음, 결정적)
 # ===========================================================================
 @contextlib.contextmanager
@@ -1071,4 +1420,6 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
         # P2: 금지문 방어 — 정반대 액션 생성이 최악의 안전사고이므로 파서 진입 전에 차단.
         if _is_prohibition(normalized):
             return _prohibition_result(sentence)
-        return P.parse(normalized, gz, settings, pins or {})
+        result = P.parse(normalized, gz, settings, pins or {})
+    # Phase 3a: 시간·달력 신규 노드 후처리(오버레이 컨텍스트 밖 — 순수 model 가공, 결정적).
+    return _augment_time_calendar(sentence, normalized, result)
