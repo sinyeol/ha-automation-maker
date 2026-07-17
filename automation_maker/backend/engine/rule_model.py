@@ -369,10 +369,36 @@ def _need_list(vals, allowed, path, errors, label) -> None:
         errors.append({"path": path, "message": f"{label} 값이 올바르지 않습니다."})
 
 
-def _validate_action_node(a, path, errors, n_triggers, mode_names) -> None:
-    """set_mode 는 엔진 전용 액션이라 별도 검증, 나머지는 v1 검증기로 위임한다."""
+def _validate_action_node(a, path, errors, n_triggers, mode_names, valid_ids=None) -> None:
+    """set_mode·if 는 v2 엔진 전용 노드라 rule_model 검증기로, 나머지는 v1 로 위임한다.
+
+    if 액션(S7 else 분기)은 조건에 신규 노드(weekday/sun_window/presence_agg/day_type/
+    time_segment/day_of_month/interval_anchor 등)를 담을 수 있으므로 v1 _validate_condition
+    이 아니라 v2 _validate_condition 으로 검증한다 — 그렇지 않으면 신규 조건이 '지원하지
+    않는 조건 유형'으로 오거부돼 else 분기 규칙을 저장할 수 없다. then/else 액션은 set_mode
+    를 포함할 수 있어 재귀적으로 v2 노드 검증한다(서비스 도메인·실존은 _scan 이 별도로 훑음)."""
     if isinstance(a, dict) and a.get("type") == "set_mode":
         _check_mode_ref(a, path, errors, mode_names, "to")
+        return
+    if isinstance(a, dict) and a.get("type") == "if":
+        ifs = a.get("if")
+        if not isinstance(ifs, list) or not ifs:
+            errors.append({"path": path + ".if", "message": "조건을 하나 이상 추가해 주세요."})
+        else:
+            for i, cc in enumerate(ifs):
+                _validate_condition(cc, f"{path}.if[{i}]", errors, valid_ids or set(),
+                                    n_triggers, mode_names)
+        then = a.get("then")
+        if not isinstance(then, list) or not then:
+            errors.append({"path": path + ".then",
+                           "message": "조건이 참일 때 실행할 동작을 추가해 주세요."})
+        else:
+            for i, ac in enumerate(then):
+                _validate_action_node(ac, f"{path}.then[{i}]", errors, n_triggers,
+                                      mode_names, valid_ids)
+        for i, ac in enumerate(a.get("else") or []):
+            _validate_action_node(ac, f"{path}.else[{i}]", errors, n_triggers,
+                                  mode_names, valid_ids)
         return
     _validate_action(a, path, errors, n_triggers)
 
@@ -459,7 +485,8 @@ def _validate_subrule(sub, prefix, errors, valid_ids, mode_names) -> None:
         errors.append({"path": abase, "message": "실행할 동작을 하나 이상 추가해 주세요."})
     else:
         for i, a in enumerate(actions):
-            _validate_action_node(a, f"{abase}[{i}]", errors, n_triggers, mode_names)
+            _validate_action_node(a, f"{abase}[{i}]", errors, n_triggers, mode_names,
+                                  valid_ids)
         _scan_service_actions(actions, abase, errors, valid_ids)
 
 

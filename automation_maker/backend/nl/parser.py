@@ -9,12 +9,11 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from . import postpass, surface
+from . import postpass, summary, surface
 from .gazetteer import (DAY_TYPE_WORDS, DEVICE_CONCEPTS, MOTION_CONCEPT,
                         MOTION_WORDS, SEASON_WORDS, SEGMENT_WORDS, Gazetteer)
 from .normalize import (find_clock, find_percent, find_temperature,
-                        josa_eul_reul, josa_i_ga, normalize_ws,
-                        strip_particles_simple, to_duration_obj,
+                        normalize_ws, strip_particles_simple, to_duration_obj,
                         token_boundary_ok)
 
 # ---------------------------------------------------------------------------
@@ -1834,146 +1833,12 @@ class _Parser:
                 return self._CAT_MAP[dom]
         return "etc"
 
-    _DAY_TYPE_LABELS = {"weekday": "평일", "weekend": "주말", "holiday": "공휴일"}
-    _SEASON_LABELS = {"spring": "봄", "summer": "여름", "autumn": "가을", "winter": "겨울"}
-
     def _summary(self):
-        parts = []
-        # 트리거
-        tdesc = []
-        zone_persons = []
-        for t in self.triggers:
-            typ = t.get("type")
-            if typ == "zone":
-                zone_persons.append(self._nm(t.get("entity_id")))
-                continue
-            if typ == "mode":
-                tdesc.append(f"{t.get('mode')}{josa_i_ga(t.get('mode') or '')} "
-                             f"{'켜지면' if t.get('to') == 'on' else '꺼지면'}")
-                continue
-            if typ == "state":
-                nm = self._nm(t.get("entity_id"))
-                verb = self._state_verb(t.get('entity_id'), t.get('to'))
-                # 대상 이름에 이미 모션/움직임 의미가 있으면 중복 서술 제거
-                if self._is_motion_name(nm):
-                    verb = verb.replace("움직임이 ", "")
-                tdesc.append(f"{nm}{josa_i_ga(nm)} {verb}")
-            elif typ == "state_held":
-                nm = self._nm(t.get("entity_id"))
-                tdesc.append(f"{nm}{josa_i_ga(nm)} {self._dur(t['for'])} 동안 "
-                             f"{'없으면' if t.get('to')=='off' else '있으면'}")
-            elif typ == "group_held":
-                tdesc.append(f"다른 곳 움직임이 {self._dur(t['for'])} 동안 없으면")
-            elif typ == "numeric_state":
-                nm = self._nm(t.get("entity_id"))
-                if t.get("above") is not None:
-                    tdesc.append(f"{nm}{josa_i_ga(nm)} {t['above']} 이상이 되면")
-                elif t.get("below") is not None:
-                    tdesc.append(f"{nm}{josa_i_ga(nm)} {t['below']} 이하가 되면")
-            elif typ == "segment":
-                w = [k for k, v in SEGMENT_WORDS.items() if v == t.get("to")]
-                word = w[0] if w else ""
-                tdesc.append(f"{word}{josa_i_ga(word)} 되면")
-            elif typ == "daily":
-                tdesc.append(f"매일 {t.get('at')}에")
-        if zone_persons:
-            joined = ' 또는 '.join(zone_persons)
-            tdesc.insert(0, f"{joined}{josa_i_ga(joined)} 집에 도착하면")
-        if tdesc:
-            parts.append(" 또는 ".join(tdesc))
-        # 조건
-        cdesc = []
-        for c in self.conditions:
-            typ = c.get("type")
-            if typ == "time_segment":
-                w = [k for k, v in SEGMENT_WORDS.items() if v == c["segments"][0]]
-                cdesc.append(f"{w[0] if w else ''} 시간대")
-            elif typ == "day_type":
-                labels = [self._DAY_TYPE_LABELS.get(x, x) for x in c.get("types", [])]
-                cdesc.append("/".join(labels))
-            elif typ == "season":
-                labels = [self._SEASON_LABELS.get(x, x) for x in c.get("seasons", [])]
-                cdesc.append("/".join(labels))
-            elif typ == "time":
-                if c.get("after"):
-                    cdesc.append(f"{c['after'][:5]} 이후")
-                if c.get("before"):
-                    cdesc.append(f"{c['before'][:5]} 이전")
-            elif typ == "numeric_state":
-                nm = self._nm(c.get("entity_id"))
-                if c.get("above") is not None:
-                    cdesc.append(f"{nm}{josa_i_ga(nm)} {c['above']} 이상")
-                if c.get("below") is not None:
-                    cdesc.append(f"{nm}{josa_i_ga(nm)} {c['below']} 이하")
-            elif typ == "state":
-                nm = self._nm(c.get("entity_id"))
-                cdesc.append(f"{nm} 상태가 {c.get('state')}")
-            elif typ == "mode":
-                cdesc.append(f"{c.get('mode')} "
-                             f"{'켜짐' if c.get('state') == 'on' else '꺼짐'}")
-        # 액션
-        adesc = []
-        for a in self.actions:
-            if a.get("type") == "delay":
-                adesc.append(f"{self._dur(a.get('duration', {}))} 뒤에")
-                continue
-            if a.get("type") == "set_mode":
-                adesc.append(f"{a.get('mode')}{josa_eul_reul(a.get('mode') or '')} "
-                             f"{'켭니다' if a.get('to') == 'on' else '끕니다'}")
-                continue
-            act = a.get("action", "")
-            tgt = a.get("target", {}).get("entity_id", [])
-            nm = self._nm(tgt[0]) if tgt else act.split(".")[0]
-            if act.endswith("turn_on") or act == "cover.open_cover":
-                extra = ""
-                if a.get("data", {}).get("brightness_pct"):
-                    extra = f" {a['data']['brightness_pct']}% 밝기로"
-                verb = "엽니다" if act == "cover.open_cover" else "켭니다"
-                adesc.append(f"{nm}{josa_eul_reul(nm)}{extra} {verb}")
-            elif act.endswith("turn_off") or act == "cover.close_cover":
-                verb = "닫습니다" if act == "cover.close_cover" else "끕니다"
-                adesc.append(f"{nm}{josa_eul_reul(nm)} {verb}")
-            elif act == "climate.set_fan_mode":
-                adesc.append(f"팬 모드를 {a['data'].get('fan_mode')}로 설정합니다")
-            elif act and act.startswith("scene."):
-                adesc.append("모드를 전환합니다")
-            else:
-                adesc.append(f"{nm} 동작을 실행합니다")
-        cond_txt = (", " + " 그리고 ".join(cdesc)) if cdesc else ""
-        return f"{' '.join(parts)}{cond_txt} → {', '.join(adesc)}." if parts else \
-               f"{', '.join(adesc)}."
-
-    @staticmethod
-    def _is_motion_name(nm) -> bool:
-        return bool(nm) and any(w in nm for w in ("모션", "움직임", "인기척", "동작", "재실"))
-
-    def _state_verb(self, eid, to):
-        e = self.gz.entity(eid)
-        dc = e.get("device_class") if e else None
-        if dc in ("door", "window", "opening", "garage_door"):
-            return "열리면" if to == "on" else "닫히면"
-        if dc in ("motion", "occupancy", "presence"):
-            return "움직임이 감지되면" if to == "on" else "움직임이 없으면"
-        return "켜지면" if to == "on" else "꺼지면"
-
-    def _nm(self, eid):
-        if not eid:
-            return "대상"
-        e = self.gz.entity(eid)
-        if e:
-            return e.get("name") or eid
-        # person
-        for surf, pid in self.gz.person_surfaces.items():
-            if pid == eid:
-                return surf
-        return eid
-
-    def _dur(self, d):
-        if d.get("hours"):
-            return f"{d['hours']}시간"
-        if d.get("minutes"):
-            return f"{d['minutes']}분"
-        return f"{d.get('seconds',0)}초"
+        # §S7: 요약 서술(트리거/조건/액션 → 한국어)은 파서·후처리 공용 모듈(summary)로
+        # 단일화한다. 후처리(postpass)가 신규 노드(sun/weekday/presence/if 등)를 얹은 뒤
+        # 같은 함수로 재생성하므로 확인 카드에 미서술 노드가 남지 않는다(APP-PORT-PLAN §1.3 S7).
+        return summary.summarize_subrule(self.triggers, self.conditions,
+                                         self.actions, self.gz)
 
 
 def parse(sentence: str, gazetteer: Gazetteer, settings: dict,

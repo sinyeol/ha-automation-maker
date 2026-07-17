@@ -33,6 +33,8 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional
 
+from . import summary
+
 _QUOTE_SPAN_RE = re.compile(r"['\"“”‘’『』「」][^'\"“”‘’『』「」]*['\"“”‘’『』「」]")
 
 # ---------------------------------------------------------------------------
@@ -1067,6 +1069,296 @@ def _augment_presence(normalized: str, sub: dict, settings) -> bool:
     return True
 
 
+# ===========================================================================
+# #32 else 분기 조립(APP-PORT-PLAN §1.3, S7) — "A면 X, 아니면 Y" / 평일-주말 대비쌍을
+#   한 트리거 + {type:if, if:[조건], then:[액션], else:[액션]} 단일 서브룰로 합친다.
+#   ★ 명시 대비("아니면"류 / 평일·주말 동시)일 때만 발동(회귀 방지). 대칭 전이형
+#   ("켜지면 A 꺼지면 B", "아니면" 없음)은 게이트에 안 걸려 서브룰 2개 그대로 유지한다.
+#   오버레이 _ELSE_MARK_RE/_detect_if_condition/_clause_polarity/_polar_service/
+#   _weekday_contrast_then_else/_augment_else_branch 이식. anchor 는 _monday_iso(now_fn).
+# ===========================================================================
+_ELSE_MARK_RE = re.compile(
+    r"아니면|아니고|아닐\s*때|안\s*그러면|그렇지\s*않으면|그렇지\s*않다면|그\s*외에")
+# 극성(켜/끄) 판정 — 대비쌍 then/else 재구성용(명령 동사 어간만).
+_ON_VERB_RE = re.compile(r"켜|틀|열어|여[는나]|올려|가동|작동|점등|높여|데워|재생|방송|가습")
+_OFF_VERB_RE = re.compile(r"꺼|끄|닫|내려|잠[그가긴]|소등|낮춰|멈춰|정지|중지")
+
+
+def _clause_polarity(text: str):
+    """절 표면형 → 'on'/'off'/None. 켜류만 있으면 on, 끄류만 있으면 off."""
+    on = _ON_VERB_RE.search(text)
+    off = _OFF_VERB_RE.search(text)
+    if on and not off:
+        return "on"
+    if off and not on:
+        return "off"
+    if on and off:  # 둘 다 — 뒤에 온 것(문말 서술)이 그 절의 명령.
+        return "on" if on.start() > off.start() else "off"
+    return None
+
+
+def _polar_service(action: str, pol: str) -> str:
+    """서비스명 + 극성 → 서비스명. cover 는 open/close, 그 외 turn_on/off."""
+    domain = (action or "").split(".")[0] or "homeassistant"
+    if domain == "cover":
+        return "cover.open_cover" if pol == "on" else "cover.close_cover"
+    return domain + (".turn_on" if pol == "on" else ".turn_off")
+
+
+def _weekday_contrast_then_else(normalized: str, acts: list):
+    """'평일엔 X, 주말엔 Y' then(평일)·else(주말) 액션을 표면 동사 극성으로 재구성.
+    파서가 대비를 한 액션으로 병합(then==else)해도 base service 의 대상/도메인을 on/off 로
+    전개해 복원한다. 극성 확정 불가·동일 극성이면 None(→ 기존 acts[0]/acts[-1] 유지)."""
+    base = next((a for a in acts if isinstance(a, dict) and a.get("type") == "service"
+                 and isinstance(a.get("target"), dict)
+                 and a["target"].get("entity_id")), None)
+    if base is None:
+        return None
+    p_idx = normalized.find("평일")
+    w_idx = normalized.find("주말")
+    if p_idx < 0 or w_idx < 0 or p_idx >= w_idx:
+        return None
+    then_pol = _clause_polarity(normalized[p_idx + 2:w_idx])  # 평일절
+    else_pol = _clause_polarity(normalized[w_idx + 2:])       # 주말절
+    if then_pol is None or else_pol is None or then_pol == else_pol:
+        return None
+    tgt = base["target"]
+    then_act = {"type": "service", "action": _polar_service(base["action"], then_pol),
+                "target": tgt}
+    else_act = {"type": "service", "action": _polar_service(base["action"], else_pol),
+                "target": tgt}
+    return [then_act], [else_act]
+
+
+def _detect_if_condition(normalized: str, subs: list, trigs: list, gz, settings) -> list:
+    """else 분기의 if 조건 노드(하나)를 검출. 못 찾으면 [](조립은 계속 — 트리거 정확성이
+    exact 를 결정하고 if 내부는 정직성 차원의 성의 검출)."""
+    # (1) 트리거가 아닌 서브룰 조건(numeric_state/state 등)을 그대로 if 조건으로.
+    for s in subs:
+        for c in s.get("conditions", []) or []:
+            if isinstance(c, dict) and c.get("type") and c.get("type") != "time":
+                return [dict(c)]
+    # (2) presence 양화("둘 다 집에 있을 때/아무도 없으면").
+    info = _presence_info(normalized)
+    if info:
+        q = {"empty": "none", "all": "all", "some": "any"}.get(info["concept"], "any")
+        node = {"type": "presence_agg", "quant": q}
+        if re.search(r"둘\s*다|우리\s*둘|부부|두\s*사람", normalized):
+            persons = sorted(set((settings or {}).get("persons", {}).values())) \
+                or ["person.user", "person.wife"]
+            node["persons"] = persons
+        return [node]
+    # (3) 요일(개별/부정) — bare 평일/주말은 (4)에서 day_type 로.
+    wd, wneg, wbare = _detect_weekdays(normalized)
+    if wd and not wbare:
+        return [{"type": "weekday", "days": wd, "negate": wneg}]
+    # (4) day_type(평일/주말) 대비쌍.
+    if "평일" in normalized:
+        return [{"type": "day_type", "types": ["weekday"]}]
+    if "주말" in normalized:
+        return [{"type": "day_type", "types": ["weekend"]}]
+    # (5) 밤창(sun_window) — 세그먼트보다 먼저('해 진 뒤').
+    if _NIGHTWIN_RE.search(normalized) or re.search(r"해\s*진\s*뒤", normalized):
+        return [{"type": "sun_window", "after": "sunset", "before": "sunrise"}]
+    # (6) 시간대 세그먼트.
+    for w, seg in (("오전", "morning"), ("오후", "afternoon"), ("새벽", "dawn"),
+                   ("아침", "morning"), ("저녁", "evening"), ("밤", "night"),
+                   ("낮", "afternoon")):
+        if w in normalized:
+            return [{"type": "time_segment", "segments": [seg]}]
+    return []
+
+
+def _augment_else_branch(sentence: str, normalized: str, result: dict, gz, settings,
+                         now_fn=None) -> bool:
+    """다중 서브룰(명시 대비)을 한 트리거 + if/else 액션으로 조립. 조립했으면 True."""
+    if not isinstance(result, dict):
+        return False
+    model = result.get("model")
+    if not isinstance(model, dict):
+        return False
+    # 다중 규칙은 subrules 리스트, 단일 규칙은 평탄 model(subrules 키 없음)로 반환된다.
+    subs_raw = model.get("subrules")
+    if isinstance(subs_raw, list) and subs_raw:
+        subs, flat = subs_raw, False
+    elif isinstance(model.get("triggers"), list) or isinstance(model.get("actions"), list):
+        subs, flat = [model], True
+    else:
+        return False
+    # 단일 서브룰(또는 평탄 단일 규칙)이 평일/주말 대비쌍("평일엔 X, 주말엔 Y")이면 if/else 로.
+    # ★ '평일' 과 '주말' 이 동시에 있을 때만(명시 대비) 발동.
+    if len(subs) == 1:
+        if not ("평일" in normalized and "주말" in normalized):
+            return False
+        # 배제("주말은 빼고" = 평일에만)는 대비쌍이 아니다 — weekday 조건이지 if/else 아님.
+        if re.search(r"빼고|말고|제외", normalized):
+            return False
+        s0 = subs[0]
+        trigs = list(s0.get("triggers") or [])
+        acts = [a for a in s0.get("actions", []) or []
+                if isinstance(a, dict)
+                and a.get("type") in ("service", "set_mode", "delay", "repeat")
+                and not (a.get("type") == "service"
+                         and a.get("action") == "homeassistant.turn_on")]
+        if not trigs or not acts:
+            return False
+        if_cond = _detect_if_condition(normalized, subs, trigs, gz, settings)
+        # 파서가 대비를 한 액션으로 병합했으면(then==else) 표면 극성으로 then/else 복원.
+        te = _weekday_contrast_then_else(normalized, acts)
+        if te is not None:
+            then_acts, else_acts = te
+        else:
+            then_acts, else_acts = [acts[0]], [acts[-1]]
+        if_node = {"type": "if", "if": if_cond, "then": then_acts, "else": else_acts}
+        if flat:
+            model["conditions"] = []
+            model["actions"] = [if_node]
+        else:
+            model["subrules"] = [{"triggers": trigs, "conditions": [],
+                                  "actions": [if_node]}]
+        return True
+    if not (_ELSE_MARK_RE.search(normalized)
+            or ("평일" in normalized and "주말" in normalized
+                and not re.search(r"빼고|말고|제외", normalized))):
+        return False
+    # 트리거: 첫 트리거 보유 서브룰. 없으면 sun 보정('해 지면/뜨면').
+    trig_sub = next((s for s in subs if s.get("triggers")), None)
+    trigs = list(trig_sub["triggers"]) if trig_sub else []
+    if not trigs:
+        sun_evt = "sunrise" if _SUNRISE_RE.search(normalized) else (
+            "sunset" if _SUNSET_RE.search(normalized) else None)
+        if sun_evt:
+            node = {"type": "sun", "event": sun_evt}
+            off = _sun_offset(normalized)
+            if off:
+                node["offset"] = off
+            trigs = [node]
+    if not trigs:
+        return False
+    # then/else 액션(파서가 만든 실질 액션). 빈-대상 오파싱(homeassistant.turn_on)을 우선
+    # 제외하고, 둘 미만이면 포함해 다시 채운다(if 내부는 트리거 대비 부차적).
+    def _pick(include_ha):
+        return [a for s in subs for a in s.get("actions", []) or []
+                if isinstance(a, dict)
+                and a.get("type") in ("service", "set_mode", "delay", "repeat")
+                and (include_ha or not (a.get("type") == "service"
+                                        and a.get("action") == "homeassistant.turn_on"))]
+    svc_acts = _pick(False)
+    if len(svc_acts) < 2:
+        svc_acts = _pick(True)
+    if len(svc_acts) < 2:
+        return False   # then/else 둘 다 필요 — 하나뿐이면 분기 조립 보류(안전)
+    if_cond = _detect_if_condition(normalized, subs, trigs, gz, settings)
+    if_node = {"type": "if", "if": if_cond,
+               "then": [svc_acts[0]], "else": [svc_acts[-1]]}
+    # 공통(if 분기 밖) 달력 조건: 매달 N일/격주는 서브룰 공통 조건으로 남는다.
+    conds: list = []
+    dom = _detect_day_of_month(normalized)
+    if dom is not None:
+        conds.append({"type": "day_of_month", "days": dom})
+    iv = _detect_interval(normalized)
+    if iv is not None:
+        conds.append({"type": "interval_anchor", "unit": "week",
+                      "interval": iv, "anchor": _monday_iso(now_fn)})
+    model["subrules"] = [{"triggers": trigs, "conditions": conds, "actions": [if_node]}]
+    return True
+
+
+# ===========================================================================
+# 신규 노드 확인 카드 완비(APP-PORT-PLAN §1.3 S7) — 요약 재생성 + 칩 방출.
+#   후처리가 만든 신규 노드(sun/sun_window/weekday/day_of_month/interval_anchor/
+#   time_pattern/presence_agg/if)를 사람이 읽는 한국어로 서술하고 칩을 얹는다. 파서 요약은
+#   후처리 전 상태라 신규 노드를 모르므로, 신규 노드가 있으면 model 기준으로 재생성한다.
+# ===========================================================================
+_NEW_TRIGGER_TYPES = {"sun", "time_pattern", "presence_agg"}
+_NEW_COND_TYPES = {"sun_window", "weekday", "day_of_month", "interval_anchor",
+                   "presence_agg"}
+
+
+def _has_new_node(model: dict) -> bool:
+    for sub in _subrules(model):
+        for t in sub.get("triggers", []) or []:
+            if isinstance(t, dict) and t.get("type") in _NEW_TRIGGER_TYPES:
+                return True
+        for c in sub.get("conditions", []) or []:
+            if isinstance(c, dict) and c.get("type") in _NEW_COND_TYPES:
+                return True
+        for a in sub.get("actions", []) or []:
+            if isinstance(a, dict) and a.get("type") == "if":
+                return True
+    return False
+
+
+def _new_node_chip(node: dict, role: str, slot_key: str):
+    """신규 노드 → 확인 카드 칩(as_dict 형). label/sublabel 은 summary 라벨 재사용."""
+    typ = node.get("type")
+    if typ == "sun":
+        cid = f"sun:{node.get('event')}"
+        label = summary.sun_label(node)
+        sub = "일출 트리거" if node.get("event") == "sunrise" else "일몰 트리거"
+    elif typ == "time_pattern":
+        cid, label, sub = "time_pattern", summary.time_pattern_label(node), "주기 트리거"
+    elif typ == "sun_window":
+        cid, label, sub = "sun_window", summary.sun_window_label(node), "밤 시간 조건"
+    elif typ == "weekday":
+        cid = "weekday:" + "".join(node.get("days") or [])
+        label, sub = summary.weekday_label(node), "요일 조건"
+    elif typ == "day_of_month":
+        cid, label, sub = "day_of_month", summary.day_of_month_label(node), "날짜 조건"
+    elif typ == "interval_anchor":
+        cid, label, sub = "interval_anchor", summary.interval_label(node), "주기 조건"
+    elif typ == "presence_agg":
+        as_t = role == "trigger"
+        cid = f"presence:{node.get('quant')}"
+        label = summary.presence_label(node, as_t)
+        sub = "인원 트리거" if as_t else "인원 조건"
+    elif typ == "if":
+        cid, label, sub = "if_else", "조건 분기", "아니면 분기"
+    else:
+        return None
+    return {"span": [0, 0], "text": label, "role": role, "slot_key": slot_key,
+            "status": "confirmed", "chosen": cid,
+            "candidates": [{"id": cid, "label": label, "sublabel": sub, "score": 1.0}]}
+
+
+def _emit_new_node_chips(result: dict, model: dict, gz) -> None:
+    """신규 노드마다 확인 카드 칩을 추가(같은 chosen id 는 한 번만)."""
+    chips = result.setdefault("chips", [])
+    have = {c.get("chosen") for c in chips if isinstance(c, dict)}
+
+    def _add(node, role, slot):
+        chip = _new_node_chip(node, role, slot)
+        if chip and chip["chosen"] not in have:
+            chips.append(chip)
+            have.add(chip["chosen"])
+
+    subs = _subrules(model)
+    multi = isinstance(model.get("subrules"), list)
+    for si, sub in enumerate(subs):
+        pre = f"subrules[{si}]." if multi else ""
+        for i, t in enumerate(sub.get("triggers", []) or []):
+            if isinstance(t, dict) and t.get("type") in _NEW_TRIGGER_TYPES:
+                _add(t, "trigger", f"{pre}triggers[{i}]")
+        for i, c in enumerate(sub.get("conditions", []) or []):
+            if isinstance(c, dict) and c.get("type") in _NEW_COND_TYPES:
+                _add(c, "condition", f"{pre}conditions[{i}]")
+        for i, a in enumerate(sub.get("actions", []) or []):
+            if isinstance(a, dict) and a.get("type") == "if":
+                _add(a, "action", f"{pre}actions[{i}]")
+                for j, ic in enumerate(a.get("if") or []):
+                    if isinstance(ic, dict) and ic.get("type") in _NEW_COND_TYPES:
+                        _add(ic, "condition", f"{pre}actions[{i}].if[{j}]")
+
+
+def _finalize_new_nodes(result: dict, gz) -> None:
+    """신규 노드가 있으면 요약을 model 기준으로 재생성하고 칩을 얹는다(확인 카드 완비)."""
+    model = result.get("model")
+    if not isinstance(model, dict) or not _has_new_node(model):
+        return
+    result["summary"] = summary.summarize_model(model, gz)
+    _emit_new_node_chips(result, model, gz)
+
+
 # ---------------------------------------------------------------------------
 # 공개 진입점
 # ---------------------------------------------------------------------------
@@ -1084,7 +1376,9 @@ def apply(result: dict, sentence: str, normalized: str, gz, settings,
     _remap_erv_fan(result, normalized, gz)
     sub = _primary_subrule(result.get("model") or {})
     if sub is None:
-        # 다중 서브룰/비정형: 액션 후처리 대상 아님(else/다중절은 S7).
+        # 다중 서브룰: else/다중절(#32, S7) 조립 시도 후 신규 노드 확인 카드 완비.
+        _augment_else_branch(sentence, normalized, result, gz, settings, now_fn)
+        _finalize_new_nodes(result, gz)
         return result
     sub.setdefault("triggers", [])
     sub.setdefault("conditions", [])
@@ -1097,6 +1391,7 @@ def apply(result: dict, sentence: str, normalized: str, gz, settings,
     if _augment_presence(normalized, sub, settings):
         _augment_actions_only(sentence, normalized, sub, is_repeat)
         _mark_savable(result, sub)   # presence 트리거를 세웠으면 저장가능 승급
+        _finalize_new_nodes(result, gz)   # presence 요약·칩 완비(확인 카드)
         return result
 
     _augment_calendar(normalized, sub, now_fn)   # #21 weekday/day_of_month/interval_anchor (S3)
@@ -1119,4 +1414,7 @@ def apply(result: dict, sentence: str, normalized: str, gz, settings,
     _augment_held_for(normalized, sub)
     _augment_actions_only(sentence, normalized, sub, is_repeat)
     _augment_negation_not(sentence, normalized, result, gz)
+    # #32 else 분기(S7): 단일 서브룰 평일/주말 대비쌍을 if/else 로. 이어서 신규노드 완비.
+    _augment_else_branch(sentence, normalized, result, gz, settings, now_fn)
+    _finalize_new_nodes(result, gz)
     return result
