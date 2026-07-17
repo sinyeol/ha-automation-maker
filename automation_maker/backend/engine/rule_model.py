@@ -6,6 +6,7 @@ subrules 순회와 mode 트리거/조건/set_mode 액션 검증을 추가한다.
 from __future__ import annotations
 
 import re
+from datetime import date
 
 from ..automation_builder import KNOWN_SERVICES, _validate_action
 
@@ -22,6 +23,7 @@ _UNSUPPORTED = {"template"}
 
 _SUN_EVENTS = {"sunrise", "sunset"}
 _MAX_SUN_OFFSET = 43200  # ±12시간(초)
+_WEEKDAYS_SET = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
 
 
 def _check_int_offset(v, path, errors) -> None:
@@ -164,6 +166,36 @@ def _validate_condition(c, path, errors, valid_ids, n_triggers, mode_names=None)
                                "message": "일출 또는 일몰을 지정해 주세요."})
         _check_int_offset(c.get("after_offset"), path + ".after_offset", errors)
         _check_int_offset(c.get("before_offset"), path + ".before_offset", errors)
+    elif typ == "weekday":
+        days = c.get("days")
+        if (not isinstance(days, list) or not days
+                or any(d not in _WEEKDAYS_SET for d in days)):
+            errors.append({"path": path + ".days",
+                           "message": "요일을 하나 이상 올바르게 지정해 주세요."})
+        if not isinstance(c.get("negate"), bool):
+            errors.append({"path": path + ".negate",
+                           "message": "요일 제외 여부(negate)는 참/거짓이어야 합니다."})
+    elif typ == "day_of_month":
+        days = c.get("days")
+        ok_list = (isinstance(days, list) and days
+                   and all(isinstance(d, int) and not isinstance(d, bool)
+                           and 1 <= d <= 31 for d in days))
+        if days != "last" and not ok_list:
+            errors.append({"path": path + ".days",
+                           "message": "1~31 사이의 날짜 목록 또는 'last'(말일)를 지정해 주세요."})
+    elif typ == "interval_anchor":
+        if c.get("unit") != "week":
+            errors.append({"path": path + ".unit",
+                           "message": "간격 단위는 주(week)만 지원합니다."})
+        iv = c.get("interval")
+        if isinstance(iv, bool) or not isinstance(iv, int) or iv < 2:
+            errors.append({"path": path + ".interval",
+                           "message": "간격은 2 이상의 정수여야 합니다."})
+        try:
+            date.fromisoformat(str(c.get("anchor")))
+        except (ValueError, TypeError):
+            errors.append({"path": path + ".anchor",
+                           "message": "기준일은 YYYY-MM-DD 형식이어야 합니다."})
     elif typ == "time_segment":
         _need_list(c.get("segments"), _SEGMENT_KEYS, path + ".segments", errors, "시간대")
     elif typ == "day_type":

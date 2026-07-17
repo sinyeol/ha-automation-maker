@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import time as dtime, timedelta
+from datetime import date, time as dtime, timedelta
 
 log = logging.getLogger("automation_maker.evaluator")
 
@@ -135,6 +135,15 @@ def evaluate_condition(cond: dict, ctx: EvalContext) -> bool:
     if typ == "sun_window":
         return _eval_sun_window(cond, ctx)
 
+    if typ == "weekday":
+        return _eval_weekday(cond, ctx)
+
+    if typ == "day_of_month":
+        return _eval_day_of_month(cond, ctx)
+
+    if typ == "interval_anchor":
+        return _eval_interval_anchor(cond, ctx)
+
     if typ == "and":
         return all(evaluate_condition(c, ctx) for c in (cond.get("conditions") or []))
     if typ == "or":
@@ -167,6 +176,39 @@ def _eval_sun_window(cond, ctx) -> bool:
     end = end + timedelta(seconds=int(cond.get("before_offset") or 0))
     st, en, nt = start.time(), end.time(), now.time()
     return (st <= nt <= en) if st <= en else (nt >= st or nt <= en)
+
+
+def _eval_weekday(cond, ctx) -> bool:
+    """요일 집합(APP-PORT-PLAN §2.5). now.weekday() ∈ days XOR negate. 순수 평가."""
+    days = cond.get("days") or []
+    hit = _WEEKDAYS[ctx.now().weekday()] in days
+    return hit != bool(cond.get("negate"))
+
+
+def _eval_day_of_month(cond, ctx) -> bool:
+    """매달 N일/말일(§2.5). days=="last" → 내일이 1일(=오늘이 말일). 아니면 now.day ∈ days."""
+    days = cond.get("days")
+    now = ctx.now()
+    if days == "last":
+        return (now + timedelta(days=1)).day == 1
+    return now.day in (days or [])
+
+
+def _eval_interval_anchor(cond, ctx) -> bool:
+    """격주(앵커 기준 N주기, §2.5). 월요일 정렬 주차 mod. anchor 날짜형식 오류/interval<1 → False."""
+    try:
+        anchor = date.fromisoformat(str(cond.get("anchor")))
+    except (ValueError, TypeError):
+        return False
+    interval = int(cond.get("interval") or 2)
+    if interval < 1:
+        return False
+    nowd = ctx.now().date()
+
+    def _monday(d):
+        return d - timedelta(days=d.weekday())
+
+    return ((_monday(nowd) - _monday(anchor)).days // 7) % interval == 0
 
 
 def _passes_bounds(val, above, below) -> bool:

@@ -13,6 +13,8 @@ from __future__ import annotations
 # HA 자동화로 직역 불가한 엔진 전용 노드(내보내기 시 경고).
 _UNMAPPABLE_TRIGGERS = {"segment", "mode", "state_held", "group_held"}
 
+_WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
 
 def _offset_str(sec) -> str | None:
     """오프셋 초(int) → '±HH:MM:SS'. 0/None/형식오류면 None(필드 생략)."""
@@ -58,6 +60,32 @@ def _map_condition(c: dict, warnings: list) -> dict | None:
         if bo:
             out["before_offset"] = bo
         return out
+    if typ == "weekday":
+        # §2.6: negate=true 는 여집합으로 전개해 출력(HA time.weekday 은 부정 미지원).
+        days = c.get("days") or []
+        if c.get("negate"):
+            days = [d for d in _WEEKDAY_ORDER if d not in days]
+        return {"type": "time", "weekday": list(days)}
+    if typ == "day_of_month":
+        # §2.6: day_of_month → template 조건. 'last'(말일) = 내일이 1일.
+        days = c.get("days")
+        if days == "last":
+            tmpl = "{{ (now() + timedelta(days=1)).day == 1 }}"
+        else:
+            tmpl = "{{ now().day in " + str(list(days or [])) + " }}"
+        return {"type": "template", "value_template": tmpl}
+    if typ == "interval_anchor":
+        # §2.6: interval_anchor → template(월요일 정렬 주차 mod). anchor 는 이미 월요일로 저장.
+        anchor = c.get("anchor")
+        try:
+            interval = int(c.get("interval") or 2)
+        except (TypeError, ValueError):
+            interval = 2
+        tmpl = (
+            "{{ ((as_timestamp(now().date() - timedelta(days=now().weekday())) "
+            "- as_timestamp(as_datetime('" + str(anchor) + "'))) / 604800) "
+            "| round(0, 'floor') % " + str(interval) + " == 0 }}")
+        return {"type": "template", "value_template": tmpl}
     if typ in _UNMAPPABLE_TRIGGERS:
         warnings.append(f"HA 자동화로 변환할 수 없는 조건 유형: {typ}")
         return None

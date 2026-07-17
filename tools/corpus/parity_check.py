@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 
 import yaml
 
@@ -40,6 +41,18 @@ except ImportError:  # pragma: no cover
     import structural_match as _sm
 
 _OUT = os.path.join(_HERE, "out")
+
+# 측정 시점 고정(held-out 오염 아님). interval_anchor.anchor 는 앱 파서가 "주입된 now 가
+# 속한 주의 월요일"로 **독립 산출**한다(postpass._monday_iso). gold 의 anchor 는 라벨 규약상
+# 라벨 작성일(2026-07-17, 금)이 속한 주의 월요일 = 2026-07-13 으로 고정돼 있으므로, 측정
+# 때도 같은 라벨주의 now 를 주입해 anchor 를 맞춘다. 이는 '측정 시점을 라벨주로 고정'하는
+# 것일 뿐(월요일 계산은 파서가 스스로 함), gold 값을 파서에 흘리는 held-out 오염이 아니다.
+_LABEL_NOW = datetime(2026, 7, 17, 12, 0, 0)
+
+
+def _parse_app(sentence, gz, settings):
+    """앱 parse 를 라벨주 now 주입으로 호출(달력 축 interval_anchor 결정성 측정용)."""
+    return parse(sentence, gz, settings, now_fn=lambda: _LABEL_NOW)
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +115,7 @@ def measure(corpus, gz_base, gz_overlay, settings, axes=("dataset", "difficulty"
 
     for it in corpus:
         s, gold = it["sentence"], it["gold"]
-        m1 = _safe_parse(parse, s, gz_base, settings).get("model", {})
+        m1 = _safe_parse(_parse_app, s, gz_base, settings).get("model", {})
         m1a = _safe_parse(_ov.parse_patched, s, gz_overlay, settings).get("model", {})
         e1 = _exact(gold, m1)
         e1a = _exact(gold, m1a)
