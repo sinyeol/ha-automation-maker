@@ -1,10 +1,10 @@
 # pattern_library.yaml — L2 템플릿 매처 데이터 자산(앱 동봉, read-only).
 #
-# tools/corpus/templates.yaml 를 실제 앱 파서(backend.nl.parser.parse)로 평가해
-# covered/partial 골격만 증류한 것이다. 각 항목: template(문형) + gold(정답 골격) +
-# slots(슬롯 목록) + examples(covered 예시). TemplateMatcher 가 로드해 novel 문장을
-# 이 골격으로 흡수한다. 재생성: scratchpad/build_library.py.
-# 상태분포(앱 파서): {'covered': 20, 'partial': 24, 'gap': 5, 'unknown': 0} · 편입(covered+partial) 44개.
+# tools/corpus/templates.yaml 를 **현재 앱 파서**(backend.nl.parser.parse)로 평가해
+# covered/partial 골격만 증류한 것이다(APP-PORT-PLAN §4.1 / S9). 각 항목: template(문형)
+# + gold(정답 골격) + slots + examples(grammar exact 예시). held-out 오염 0(블랙리스트 검사).
+# 재생성: python tools/corpus/export_app_library.py
+# 상태분포(앱 파서): {'covered': 21, 'partial': 24, 'gap': 4, 'unknown': 0} · 편입(covered+partial) 45개.
 - id: mode_trig_on_light
   area: mode
   template: '{mode}{가} 켜지면 {device_light}{을} <on>'
@@ -251,8 +251,8 @@
           - '{device_light.entity}'
   examples:
   - 밤에 욕실 움직임이 작동하면 거실 전등을 최대로 켜주고 5분 동안 움직임이 없으면 끄다
+  - 새벽시간에 거실 모션이 작동하면 메인등을 50% 켜주고 10분 동안 움직임이 없으면 끄다
   - 저녁에 욕실 모션이 작동하면 작은방 조명을 절반 켜주고 30분 동안 움직임이 없으면 꺼줘
-  - 새벽에 욕실 움직임이 작동하면 거실 전등을 70% 켜주고 5분 동안 움직임이 없으면 꺼
 - id: multiclause_dim_off
   area: multiclause
   template: '{motion}{가} 감지되면 {device_light}{을} {percent} 켜주고 {duration} 동안 움직임이 없으면
@@ -335,8 +335,8 @@
           - '{device_light.entity}'
   examples:
   - 거실 인기척이 감지되면 안방 조명을 켜주고 3분 동안 움직임이 없으면 꺼주세요
+  - 거실 움직임이 감지되면 메인등을 켜주고 30분 동안 움직임이 없으면 꺼줘
   - 거실 인기척이 감지되면 거실 불을 켜주고 5분 동안 움직임이 없으면 꺼
-  - 거실 움직임이 감지되면 안방 조명을 켜주고 10분 동안 움직임이 없으면 꺼
 - id: multiclause_mode_cond_onoff
   area: multiclause
   template: '{mode}이고 {motion}{가} 작동하면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면
@@ -438,6 +438,41 @@
   - 안방 모션이 감지되면 주방 조명을 켜주고 5분 동안 움직임이 없으면 주방 조명을 꺼주고 슬립모드가 켜지면 전부 조명을 꺼줘
   - 거실 인기척이 감지되면 거실등을 켜주고 5분 동안 움직임이 없으면 거실등을 꺼주고 수면 모드가 켜지면 다 조명을 꺼주세요
   - 거실 인기척이 감지되면 주방 조명을 켜주고 5분 동안 움직임이 없으면 주방 조명을 꺼주고 수면 모드가 켜지면 다 조명을 꺼줘
+- id: multiclause_qm_comma
+  area: multiclause
+  template: 거실 모션이 감지되면 거실 조명을 켜주고, 안방 모션이 감지되면 안방 조명을 켜줘
+  slots: []
+  tags:
+  - multiclause
+  - two-rules
+  - misparse
+  status: partial
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  examples:
+  - 거실 모션이 감지되면 거실 조명을 켜주고, 안방 모션이 감지되면 안방 조명을 켜줘
 - id: multiclause_qm_5bungan
   area: multiclause
   template: '{motion}{가} 감지되면 {device_light}{을} 켜주고 5분간 움직임이 없으면 <off>'
@@ -712,7 +747,7 @@
   - regression
   - held
   - multi-action
-  status: partial
+  status: covered
   gold:
     subrules:
     - triggers:
@@ -765,8 +800,6 @@
           - climate.living_room_ac
   examples:
   - 여름에 거실 온도가 28도 이상이면 에어컨을 켜줘
-  - 여름에 거실이 28도 넘으면 에어컨 켜줘
-  - 여름철에 거실 온도가 28도 이상으로 올라가면 에어컨 틀어줘
 - id: single_golden_4_loop_basic
   area: single
   template: 거실에 움직임이 감지되면 거실 조명을 켜줘
@@ -791,8 +824,6 @@
           - light.living_room_main
   examples:
   - 거실에 움직임이 감지되면 거실 조명을 켜줘
-  - 거실에서 움직임이 감지되면 거실 조명을 켜 주세요
-  - 거실에 인기척이 보이면 거실 조명 켜 줄래
 - id: single_golden_5_segment_brightness
   area: single
   template: 거실 조명은 새벽시간에 거실에 움직임이 있으면 10%로 켜줘
@@ -823,8 +854,6 @@
           brightness_pct: 10
   examples:
   - 거실 조명은 새벽시간에 거실에 움직임이 있으면 10%로 켜줘
-  - 새벽시간에 거실 움직임 있으면 거실 조명 10%로 켜줘
-  - 거실 조명은 새벽에 인기척 있으면 10프로로 켜 줘
 - id: single_golden_6_bedroom_loop
   area: single
   template: 안방에 움직임이 감지되면 안방 조명을 켜줘
@@ -849,7 +878,6 @@
           - light.master_bedroom
   examples:
   - 안방에 움직임이 감지되면 안방 조명을 켜줘
-  - 안방에서 움직임 감지되면 안방 불 켜줘
 - id: single_golden_7_bathroom_loop
   area: single
   template: 욕실에 움직임이 감지되면 욕실 조명을 켜줘
@@ -874,7 +902,6 @@
           - light.bathroom
   examples:
   - 욕실에 움직임이 감지되면 욕실 조명을 켜줘
-  - 화장실에 움직임이 보이면 욕실 조명 켜 줘
 - id: single_golden_8_segment_trigger
   area: single
   template: 저녁이 되면 거실 조명을 켜줘
@@ -898,8 +925,6 @@
           - light.living_room_main
   examples:
   - 저녁이 되면 거실 조명을 켜줘
-  - 저녁 되면 거실 조명 켜줘
-  - 저녁이 되거든 거실 불 켜 주세요
 - id: numeric_temp_ac_on
   area: numeric
   template: '{sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} <on>'
@@ -1045,7 +1070,7 @@
   examples:
   - 밤 11시가 되면 작은방 조명을 꺼줘
   - 밤 11시가 되면 현관 조명을 꺼줘
-  - 밤 11시가 되면 주방 조명을 꺼
+  - 밤 11시가 되면 메인등을 꺼
 - id: cover_seg_close
   area: cover
   template: 저녁이 되면 {device_cover}{을} <close>

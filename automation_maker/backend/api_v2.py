@@ -25,6 +25,7 @@ from aiohttp import web
 
 from backend.engine.rule_model import validate_rule_model
 from backend.nl import learn
+from backend.nl import pattern_match
 from backend.nl.llm_assist import llm_parse
 from backend.nl.manual import build_model_from_tokens, suggest_roles, tokenize
 from backend.nl.parser import parse as nl_parse
@@ -231,15 +232,18 @@ async def handle_parse(request: web.Request) -> web.Response:
     settings = request.app["settings_store"].data or {}
     result = nl_parse(sentence, gz, settings, pins)
 
-    # L2(Phase 3B): 규칙(L1)이 not ok 일 때만 로컬 학습→템플릿 매처로 흡수한다.
-    # not ok 게이트가 오탐을 억제한다(실측: 매처는 규칙이 실패할 때만 채택). ok 인
-    # 결과는 절대 덮어쓰지 않으므로 기존 파서 동작에 회귀가 없다.
-    used_matcher = None
-    if not result.get("ok"):
-        if _adopt_learned(request.app, sentence, result, gz):
-            used_matcher = "learned"
-        elif _adopt_matcher(request.app, sentence, result, gz):
-            used_matcher = "pattern"
+    # L2(§4.2 재설계): 절대 미덮음 게이트(ok & conf≥0.6)는 매처가 손대지 않는다. not-ok 는
+    # learned→매처 흡수(검증 통과 필수), ok & conf<0.6 은 shadow-try(구조 비동형+서브룰수
+    # 동일+검증 통과)만 채택한다. 금지문은 어느 창에서도 흡수하지 않는다(gate #3).
+    info = pattern_match.l2_gate(
+        result, sentence,
+        matcher=request.app.get("template_matcher"),
+        validate=lambda m: validate_rule_model(m, _inventory(request.app),
+                                               _mode_names(request.app)),
+        learned_lookup=lambda: _learned_model(request.app, sentence))
+    used_matcher = info["used"]
+    result["shadow"] = {"tried": info["shadow_tried"], "adopted": info["shadow_adopted"],
+                        "matched_id": info["matched_id"]}
 
     # L3: 로컬(L1+L2)이 부족하고 매처가 흡수하지 못했을 때만 LLM 보조(§4.5).
     backend = _llm_backend(settings)
@@ -253,67 +257,41 @@ async def handle_parse(request: web.Request) -> web.Response:
     result["used_llm"] = used_llm
     result["llm_backend"] = backend if used_llm else None
     result["used_matcher"] = used_matcher
-    result["source"] = used_matcher or ("rule" if result.get("ok") else None)
+    # shadow 채택은 출처 캡션상 'pattern'(런로그 분석용 상세는 result["shadow"]).
+    src_matcher = "pattern" if used_matcher == "pattern-shadow" else used_matcher
+    result["source"] = src_matcher or ("rule" if result.get("ok") else None)
     return _json(result)
 
 
 # ---------------------------------------------------------------------------
-# L2 채택 헬퍼 (로컬 학습 / 템플릿 매처) — 규칙이 not ok 일 때만 호출된다.
+# L2 채택 — 로컬 학습 조회(§4.5). 매처 흡수·검증·shadow 판정은 pattern_match.l2_gate 가 한다.
 # ---------------------------------------------------------------------------
-def _apply_matched_model(result: dict, model: dict, summary: str, confidence: float,
-                         **extra) -> None:
-    """매처/학습 model 을 파싱 결과에 반영(공통). 미해결 칩 제거 → 저장 가능 상태."""
-    result["model"] = model
-    result["chips"] = []
-    result["unmatched"] = []
-    result["ok"] = True
-    result["confidence"] = round(min(max(confidence, 0.0), 1.0), 3)
-    result["summary"] = summary or ""  # 실패 파싱의 낡은 요약을 덮어쓴다
-    result.update(extra)
+def _learned_model(app: web.Application, sentence: str):
+    """로컬 학습 저장소에서 문장에 대응하는 model 사본을 찾는다(l2_gate not-ok 창 전용).
 
-
-def _adopt_learned(app: web.Application, sentence: str, result: dict, gz) -> bool:
-    """로컬 학습 항목을 채택한다(learn.LearnedStore.match → model 사본).
-
-    학습 이후 기기가 사라졌을 수 있으므로, 사용 시점에 엔티티 실존을 다시 검증한다
-    (§3: 재기동 재검증에 더해 방어적 이중 검증). match 는 원문/정규형 완전일치 또는
-    문자 3-gram 근접 재매칭으로 model 을 돌려주고 hits 를 올린다.
-    """
+    match 는 원문/정규형 완전일치 또는 문자 3-gram 근접(≥0.85)으로 model 을 돌려주고 hits 를
+    올린다. 검증(validate_rule_model + 엔티티 실존)은 l2_gate 가 채택 직전 수행한다."""
     store = app.get("learned_store")
     if store is None:
-        return False
+        return None
     try:
         model = store.match(sentence)
     except Exception:
         log.exception("학습 저장소 매칭 중 오류")
-        return False
-    if not isinstance(model, dict) or not model:
-        return False
-    if validate_rule_model(model, _inventory(app), _mode_names(app)):
-        return False
-    _apply_matched_model(result, model, "", 1.0)
-    return True
+        return None
+    return model if isinstance(model, dict) and model else None
 
 
-def _adopt_matcher(app: web.Application, sentence: str, result: dict, gz) -> bool:
-    """L2 템플릿 매처 결과를 채택한다. 매처 부재/오류/검증 실패는 조용히 False."""
+def _refresh_runtime_templates(app: web.Application) -> None:
+    """학습 저장소 변경 시 매처의 런타임 템플릿 인덱스를 갱신한다(§4.5 배선)."""
     matcher = app.get("template_matcher")
-    if matcher is None:
-        return False
+    store = app.get("learned_store")
+    if matcher is None or store is None:
+        return
     try:
-        m = matcher.match(sentence)
+        matcher.add_runtime_templates(store.all())
     except Exception:
-        log.exception("템플릿 매처 실행 중 오류")
-        return False
-    if not m or not isinstance(m.get("model"), dict):
-        return False
-    model = m["model"]
-    if validate_rule_model(model, _inventory(app), _mode_names(app)):
-        return False
-    _apply_matched_model(result, model, "",
-                         float(m.get("score") or _LLM_MERGE_SCORE),
-                         matched_id=m.get("matched_id"))
-    return True
+        log.exception("학습 런타임 템플릿 갱신 실패")
 
 
 def _has_unresolved(result: dict) -> bool:
@@ -894,6 +872,7 @@ async def handle_learn_confirm(request: web.Request) -> web.Response:
     # LearnedStore.add(raw, normalized, model, entities): 같은 원문은 교체(무한 성장 방어).
     entities = learn.model_entities(model)
     entry = store.add(sentence.strip(), normalized, model, entities)
+    _refresh_runtime_templates(request.app)  # §4.5: 매처 런타임 인덱스에 즉시 편입
     return _json({"ok": True, "learned_id": entry["id"]})
 
 
@@ -907,6 +886,8 @@ async def handle_learned_delete(request: web.Request) -> web.Response:
     """DELETE api/v2/learned/{id} → {"ok":bool}."""
     store = request.app.get("learned_store")
     ok = store.delete(request.match_info["id"]) if store is not None else False
+    if ok:
+        _refresh_runtime_templates(request.app)  # §4.5: 삭제분을 매처 인덱스에서 제거
     return _json({"ok": ok})
 
 

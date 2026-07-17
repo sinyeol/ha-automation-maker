@@ -469,6 +469,14 @@ async def _on_startup(app: web.Application) -> None:
         except Exception:
             log.exception("학습 항목 재검증 실패")
 
+    # §4.5 CLI 증류 수용체: 학습된 (원문→정규형→구체 model)을 매처 런타임 템플릿으로 편입해,
+    # 이후 같은/비슷(스트림 LCS)한 문장을 CLI 없이 로컬에서 struct_replace 로 흡수한다.
+    if app["template_matcher"] is not None and learned_store is not None:
+        try:
+            app["template_matcher"].add_runtime_templates(learned_store.all())
+        except Exception:
+            log.exception("학습 런타임 템플릿 초기화 실패")
+
     rules_json = JsonStore(ddir / "rules.json", [])
     rule_store = RuleStore(rules_json)
     app["rule_store"] = rule_store

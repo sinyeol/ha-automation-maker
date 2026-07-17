@@ -201,6 +201,26 @@ async def test_learn_confirm_saves_and_reuses_locally(aiohttp_client, make_v2_ap
     assert (await resp.json())["learned"] == []
 
 
+async def test_learn_confirm_wires_runtime_templates(aiohttp_client, make_v2_app,
+                                                     v2_data_dir):
+    """§4.5 배선: confirm 시 매처 런타임 템플릿 인덱스에 즉시 편입, delete 시 제거."""
+    from backend.nl.pattern_match import TemplateMatcher
+    app = make_v2_app(_settings_with(learn={"enabled": True}))
+    app["learned_store"] = LearnedStore(v2_data_dir / "learned.yaml")
+    gz = app["gazetteer_fn"]()
+    app["template_matcher"] = TemplateMatcher([], gz, gz.inventory)
+    client = await aiohttp_client(app)
+
+    resp = await client.post("/api/v2/learn/confirm", json={
+        "sentence": _UNPARSED, "normalized": "욕실 모션이 감지되면 욕실 환풍기를 켜",
+        "model": copy.deepcopy(_FAN_MODEL)})
+    learned_id = (await resp.json())["learned_id"]
+    assert len(app["template_matcher"]._runtime) == 1     # confirm → 즉시 편입
+
+    await client.delete(f"/api/v2/learned/{learned_id}")
+    assert app["template_matcher"]._runtime == []          # delete → 제거
+
+
 async def test_learn_confirm_disabled_returns_409(aiohttp_client, make_v2_app):
     client = await aiohttp_client(make_v2_app())  # learn off
     resp = await client.post("/api/v2/learn/confirm", json={

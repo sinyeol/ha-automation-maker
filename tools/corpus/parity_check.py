@@ -15,6 +15,7 @@ held-out(heldout.yaml + paraphrases 명시 gold hard case)에 대해
 from __future__ import annotations
 
 import argparse
+import copy
 import os
 import sys
 from datetime import datetime
@@ -27,6 +28,8 @@ _APP_ROOT = os.path.abspath(os.path.join(_HERE, "..", "..", "automation_maker"))
 if _APP_ROOT not in sys.path:
     sys.path.insert(0, _APP_ROOT)
 
+from backend.engine.rule_model import validate_rule_model  # noqa: E402
+from backend.nl import pattern_match as _pm  # noqa: E402
 from backend.nl.parser import parse  # noqa: E402
 
 try:  # 패키지/스크립트 양쪽 실행 지원
@@ -212,6 +215,120 @@ def scan_prohibitions(gz, settings, entries, parse_fn=parse):
 
 
 # ---------------------------------------------------------------------------
+# §4 (S9) — 앱 L1 vs 앱 L1+L2 정직 측정(순리프트 · l2_regressions)
+#   런타임과 동일한 pattern_match.l2_gate 를 태워 exact% 를 재산정한다(단일 소스).
+#   learned_lookup=None(held-out 에는 학습 항목 없음). 정직 채점기(structural_compare)로 exact.
+# ---------------------------------------------------------------------------
+def build_matcher(gz_base, inventory, library_path=None):
+    lib = _pm.load_pattern_library(library_path)
+    return _pm.TemplateMatcher(lib, gz_base, inventory), len(lib)
+
+
+def measure_l2(corpus, gz_base, inventory, settings, matcher, enable_shadow=None):
+    mode_names = set(settings.get("modes", {}))
+
+    def _validate(m):
+        return validate_rule_model(m, inventory, mode_names)
+
+    counts = {"L1": 0, "L1L2": 0, "n": 0}
+    regressions, gains = [], []
+    shadow = {"tried": 0, "adopted": 0}
+    used = {}
+    for it in corpus:
+        s, gold = it["sentence"], it["gold"]
+        r1 = _safe_parse(_parse_app, s, gz_base, settings)
+        e1 = _exact(gold, r1.get("model", {}))
+        r2 = copy.deepcopy(r1)
+        info = _pm.l2_gate(r2, s, matcher=matcher, validate=_validate,
+                           learned_lookup=None, enable_shadow=enable_shadow)
+        e2 = _exact(gold, r2.get("model", {}))
+        counts["n"] += 1
+        counts["L1"] += int(e1)
+        counts["L1L2"] += int(e2)
+        shadow["tried"] += int(info["shadow_tried"])
+        shadow["adopted"] += int(info["shadow_adopted"])
+        if info["used"]:
+            used[info["used"]] = used.get(info["used"], 0) + 1
+        if e1 and not e2:
+            regressions.append({"id": it.get("id"), "sentence": s,
+                                "used": info["used"], "matched_id": info["matched_id"]})
+        elif e2 and not e1:
+            gains.append({"id": it.get("id"), "sentence": s,
+                          "used": info["used"], "matched_id": info["matched_id"]})
+    return {"counts": counts, "regressions": regressions, "gains": gains,
+            "shadow": shadow, "used": used}
+
+
+def scan_prohibitions_gate(gz, inventory, settings, entries, matcher):
+    """런타임 게이트(L1+L2)로 금지문을 돌려 forbidden 액션 방출을 검사한다(gate #3).
+
+    parse 결과에 l2_gate 를 적용한 뒤 방출 액션을 본다 — 매처/학습이 금지문을 흡수해 정반대
+    액션을 만들지 않는지 확인(scan_prohibitions 의 L1 전용 검사보다 강함)."""
+    mode_names = set(settings.get("modes", {}))
+
+    def _validate(m):
+        return validate_rule_model(m, inventory, mode_names)
+
+    misfires, ok_true = [], []
+    for rid, sentence, forbidden in entries:
+        res = _safe_parse(parse, sentence, gz, settings)
+        _pm.l2_gate(res, sentence, matcher=matcher, validate=_validate,
+                    learned_lookup=None)
+        emitted = _emitted_actions(res.get("model", {}))
+        if res.get("ok"):
+            ok_true.append(rid)
+        hit = None
+        for fb in forbidden:
+            fact, feid = fb.get("action"), fb.get("entity_id")
+            for act, ids in emitted:
+                if act == fact and (feid is None or feid in ids):
+                    hit = fb
+                    break
+            if hit:
+                break
+        if hit is not None:
+            misfires.append({"id": rid, "sentence": sentence, "forbidden_hit": hit})
+    return {"total": len(entries), "misfires": misfires, "ok_true": ok_true}
+
+
+def format_l2_report(res, prohib_gate, lib_n, show=0) -> str:
+    c = res["counts"]
+    L1 = _pct(c, "L1")
+    L1L2 = _pct(c, "L1L2")
+    lift = L1L2 - L1
+    L = []
+    L.append("# 앱 L1 vs 앱 L1+L2 정직 측정 (parity_check --l2, S9)")
+    L.append("")
+    L.append(f"- held-out n = {c['n']}  ·  pattern_library 템플릿 {lib_n}개")
+    L.append(f"- **앱 L1        exact = {L1:.1f}% ({c['L1']}/{c['n']})**")
+    L.append(f"- **앱 L1+L2     exact = {L1L2:.1f}% ({c['L1L2']}/{c['n']})**")
+    L.append(f"- **L2 순리프트 = {lift:+.1f}%p ({c['L1L2']-c['L1']:+d}문장)**")
+    L.append(f"- **l2_regressions = {len(res['regressions'])}** (L1 exact→L1+L2 non-exact, 0 이어야 함)")
+    L.append(f"- l2_gains = {len(res['gains'])} (L1 miss→L1+L2 exact)")
+    L.append(f"- 채택 분포 = {res['used']}  ·  shadow(시도/채택) = "
+             f"{res['shadow']['tried']}/{res['shadow']['adopted']}")
+    L.append("")
+    L.append("## 금지문 게이트(L1+L2, gate #3)")
+    L.append(f"- 전수 {prohib_gate['total']}문장 · **forbidden 방출(misfire) = "
+             f"{len(prohib_gate['misfires'])}/{prohib_gate['total']}** · "
+             f"ok=True = {len(prohib_gate['ok_true'])}")
+    for mf in prohib_gate["misfires"]:
+        L.append(f"  - ⚠️ {mf['id']}: {mf['sentence']} → {mf['forbidden_hit']}")
+    L.append("")
+    if res["regressions"]:
+        L.append("## ⚠️ 회귀(L1 exact 를 L2 가 덮음) — 0 이어야 함")
+        for d in res["regressions"]:
+            L.append(f"  - [{d['used']}/{d['matched_id']}] {d['id']}: {d['sentence']}")
+        L.append("")
+    if show and res["gains"]:
+        L.append(f"## L2 이득 상위 {show}")
+        for d in res["gains"][:show]:
+            L.append(f"  - [{d['used']}/{d['matched_id']}] {d['id']}: {d['sentence']}")
+        L.append("")
+    return "\n".join(L)
+
+
+# ---------------------------------------------------------------------------
 # 리포트
 # ---------------------------------------------------------------------------
 def _pct(c, key):
@@ -259,17 +376,45 @@ def format_report(res, prohib, show_diffs=0) -> str:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="앱 L1 정직 측정 + A/B 패리티 (S0/S1)")
+    ap = argparse.ArgumentParser(description="앱 L1 정직 측정 + A/B 패리티 (S0/S1) · L2 순리프트(S9)")
     ap.add_argument("--show-diffs", type=int, default=0, help="패리티 diff 상위 N개 출력.")
+    ap.add_argument("--l2", action="store_true",
+                    help="앱 L1 vs 앱 L1+L2 정직 측정(순리프트·l2_regressions·금지문 게이트).")
+    ap.add_argument("--no-shadow", action="store_true",
+                    help="--l2 에서 shadow-try 창을 끄고 측정(롤백 비교용).")
+    ap.add_argument("--library", default=None, help="측정에 쓸 pattern_library 경로(기본 앱 동봉).")
+    ap.add_argument("--show", type=int, default=0, help="--l2 이득 상위 N개 출력.")
     ap.add_argument("--out", default=os.path.join(_OUT, "parity_report.md"))
     args = ap.parse_args()
 
     corpus, inventory, gz_base, gz_overlay, settings = load_corpus()
+    os.makedirs(_OUT, exist_ok=True)
+
+    if args.l2:
+        matcher, lib_n = build_matcher(gz_base, inventory, args.library)
+        enable_shadow = False if args.no_shadow else None
+        res = measure_l2(corpus, gz_base, inventory, settings, matcher,
+                         enable_shadow=enable_shadow)
+        prohib_gate = scan_prohibitions_gate(gz_base, inventory, settings,
+                                             load_prohibitions(), matcher)
+        report = format_l2_report(res, prohib_gate, lib_n, show=args.show)
+        out = args.out if args.out != os.path.join(_OUT, "parity_report.md") \
+            else os.path.join(_OUT, "parity_l2_report.md")
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(report)
+        c = res["counts"]
+        print(f"앱 L1 = {_pct(c,'L1'):.1f}% ({c['L1']}/{c['n']})  |  "
+              f"앱 L1+L2 = {_pct(c,'L1L2'):.1f}% ({c['L1L2']}/{c['n']})  |  "
+              f"순리프트 = {_pct(c,'L1L2')-_pct(c,'L1'):+.1f}%p  |  "
+              f"regressions = {len(res['regressions'])}  |  "
+              f"gains = {len(res['gains'])}  |  "
+              f"금지문 misfire(gate) = {len(prohib_gate['misfires'])}/{prohib_gate['total']}")
+        print(f"report → {out}")
+        return
+
     res = measure(corpus, gz_base, gz_overlay, settings)
     prohib = scan_prohibitions(gz_base, settings, load_prohibitions())
     report = format_report(res, prohib, show_diffs=args.show_diffs)
-
-    os.makedirs(_OUT, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(report)
 

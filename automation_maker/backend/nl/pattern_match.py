@@ -18,14 +18,19 @@ A6 조명 접미사 어휘("무드등"/"메인등"/"등")는 delexicalize 오버
 """
 from __future__ import annotations
 
+import copy
 import os
 import re
+from collections import Counter
 from typing import Optional
 
 import yaml
 
+from . import surface as _surface
 from .gazetteer import MOTION_CONCEPT
 from .normalize import find_duration
+# 절 단위 매칭(§4.4)용 파서 헬퍼(단방향 의존 — parser 는 matcher 를 import 하지 않음).
+from .parser import COMMAND_HINTS, _is_myeon_boundary, _is_noun_surface
 
 # ---------------------------------------------------------------------------
 # A6 오버레이 어휘 — 조명 접미사(무드등/메인등/등). pattern_library 가 A6 반영 파서로
@@ -143,6 +148,11 @@ _JOSA_TOKENS = {"이", "가", "을", "를", "은", "는", "와", "과", "로", "
 
 _MOTION_WORDS = ("움직임", "모션", "인기척", "재실", "동작")
 
+# §4.3: struct_replace 2단의 기능심볼 멀티셋 불일치 심볼당 감점(가중 패널티). ACTON↔ACTOFF·
+# TRIGON↔TRIGOFF 직접 충돌은 별도 하드 차단. 라이브러리에 없는 부가 어미를 관용하되, 불일치가
+# 많으면 τ 아래로 떨어져 오탐을 막는다.
+_SYMDIFF_PENALTY = 0.08
+
 
 def _sym(word: str) -> Optional[str]:
     """기능어 한 어절 → 극성/구조 심볼(정규화). 없으면 None(무시).
@@ -156,13 +166,14 @@ def _sym(word: str) -> Optional[str]:
         return "SCOPE"
     if re.search(r"해제|취소|종료|풀리|풀려|해지", word):
         return "TRIGOFF"
-    if "켜지" in word:
+    if re.search(r"켜지|켜져", word):                 # 자동사 켜짐(구어 '켜져' 포함)
         return "TRIGON"
-    if "꺼지" in word:
+    if re.search(r"꺼지|꺼져", word):                 # 자동사 꺼짐(구어 '꺼져' 포함)
         return "TRIGOFF"
     if "없으" in word or ("없" in word and word.endswith("면")):
         return "HELDOFF"
-    if re.search(r"감지|작동|뜨면|들어오|열리|울리|눌리", word):
+    # 이벤트(발생) 어휘 확장(§4.3): 모션/재실 동의어 느껴지/잡히·입실 들어와 추가.
+    if re.search(r"감지|작동|뜨면|들어오|들어와|열리|울리|눌리|느껴지|잡히", word):
         return "EVTON"
     if re.search(r"이고|일\s*때|일때|이면서|인때|이면$", word):
         return "COND"
@@ -200,6 +211,8 @@ class TemplateMatcher:
         # A6 오버레이 어휘(매처 delexicalize 용) — 최장일치 우선.
         self._extra_devices = sorted(_A6_CONCEPTS.items(), key=lambda kv: -len(kv[0]))
         self._index = self._build_index(pattern_library)
+        # 학습(CLI 증류) 런타임 템플릿(§4.5). add_runtime_templates 로 채운다.
+        self._runtime: list = []
 
     # ---- 인덱스: covered/partial 템플릿만(§2.6 게이트2: gap 제외) ----
     def _build_index(self, library: list) -> list:
@@ -392,19 +405,119 @@ class TemplateMatcher:
         return cands[0]["id"] if cands else None
 
     def delexicalize(self, sentence: str):
-        """문장 → (스트림, 내용스팬열). 스트림 = 내용태그 + 기능심볼(순서 보존)."""
-        spans = self._collect_spans(sentence)
+        """문장 → (스트림, 내용스팬열). 스트림 = 내용태그 + 기능심볼(순서 보존).
+
+        §4.3: 표면정규화(surface.normalize_surface)를 **입력에도** 적용해 템플릿(표준형)과
+        같은 정규 표면에서 태깅한다(사역 wrapper·구어체·후치 재배열 흡수). 회귀 0(정규형
+        입력은 그대로 반환).
+        """
+        norm = _surface.normalize_surface(sentence) or sentence
+        spans = self._collect_spans(norm)
         stream: list = []
         content_spans: list = []
         pos = 0
         for sp in spans:
-            self._emit_literal_tokens(sentence[pos:sp.s], stream)
+            self._emit_literal_tokens(norm[pos:sp.s], stream)
             stream.append(sp.tag)
             if sp.tag in _CONTENT_TAGS:
                 content_spans.append(sp)
             pos = sp.e
-        self._emit_literal_tokens(sentence[pos:], stream)
+        self._emit_literal_tokens(norm[pos:], stream)
         return stream, content_spans
+
+    def unrecognized_rate(self, sentence: str) -> dict:
+        """정규화 입력의 미인식 어절률 지표(§4.3 계측). 내용스팬/기능심볼로 소비되지 않은
+        어절 비율을 돌려준다(evaluate/DEBUG 리포트용, 매칭 판정에는 미사용)."""
+        norm = _surface.normalize_surface(sentence) or sentence
+        spans = self._collect_spans(norm)
+        total = 0
+        unk = 0
+
+        def _scan(lit: str):
+            nonlocal total, unk
+            for w in lit.split():
+                total += 1
+                if _sym(w) is None and not any(mw in w for mw in _MOTION_WORDS):
+                    unk += 1
+
+        pos = 0
+        for sp in spans:
+            _scan(norm[pos:sp.s])
+            total += 1              # 내용 스팬(어절군)은 인식된 것으로 계수
+            pos = sp.e
+        _scan(norm[pos:])
+        return {"total": total, "unrecognized": unk,
+                "rate": (unk / total) if total else 0.0}
+
+    # ---- 학습 런타임 템플릿(§4.5 CLI 증류 수용체) ----
+    def add_runtime_templates(self, entries: list) -> None:
+        """학습 항목(원문→정규형→구체 model)을 struct_replace 후보로 인덱싱한다.
+
+        정규 템플릿과 달리 슬롯 재바인딩 없이 저장된 구체 model 을 그대로 돌려주되, 채택
+        시점에 엔티티 실존을 재검증한다(§4.5). LearnedStore.match(문자 3-gram)가 놓치는
+        '비슷하지만 다른 어순' 문장을 스트림 LCS 로 흡수한다."""
+        runtime: list = []
+        for e in entries or []:
+            if not isinstance(e, dict):
+                continue
+            model = e.get("model")
+            if not isinstance(model, dict) or not model:
+                continue
+            norm = e.get("normalized") or e.get("raw") or ""
+            stream = e.get("stream")
+            if not stream:
+                try:
+                    stream, _ = self.delexicalize(norm)
+                except Exception:  # noqa: BLE001
+                    continue
+            stream = list(stream)
+            if not stream:
+                continue
+            runtime.append({
+                "id": "learned:" + str(e.get("id") or "rt"),
+                "stream": stream,
+                "content_tag_set": frozenset(t for t in stream if t in _CONTENT_TAGS),
+                "func": self._func_multiset(stream),
+                "model": model,
+                "entities": e.get("entities") or [],
+            })
+        self._runtime = runtime
+
+    def _entities_exist(self, eids) -> bool:
+        for eid in eids or []:
+            if eid and not self.gz.entity(eid):
+                return False
+        return True
+
+    def _runtime_result(self, r: dict, sentence: str, score: float, mode: str):
+        model = copy.deepcopy(r["model"])
+        if isinstance(model, dict):
+            model["alias"] = sentence.strip()
+        return {"model": model, "matched_id": r["id"], "score": score, "mode": mode}
+
+    def _match_runtime(self, stream: list, in_tag_set, in_func, sentence: str):
+        """학습 런타임 템플릿과 대조(정규 인덱스가 못 흡수했을 때 폴백)."""
+        if not self._runtime:
+            return None
+        for r in self._runtime:                        # 1단: 스트림 완전일치
+            if r["stream"] == stream and self._entities_exist(r["entities"]):
+                return self._runtime_result(r, sentence, 1.0, "slot_fill")
+        scored = []                                    # 2단: LCS τ + 극성/구조 게이트
+        for r in self._runtime:
+            if r["func"] != in_func:
+                continue
+            if not in_tag_set.issubset(r["content_tag_set"]):
+                continue
+            if not self._entities_exist(r["entities"]):
+                continue
+            sc = self._sim(stream, r["stream"])
+            if sc >= self.tau:
+                scored.append((sc, r))
+        if not scored:
+            return None
+        scored.sort(key=lambda t: -t[0])
+        best_sc, best = scored[0]
+        return self._runtime_result(best, sentence, round(best_sc, 3), "struct_replace")
 
     # ---- 슬롯 바인딩 → gold 구체화 ----
     def _filler_for(self, sp: _Span):
@@ -533,14 +646,107 @@ class TemplateMatcher:
         """스트림의 기능심볼(극성/구조) 멀티셋 — 내용 태그 제외, 정렬 튜플."""
         return tuple(sorted(t for t in stream if t not in _CONTENT_TAGS))
 
+    @staticmethod
+    def _polarity_conflict(a: tuple, b: tuple) -> bool:
+        """극성 직접 충돌(ACTON↔ACTOFF·TRIGON↔TRIGOFF) — 이건 하드 차단(§4.3)."""
+        aset, bset = set(a), set(b)
+        for on, off in (("ACTON", "ACTOFF"), ("TRIGON", "TRIGOFF")):
+            if (on in aset and off in bset) or (off in aset and on in bset):
+                return True
+        return False
+
+    @staticmethod
+    def _symdiff_count(a: tuple, b: tuple) -> int:
+        """두 기능심볼 멀티셋의 대칭차 크기(가중 패널티용)."""
+        ca, cb = Counter(a), Counter(b)
+        return sum(abs(ca.get(k, 0) - cb.get(k, 0)) for k in set(ca) | set(cb))
+
     # ---- 진입점 ----
     def match(self, sentence: str):
+        r = self._match_single(sentence)
+        if r is not None:
+            return r
+        # 절 단위 매칭(§4.4): pivot≥2 다중절을 구간별로 매칭해 subrules 로 조립.
+        return self._match_multiclause(sentence)
+
+    def _match_single(self, sentence: str):
+        """단일 절 매칭(정규 인덱스 → 학습 런타임 템플릿)."""
         stream, content_spans = self.delexicalize(sentence)
         if not stream:
             return None
         in_tag_set = frozenset(t for t in stream if t in _CONTENT_TAGS)
         in_func = self._func_multiset(stream)
+        r = self._match_indexed(stream, content_spans, in_tag_set, in_func, sentence)
+        if r is not None:
+            return r
+        # 폴백: 학습(CLI 증류) 런타임 템플릿(§4.5) — 정규 인덱스가 못 흡수한 문장만.
+        return self._match_runtime(stream, in_tag_set, in_func, sentence)
 
+    # ---- 절 단위 매칭(§4.4) — parser._parse_multi 와 동형 구간 분해 ----
+    def _action_boundary(self, region: list) -> int:
+        if not region:
+            return -1
+        for j in range(len(region) - 1, -1, -1):
+            tok = region[j].rstrip(",.…")
+            if not ((tok.endswith("고") or tok.endswith("며"))
+                    and any(h in tok for h in COMMAND_HINTS)):
+                continue
+            if j > 0 and self._is_subject_tok(region[j - 1]):
+                continue
+            return j
+        return len(region) - 1
+
+    def _is_subject_tok(self, tok: str) -> bool:
+        if not (tok.endswith("이") or tok.endswith("가")):
+            return False
+        return _is_noun_surface(self.gz, tok[:-1])
+
+    def _segments(self, tokens: list, pivots: list) -> list:
+        """각 서브룰의 'condition면 action' 세그먼트 텍스트 목록(parser 와 동형)."""
+        n = len(pivots)
+        cond_zones = [[] for _ in range(n)]
+        act_zones = [[] for _ in range(n)]
+        cond_zones[0] = tokens[: pivots[0] + 1]
+        for i in range(1, n):
+            region = tokens[pivots[i - 1] + 1: pivots[i]]
+            b = self._action_boundary(region)
+            act_zones[i - 1] = region[: b + 1] if region else []
+            cond_zones[i] = (region[b + 1:] if region else []) + [tokens[pivots[i]]]
+        act_zones[n - 1] = tokens[pivots[n - 1] + 1:]
+        return [(" ".join(cond_zones[i]) + " " + " ".join(act_zones[i])).strip()
+                for i in range(n)]
+
+    def _match_multiclause(self, sentence: str):
+        norm = _surface.normalize_surface(sentence) or sentence
+        tokens = norm.split()
+        pivots = [i for i, t in enumerate(tokens) if _is_myeon_boundary(t)]
+        if len(pivots) < 2:
+            return None
+        subrules = []
+        scores = []
+        for seg in self._segments(tokens, pivots):
+            if not seg:
+                return None
+            m = self._match_single(seg)         # 재귀 아님(단일 절 경로)
+            if not m or not isinstance(m.get("model"), dict):
+                return None                     # 한 구간이라도 실패 → 전체 버림(안전)
+            subs = m["model"].get("subrules")
+            if not isinstance(subs, list) or not subs:
+                subs = [{"triggers": m["model"].get("triggers", []),
+                         "condition_mode": m["model"].get("condition_mode", "and"),
+                         "conditions": m["model"].get("conditions", []),
+                         "actions": m["model"].get("actions", [])}]
+            subrules.extend(copy.deepcopy(subs))
+            scores.append(float(m.get("score") or 0.9))
+        if len(subrules) < 2:
+            return None
+        model = {"alias": sentence.strip(), "description": "", "mode": "single",
+                 "subrules": subrules}
+        return {"model": model, "matched_id": "multiclause",
+                "score": round(min(scores), 3), "mode": "multiclause"}
+
+    def _match_indexed(self, stream, content_spans, in_tag_set, in_func, sentence):
+        """앱 동봉 pattern_library 인덱스와 대조(정규 템플릿, 슬롯 바인딩)."""
         # ---- 1단: 스트림 완전일치(극성 기능어 포함) → slot_fill ----
         # 도메인 게이트: 기기 슬롯 도메인 ↔ 입력 기기 도메인 일치 후보만(오도메인 흡수 차단).
         exact = [r for r in self._index
@@ -551,11 +757,14 @@ class TemplateMatcher:
             return {"model": model, "matched_id": best["id"], "score": 1.0,
                     "mode": "slot_fill"}
 
-        # ---- 2단: 순서보존 유사도 τ, 오탐 3게이트 → struct_replace ----
-        # 극성 게이트: 기능심볼 멀티셋이 같아야 한다(ACTON↔ACTOFF·TRIGON↔TRIGOFF 교차 차단).
+        # ---- 2단: 순서보존 유사도 τ, 오탐 게이트 → struct_replace ----
+        # 극성 게이트(§4.3): 완전일치 하드 게이트를 가중 패널티로 완화한다. 단 극성 직접
+        # 충돌(ACTON↔ACTOFF·TRIGON↔TRIGOFF)은 여전히 하드 차단. 그 외 기능심볼 멀티셋
+        # 불일치는 심볼당 _SYMDIFF_PENALTY 감점(라이브러리에 없는 부가 어미를 관용).
         scored = []
         for r in self._index:
-            if self._func_multiset(r["stream"]) != in_func:
+            tmpl_func = self._func_multiset(r["stream"])
+            if self._polarity_conflict(in_func, tmpl_func):
                 continue
             # 게이트3: 입력 구조태그 ⊆ 템플릿 구조태그(과잉 구조 차단)
             if not in_tag_set.issubset(r["content_tag_set"]):
@@ -563,7 +772,8 @@ class TemplateMatcher:
             # 게이트4: 기기 슬롯 도메인 ↔ 입력 기기 도메인 일치(오도메인 흡수 차단)
             if not self._domain_ok(r, content_spans):
                 continue
-            sc = self._sim(stream, r["stream"])
+            sc = self._sim(stream, r["stream"]) \
+                - _SYMDIFF_PENALTY * self._symdiff_count(in_func, tmpl_func)
             scored.append((sc, r))
         if not scored:
             return None
@@ -579,3 +789,197 @@ class TemplateMatcher:
         model = self._bind_and_concretize(best, content_spans, sentence)
         return {"model": model, "matched_id": best["id"], "score": round(best_sc, 3),
                 "mode": "struct_replace"}
+
+
+# ===========================================================================
+# 구조 동형 비교(§4.2 _struct_equal · §4b) — structural_compare.normalize_model 경량본.
+#   런타임(api_v2)·측정(parity_check) 게이트가 같은 함수로 "동형이면 채택 무의미" 를
+#   판정하도록 단일 소스로 둔다. 핵심 의미필드만 남겨 정규화 후 정렬 비교.
+# ===========================================================================
+_EQ_TRIG = ("type", "entity_id", "to", "for", "mode", "segments", "above", "below",
+            "event", "offset", "minutes", "hours", "seconds", "quant", "persons",
+            "at", "zone")
+_EQ_COND = ("type", "entity_id", "state", "segments", "mode", "types", "seasons",
+            "after", "before", "above", "below", "after_offset", "before_offset",
+            "days", "negate", "unit", "interval", "anchor", "quant", "persons")
+_EQ_ACT = ("type", "action", "mode", "to", "duration", "count", "kind")
+
+
+def _eq_scalar(v):
+    if isinstance(v, bool):
+        return "on" if v else "off"
+    if isinstance(v, float) and v.is_integer():
+        return int(v)
+    return v
+
+
+def _eq_node(node: dict, fields) -> tuple:
+    if not isinstance(node, dict):
+        return ()
+    items = []
+    for k in fields:
+        v = node.get(k)
+        if v is None:
+            continue
+        if k == "negate" and _eq_scalar(v) == "off":
+            continue
+        if isinstance(v, list) and all(not isinstance(x, (dict, list)) for x in v):
+            v = tuple(sorted((_eq_scalar(x) for x in v), key=repr))
+        elif isinstance(v, (dict, list)):
+            v = repr(v)
+        else:
+            v = _eq_scalar(v)
+        items.append((k, v))
+    tgt = node.get("target")
+    if isinstance(tgt, dict):
+        ids = tgt.get("entity_id")
+        ids = [ids] if isinstance(ids, str) else (ids or [])
+        items.append(("target", tuple(sorted(str(x) for x in ids))))
+    data = node.get("data")
+    if isinstance(data, dict):
+        items.append(("data", tuple(sorted((str(k2), _eq_scalar(x))
+                                            for k2, x in data.items()))))
+    return tuple(items)
+
+
+def _flatten_subs(model: dict) -> list:
+    if not isinstance(model, dict):
+        return []
+    subs = model.get("subrules")
+    if isinstance(subs, list):
+        return subs
+    return [{"triggers": model.get("triggers", []),
+             "conditions": model.get("conditions", []),
+             "actions": model.get("actions", [])}]
+
+
+def canonical_model(model: dict) -> tuple:
+    """model → 서브룰별 (triggers, conditions, actions) 정규 튜플(정렬)."""
+    out = []
+    for sub in _flatten_subs(model):
+        if not isinstance(sub, dict):
+            continue
+        out.append((
+            tuple(sorted((_eq_node(t, _EQ_TRIG) for t in sub.get("triggers", [])),
+                         key=repr)),
+            tuple(sorted((_eq_node(c, _EQ_COND) for c in sub.get("conditions", [])),
+                         key=repr)),
+            tuple(sorted((_eq_node(a, _EQ_ACT) for a in sub.get("actions", [])),
+                         key=repr)),
+        ))
+    return tuple(sorted(out, key=repr))
+
+
+def struct_equal(a: dict, b: dict) -> bool:
+    """두 model 이 구조 동형인가(§4.2: 동형이면 shadow 채택 무의미)."""
+    return canonical_model(a) == canonical_model(b)
+
+
+def subrule_count(model: dict) -> int:
+    return len(_flatten_subs(model))
+
+
+# ===========================================================================
+# L2 게이트(§4.2) — 단일 소스. api_v2.handle_parse · tools/corpus/parity_check 공용.
+#   런타임 exact 프록시(ok & conf≥0.6)는 절대 미덮음. not-ok 는 learned→matcher 흡수.
+#   ok & conf<0.6 은 shadow-try(검증 통과 + 구조 비동형 + 서브룰수 동일)만 채택.
+# ===========================================================================
+_L2_LOW_CONF = 0.6
+# shadow-try 창 on/off(순리프트≤0·회귀>0 이면 여기서 롤백). 한 곳에서 관통.
+L2_ENABLE_SHADOW = True
+
+
+def _safe_match(matcher, sentence: str):
+    if matcher is None:
+        return None
+    try:
+        return matcher.match(sentence)
+    except Exception:  # noqa: BLE001 — 매처 예외는 미채택(안전)
+        return None
+
+
+def _adopt_valid(result: dict, model: dict, validate, score: float, *,
+                 matched_id=None, extra=None) -> bool:
+    """검증 통과 시 result 를 매처/학습 model 로 대체(저장가능 상태). 실패는 False."""
+    if not isinstance(model, dict) or not model:
+        return False
+    try:
+        if validate(model):
+            return False
+    except Exception:  # noqa: BLE001
+        return False
+    result["model"] = model
+    result["chips"] = []
+    result["unmatched"] = []
+    result["ok"] = True
+    result["confidence"] = round(min(max(score, 0.0), 1.0), 3)
+    result["summary"] = ""
+    if matched_id is not None:
+        result["matched_id"] = matched_id
+    if extra:
+        result.update(extra)
+    return True
+
+
+def l2_gate(result: dict, sentence: str, *, matcher, validate,
+            learned_lookup=None, enable_shadow=None) -> dict:
+    """L2 게이트를 result 에 적용(제자리 수정). shadow 계측 dict 반환.
+
+    validate(model) -> errors(list); 빈 리스트면 통과.
+    learned_lookup() -> model|None (필요할 때만 호출 — not-ok 창에서만).
+    반환: {"used": None|'learned'|'pattern'|'pattern-shadow',
+           "shadow_tried": bool, "shadow_adopted": bool, "matched_id": ...}.
+    """
+    if enable_shadow is None:
+        enable_shadow = L2_ENABLE_SHADOW
+    info = {"used": None, "shadow_tried": False, "shadow_adopted": False,
+            "matched_id": None}
+    ok = bool(result.get("ok"))
+    conf = float(result.get("confidence", 1.0) or 0.0)
+    # 절대 미덮음: 런타임 exact 프록시.
+    if ok and conf >= _L2_LOW_CONF:
+        return info
+    # 금지문(정반대 액션 절대 미생성) — 매처/학습 흡수 금지(gate #3). normalize 후 판정.
+    try:
+        if _surface.is_prohibition(_surface.normalize_surface(sentence)):
+            return info
+    except Exception:  # noqa: BLE001
+        pass
+    l1_model = result.get("model") or {}
+
+    if not ok:
+        # 창1(현행): not-ok — learned 우선, 그다음 매처(검증 통과 필수).
+        if learned_lookup is not None:
+            try:
+                lm = learned_lookup()
+            except Exception:  # noqa: BLE001
+                lm = None
+            if lm is not None and _adopt_valid(result, lm, validate, 1.0):
+                info["used"] = "learned"
+                return info
+        m = _safe_match(matcher, sentence)
+        if m and isinstance(m.get("model"), dict) and _adopt_valid(
+                result, m["model"], validate, float(m.get("score") or 0.9),
+                matched_id=m.get("matched_id")):
+            info["used"] = "pattern"
+            info["matched_id"] = m.get("matched_id")
+        return info
+
+    # 창2(신설): ok & conf<0.6 — shadow-try. L1-exact 를 덮지 않도록 3중 게이트.
+    if not enable_shadow:
+        return info
+    info["shadow_tried"] = True
+    m = _safe_match(matcher, sentence)
+    if not m or not isinstance(m.get("model"), dict):
+        return info
+    cand = m["model"]
+    if struct_equal(cand, l1_model):
+        return info                       # 동형이면 채택 무의미(합의)
+    if subrule_count(cand) != subrule_count(l1_model):
+        return info                       # 절 수가 다르면 미채택(안전)
+    if _adopt_valid(result, cand, validate, float(m.get("score") or 0.9),
+                    matched_id=m.get("matched_id"), extra={"l1_model": l1_model}):
+        info["used"] = "pattern-shadow"
+        info["shadow_adopted"] = True
+        info["matched_id"] = m.get("matched_id")
+    return info
