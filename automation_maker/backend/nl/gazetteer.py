@@ -30,12 +30,43 @@ DEVICE_CONCEPTS: dict[str, dict] = {
     "블라인드": {"domain": "cover", "label": "블라인드"},
     "티비": {"domain": "media_player", "label": "TV"},
     "텔레비전": {"domain": "media_player", "label": "TV"},
+    # B7: 영문 TV 표기(티비/텔레비전 외).
+    "TV": {"domain": "media_player", "label": "TV"},
+    "tv": {"domain": "media_player", "label": "TV"},
     "도어락": {"domain": "lock", "label": "도어락"},
-    "콘센트": {"domain": "switch", "label": "콘센트"},
+    # B6: 가스밸브/대기전력 콘센트(이름 매칭 보너스로 정확 엔티티 선택).
+    "가스밸브": {"domain": "switch", "label": "가스밸브"},
+    "가스": {"domain": "switch", "label": "가스밸브"},
+    "밸브": {"domain": "switch", "label": "가스밸브"},
+    "대기전력": {"domain": "switch", "label": "대기전력 콘센트"},
+    "콘센트": {"domain": "switch", "label": "대기전력 콘센트"},
+    # B6/F2: 환기장치/선풍기 팬 동의어(이름 매칭 보너스로 정확 엔티티).
+    "환기장치": {"domain": "fan", "label": "전열교환기"},
+    "선풍기": {"domain": "fan", "label": "선풍기"},
     "온도": {"domain": "sensor", "device_class": "temperature", "label": "온도"},
     "습도": {"domain": "sensor", "device_class": "humidity", "label": "습도"},
     "미세먼지": {"domain": "sensor", "device_class": "pm25", "label": "미세먼지"},
 }
+
+# A6: 조명 접미사('등') 처리.
+#   무드등/메인등/천장등 등 라벨 붙은 조명은 이미 엔티티 이름 정확일치로 해석되고
+#   (예: "거실 무드등" → light.living_room_mood), 단독 "등"(1글자)을 기기 개념으로 넣으면
+#   "등록/고등" 등에 오매칭하며 "무드등"까지 light 로 삼켜 앱의 "미해석 대상은 조용히
+#   상속하지 않는다" 불변식(test_defect2)을 깨뜨린다. 그래서 overlay/계획서 권고대로
+#   "[room]등"(거실등/안방등)만 앵커링해 각 방의 조명 엔티티로 해석한다(아래 __init__).
+_LIGHT_SUFFIX = "등"
+# A1: 모드 동의어. 정규 모드명(settings.modes 의 키) → 표면형 목록.
+# 설정에 해당 정규명이 실제로 있을 때만 표면형을 얹는다(빌드 로직 참고).
+# 취침/수면 시점 표현을 슬립 모드로. '잘 때/수면 모드' 등은 무경계 문두 트리거로도 쓰인다.
+MODE_SYNONYMS: dict[str, list[str]] = {
+    "슬립 모드": ["취침 모드", "취침모드", "취침",
+               "잘 때", "잠잘 때", "잘때", "수면 모드", "수면모드", "잠들 때"],
+}
+
+# B1: 사람 동의어. 표면형 → 설정 인물(settings.persons)의 기준 표면형.
+# 기준 표면형이 실제로 있을 때만 person_surfaces 에 얹는다(빌드 로직 참고).
+PERSON_SYNONYMS: dict[str, str] = {"아내": "와이프", "부인": "와이프", "집사람": "와이프"}
+
 # 모션류 감지 개념
 MOTION_WORDS = ["움직임", "모션", "인기척", "동작", "재실"]
 MOTION_CONCEPT = {"domain": "binary_sensor",
@@ -92,11 +123,28 @@ class Gazetteer:
             for form in {name, name.replace(" ", "")}:
                 self.entity_surfaces.setdefault(form, []).append(e["entity_id"])
 
+        # A6: "[room]등" 앵커링. 방 표면형 + "등"(거실등/안방등/큰방등…)을 그 방의 조명
+        # 엔티티로 해석한다. 단독 "등"(오매칭)이나 "무드등"(미해석 유지) 은 건드리지 않고,
+        # 방 접두가 붙은 형태만 이름 표면형으로 추가한다(정확 엔티티 이름이 이미 있으면 보존).
+        lights_by_area: dict[str, list[str]] = {}
+        for e in self.entities:
+            if e["domain"] == "light" and e.get("area_id"):
+                lights_by_area.setdefault(e["area_id"], []).append(e["entity_id"])
+        for surf, aid in self.room_surfaces.items():
+            ids = lights_by_area.get(aid)
+            if ids:
+                self.entity_surfaces.setdefault(surf + _LIGHT_SUFFIX, list(ids))
+
         # 사람: settings.persons 오버레이 (표면형 → person entity_id)
         self.person_surfaces: dict[str, str] = {}
         for surf, pid in (self.settings.get("persons") or {}).items():
             if pid:
                 self.person_surfaces[surf] = pid
+        # B1: 사람 동의어(아내/부인/집사람 → 설정 인물 '와이프'). 기준 표면형이 있을 때만.
+        for syn, base in PERSON_SYNONYMS.items():
+            pid = self.person_surfaces.get(base)
+            if pid:
+                self.person_surfaces.setdefault(syn, pid)
         # 모드: settings.modes. 표면형(공백 유무 이형태) → spec, 그리고 → 정규명(canonical).
         self.mode_surfaces: dict[str, dict] = {}
         self.mode_canonical: dict[str, str] = {}
@@ -105,6 +153,18 @@ class Gazetteer:
             self.mode_surfaces.setdefault(name.replace(" ", ""), spec)
             self.mode_canonical[name] = name
             self.mode_canonical.setdefault(name.replace(" ", ""), name)
+        # A1: 모드 동의어(취침/수면 시점 표현 → 정규 모드명). 설정에 해당 정규명이
+        # 실제로 있을 때만 표면형을 얹는다(공백 이형태 대응, 각 설정 모드에 일반화).
+        for canon, syns in MODE_SYNONYMS.items():
+            spec = self.mode_surfaces.get(canon) \
+                or self.mode_surfaces.get(canon.replace(" ", ""))
+            if spec is None:
+                continue  # 이 인벤토리/설정에 해당 모드가 없으면 동의어도 추가하지 않음
+            target = self.mode_canonical.get(canon) \
+                or self.mode_canonical.get(canon.replace(" ", ""), canon)
+            for surf in syns:
+                self.mode_surfaces.setdefault(surf, spec)
+                self.mode_canonical.setdefault(surf, target)
         # 별칭: settings.aliases 오버레이(항상 우선)
         self.alias_surfaces: dict[str, str] = {}
         for al in (self.settings.get("aliases") or []):

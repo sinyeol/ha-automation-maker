@@ -74,7 +74,11 @@ def strip_particles_simple(token: str) -> str:
 # ---------------------------------------------------------------------------
 PERCENT_RE = re.compile(r"(\d+)\s*(?:%|퍼센트|프로)")
 TEMP_RE = re.compile(r"(\d+(?:\.\d+)?)\s*도(?![시분])")
+# 지속시간 스칼라. '동안'/'간' 접미사(예: "5분간"/"5분 동안")는 뒤따르는 잉여 텍스트로
+# 취급돼 스칼라 추출에 영향이 없다(A4 프레임 인식은 parser._duration_frames 담당).
 DURATION_RE = re.compile(r"(\d+)\s*(초|분|시간)")
+# 음수 온도 표지(영하/마이너스). find_temperature(signed=True) 에서만 부호 반영.
+NEG_TEMP_RE = re.compile(r"영하|마이너스")
 # 시각: (오전|오후|아침|저녁|밤|새벽|낮)? 12시 (30분|반)?
 CLOCK_RE = re.compile(
     r"(오전|오후|아침|저녁|밤|새벽|낮|정오|자정)?\s*(\d{1,2})\s*시\s*(?:(\d{1,2})\s*분|(반))?"
@@ -90,11 +94,19 @@ def find_percent(text: str):
     return {"value": int(m.group(1)), "span": (m.start(), m.end())}
 
 
-def find_temperature(text: str):
+def find_temperature(text: str, *, signed: bool = False):
+    """온도 리터럴('26도') → {'value','span'}. 없으면 None.
+
+    signed=True 이면 '영하'/'마이너스' 표지가 문장에 있을 때 부호를 음수로 반영한다
+    ('영하 5도' → -5.0). 기본(False) 은 기존 동작(양수 절댓값)과 동일해 회귀 없음.
+    """
     m = TEMP_RE.search(text)
     if not m:
         return None
-    return {"value": float(m.group(1)), "span": (m.start(), m.end())}
+    val = float(m.group(1))
+    if signed and NEG_TEMP_RE.search(text):
+        val = -abs(val)
+    return {"value": val, "span": (m.start(), m.end())}
 
 
 def find_duration(text: str):
@@ -111,6 +123,45 @@ def to_duration_obj(seconds: int) -> dict:
     m = (seconds % 3600) // 60
     s = seconds % 60
     return {"hours": h, "minutes": m, "seconds": s}
+
+
+# ---------------------------------------------------------------------------
+# 값(밝기/세기/위치/볼륨) 정규화 (B2)
+#   %/절반/최대/최소·은은·약하게/단위없는 'N으로' → 0~100 정수.
+#   순수 텍스트→값 변환이므로 gazetteer/parser 상태에 의존하지 않는다.
+# ---------------------------------------------------------------------------
+_VALUE_HALF_RE = re.compile(r"절반|반쯤|반만|반으로|반\s*밝기|반\s*정도")
+_VALUE_MAX_RE = re.compile(r"최대|제일\s*밝|가장\s*밝|풀\s*파워|풀파워|풀\s*밝|최고\s*밝|환하게")
+_VALUE_MIN_RE = re.compile(r"최소|제일\s*어둡|가장\s*어둡|아주\s*약|은은|살짝|약하게|희미")
+_VALUE_BARE_RE = re.compile(r"(?<!\d)(\d{1,3})\s*(?:으로|로)\s*(?:켜|해|설정|맞춰|낮춰|올려|줄여)")
+
+
+def value_pct(text: str):
+    """B2 값 해석. %/절반→50/최대→100/최소·은은·약하게→20/단위없는 'N으로' → 정수. 없으면 None.
+
+    '26도로/9시로' 같은 시각·온도 리터럴은 밝기값으로 오인하지 않는다.
+    """
+    p = find_percent(text)
+    if p:
+        return p["value"]
+    if _VALUE_HALF_RE.search(text):
+        return 50
+    if _VALUE_MAX_RE.search(text):
+        return 100
+    if _VALUE_MIN_RE.search(text):
+        return 20
+    m = _VALUE_BARE_RE.search(text)
+    if m:
+        v = int(m.group(1))
+        if not re.search(str(v) + r"\s*(?:도|시|분|초|시간)", text):
+            return v
+    return None
+
+
+def value_dict(text: str):
+    """value_pct 를 {"value": n} 형태로(없으면 None). find_percent 의 상위집합(B2)."""
+    v = value_pct(text)
+    return {"value": v} if v is not None else None
 
 
 def find_clock(text: str):

@@ -26,17 +26,79 @@ VERB_STEMS = [
     "들어오", "나가", "유지", "풀리", "잠기", "울리", "닿", "생기", "뜨", "지",
     "오르", "내리", "낮아지", "높아지", "많아지", "적어지", "왔", "왔었",
     "아니",  # 모드 부정 조건('슬립모드가 아니면')의 '면' 경계 인식용(§6)
+    # A5(라운드1): 절 경계('면') 인식용 어간 확장 — 잡히면/움직이면/나서면/비우면/새면.
+    "잡히", "움직이", "나서", "비우", "새",
 ]
 # 이벤트(→트리거) 키워드
 EVENT_KEYWORDS = ["도착", "열리", "열림", "열려", "닫히", "닫힘", "감지", "눌리",
                   "눌림", "켜지", "꺼지", "생기", "울리", "왔", "들어오", "나가"]
 # 명령형(→액션) 힌트
+# enabler(B1/B6): '잠그고/차단하고/소등/점등' 등 액션 연결어미가 절 경계로 인식되도록 확장.
 COMMAND_HINTS = ["켜", "꺼", "끄", "틀", "바꿔", "바꾸", "올려", "내려", "멈춰",
-                 "닫아", "열어", "잠가", "풀어", "실행", "가동", "작동", "설정"]
+                 "닫아", "열어", "잠가", "풀어", "실행", "가동", "작동", "설정",
+                 "잠그", "차단", "소등", "점등"]
 # 절 연결어미
 CONNECTIVES = ["는데", "면서", "다가", "고", "며"]
 # 부정 표현
 NEG_WORDS = ["없", "아니", "안 "]
+
+# ---------------------------------------------------------------------------
+# 스코프/이벤트 정규식 (A3·A10 스코프, B1 zone 귀가/외출, B6 누수)
+# ---------------------------------------------------------------------------
+# A3/A10: 선두 스코프어(모든/집의 모든/전부/다). '다른/다시' 는 (?=\s) 로 배제한다.
+_SCOPE_RE = re.compile(r"\s*(집의\s+모든|모든|전부|다)(?=\s)")
+# B1: 귀가(enter) 표현. '도착/왔/들어오' 는 기존 _build_arrival(다인 로직)이 처리하므로
+#     여기서는 그 외 귀가 표현(귀가/퇴근/집에 오·와·돌아)을 zone enter 로 라우팅한다.
+_ZONE_ENTER_RE = re.compile(
+    r"귀가|퇴근|집에?\s*(?:오|와|돌아|들어)|집에?\s*도착|도착하|들어오|왔")
+# B1: 외출(leave) 표현. '나가/나서' 는 앞 음절이 한글이면(누나가·일어나서 등 오탐) 제외.
+_ZONE_LEAVE_RE = re.compile(
+    r"외출|(?<![가-힣])나가|집\s*비우|집을?\s*비우|(?<![가-힣])나서|집을?\s*나\b")
+# B6: 누수/침수(moisture) 이벤트.
+_LEAK_RE = re.compile(r"누수|물\s*새|물이\s*새|샘|침수")
+
+
+def _value_pct(clause: str):
+    """B2: 밝기/세기 값 해석. %/절반/최대/약하게/단위없는 'N으로' → 0~100 정수. 없으면 None."""
+    p = find_percent(clause)
+    if p:
+        return p["value"]
+    if re.search(r"절반|반쯤|반만|반으로|반\s*밝기|반\s*정도", clause):
+        return 50
+    if re.search(r"최대|제일\s*밝|가장\s*밝|풀\s*파워|풀파워|풀\s*밝|최고\s*밝|환하게", clause):
+        return 100
+    if re.search(r"최소|제일\s*어둡|가장\s*어둡|아주\s*약|은은|살짝|약하게|희미", clause):
+        return 20
+    m = re.search(r"(?<!\d)(\d{1,3})\s*(?:으로|로)\s*(?:켜|해|설정|맞춰|낮춰|올려|줄여)", clause)
+    if m:
+        v = int(m.group(1))
+        # '26도로/9시로' 같은 시각·온도 리터럴은 밝기값이 아니다.
+        if not re.search(str(v) + r"\s*(?:도|시|분|초|시간)", clause):
+            return v
+    return None
+
+
+def _value_dict(clause: str):
+    """B2 값 해석을 {"value": n} 형태로(없으면 None). find_percent 대체(상위집합)."""
+    v = _value_pct(clause)
+    return {"value": v} if v is not None else None
+
+
+def _time_range(clause: str):
+    """B4: 'A시 부터 B시 까지/사이' → {type:time, after, before}. 시각 2개 + 범위표지."""
+    if not re.search(r"부터", clause) or not re.search(r"까지|사이", clause):
+        return None
+    clks = []
+    pos = 0
+    while True:
+        c = find_clock(clause[pos:])
+        if not c:
+            break
+        clks.append(c["hhmm"])
+        pos += c["span"][1]
+    if len(clks) >= 2:
+        return {"type": "time", "after": clks[0] + ":00", "before": clks[1] + ":00"}
+    return None
 
 
 def _duration_frames(text: str):
@@ -56,9 +118,10 @@ def _duration_frames(text: str):
         r"(?P<neg>없|있)는\s*상태\s*(?:로|가)?\s*(?P<n>\d+)\s*(?P<u>초|분|시간)\s*"
         r"(?:동안\s*)?(?:이|가)?\s*(?:되면|지나면|유지되면|지\s*나면)")
     # locpre: 지속 패턴 '앞'의 처소격 '[방]에(는)' 흡수 (예: "안방에 30분 동안 …").
+    # A4: '동안' → '(?:동안|간)' 으로 확장해 "5분간 …" 도 지속시간 프레임으로 인식.
     p1 = re.compile(
         r"(?P<locpre>[가-힣]+(?:에서|에는|에)\s+)?"
-        r"(?P<n>\d+)\s*(?P<u>초|분|시간)\s*동안\s*(?P<loc>[가-힣]+(?:에서|에는|에)\s+)?"
+        r"(?P<n>\d+)\s*(?P<u>초|분|시간)\s*(?:동안|간)\s*(?P<loc>[가-힣]+(?:에서|에는|에)\s+)?"
         r"(?P<subj>[가-힣A-Za-z]+)\s*(?:이|가)?\s*(?P<neg>없|있)으?면")
 
     unit = {"초": 1, "분": 60, "시간": 3600}
@@ -373,14 +436,32 @@ class _Parser:
         return self._emit(frames)
 
     def _split_daily_no_boundary(self, text: str):
-        """'면' 경계가 없을 때 "매일 [밤/…]? H시 …" 시각 트리거를 antecedent로 분리."""
+        """'면' 경계가 없을 때 antecedent 를 분리(§3, B4 확장):
+        (1) markerless 시각(밤 11시엔/매일 H시) → 시각 트리거, (2) 자정/정오 → 시각,
+        (3) 문두 모드-시점(잘 때) → 모드 트리거, (4) 문두 시간대(저녁엔) → 시간대 트리거.
+        """
         clk = find_clock(text)
-        if clk and "매일" in text and not re.search(r"이후|이전|부터|까지|전에", text):
+        if clk and not re.search(r"이후|이전|부터|까지|전에|사이", text):
             ce = clk["span"][1]
-            antecedent = text[:ce].strip()
-            consequent = re.sub(r"^\s*(?:에|정각)\s*", "", text[ce:]).strip()
-            return antecedent, consequent
-        # 명령만 있는 문장 등 — 전체를 액션으로 시도
+            cons = re.sub(r"^\s*(?:에는|엔|에|정각)\s*", "", text[ce:]).strip()
+            return text[:ce].strip(), cons
+        # 자정/정오(시 없는) 문두 → 시각 antecedent.
+        m0 = re.match(r"\s*(자정|정오)(?:에는|엔|에)?\s+", text)
+        if m0:
+            return text[:m0.end()].strip(), text[m0.end():].strip()
+        # 문두 모드 표면형(잘 때/슬립 모드 …) → 모드 antecedent.
+        for surf in sorted(self.gz.mode_surfaces, key=len, reverse=True):
+            i = text.find(surf)
+            if i >= 0 and text[:i].strip() == "":
+                e = i + len(surf)
+                return text[:e].strip(), text[e:].strip()
+        # 문두 시간대(저녁엔/주말 아침엔 …) → 시간대 antecedent.
+        m = re.match(r"\s*(?:주말|평일|공휴일|휴일|주중)?\s*(새벽|아침|낮|저녁|밤)"
+                     r"(?:에는|엔|에|이)?\s+", text)
+        if m:
+            e = m.end()
+            return text[:e].strip(), text[e:].strip()
+        # 명령만 있는 문장 등 — 전체를 액션으로 시도.
         return "", text
 
     def _split_by_sentinel(self, antecedent: str, frames):
@@ -530,11 +611,16 @@ class _Parser:
 
     # ---- 절이 이벤트(→트리거 후보)인가 ----
     def _clause_is_event(self, clause: str) -> bool:
+        # B1/B6: 귀가·외출·누수 표현도 이벤트로 인식.
+        if _ZONE_ENTER_RE.search(clause) or _ZONE_LEAVE_RE.search(clause):
+            return True
+        if _LEAK_RE.search(clause):
+            return True
         if any(k in clause for k in EVENT_KEYWORDS):
             return True
-        if re.search(r"움직임|모션|인기척|동작", clause):
+        if re.search(r"움직임|모션|인기척|동작|움직이", clause):
             return True
-        if "사람" in clause and re.search(r"있|없|감지", clause):
+        if "사람" in clause and re.search(r"있|없|감지|오", clause):
             return True
         return False
 
@@ -556,12 +642,22 @@ class _Parser:
             return None
         name = self.gz.mode_canonical.get(best, best)
         tail = clause[best_end:]
+        # 조건 표지(일 때/에서/이면서/인 경우/중) → 모드 조건(다른 이벤트와 병존).
+        # 기존 v3 기본값(모드 → condition)을 유지하되 표지를 우선 판정한다.
+        if re.search(r"일\s*때|일때|에서|이면서|인\s*경우|인경우|중이|중일", tail):
+            return ("condition", name, "off" if "아니" in tail else "on")
+        # A2: 모드 해제 계열 표현은 off 트리거(켜지/꺼지 체크보다 앞).
+        if re.search(r"해제|취소|종료|풀리|풀려|해지", tail):
+            return ("trigger", name, "off")
         if "꺼지" in tail:
             return ("trigger", name, "off")
         if "켜지" in tail:
             return ("trigger", name, "on")
         if "아니" in tail:
             return ("condition", name, "off")
+        # enabler: 모드 트리거 어미 확장 — 되면/들어가/진입/시작(전환) → 모드 트리거(on).
+        if re.search(r"되면|들어가|진입|시작|전환", tail):
+            return ("trigger", name, "on")
         return ("condition", name, "on")
 
     def _emit_mode_trigger(self, name, state, clause):
@@ -642,13 +738,30 @@ class _Parser:
                                       "sublabel": "계절 조건", "score": 1.0}]))
 
     def _emit_time_aspect(self, clause):
+        # B4: 자정/정오(시 없는 표현) → daily 트리거(00:00 / 12:00).
+        if not find_clock(clause):
+            if "자정" in clause:
+                self._build_daily_trigger({"hhmm": "00:00", "text": "자정", "span": (0, 2)})
+                return
+            if "정오" in clause:
+                self._build_daily_trigger({"hhmm": "12:00", "text": "정오", "span": (0, 2)})
+                return
+        # B4: 시각 범위(A시부터 B시까지/사이) → time 조건(after A & before B).
+        rng = _time_range(clause)
+        if rng:
+            self.conditions.append(rng)
+            self.chips.append(_Chip(
+                "시간범위", "condition", f"conditions[{len(self.conditions)-1}]",
+                [{"id": "time_range", "label": f"{rng['after'][:5]}~{rng['before'][:5]}",
+                  "sublabel": "시간 범위", "score": 1.0}]))
+            return
         clk = find_clock(clause)
         if clk:
             after = re.search(r"이후|부터|넘|지나", clause)
             before = re.search(r"이전|까지|전에", clause)
-            # '되면'(전환)이나 '매일'은 daily 트리거, '이후/이전'은 time 조건으로 구분(§3).
-            is_daily = ("매일" in self.sentence or re.search(r"되면", clause)) \
-                and not after and not before
+            # markerless 시각(밤 11시엔/밤 9시가 되면/매일 …)은 daily 트리거,
+            # '이후/이전/부터/까지' 범위표지가 있으면 time 조건(§3, B4).
+            is_daily = (not after and not before)
             if is_daily:
                 self._build_daily_trigger(clk)
             else:
@@ -656,28 +769,84 @@ class _Parser:
             return
         for seg in SEGMENT_WORDS:
             if seg in clause:
-                # '새벽이 되면'처럼 전환 표현이면 트리거, '새벽시간에'처럼 위치면 조건
-                if re.search(r"되면|되\b|시작하|넘어가|바뀌", clause):
+                # A8: 전환 표현(세그먼트어+되면/시작/전환)이면 트리거로 승격. 다른 서술어의
+                # '되면'(감지되면 등)에는 반응하지 않는다. 이벤트가 전혀 없으면 단독 시간대
+                # 트리거로 승격.
+                transition = re.search(
+                    re.escape(seg) + r"(?:이|가)?\s*(?:되면|되\b|시작하|넘어가|바뀌|전환)",
+                    clause)
+                has_event = bool(re.search(
+                    r"움직|모션|인기척|동작|감지|열리|닫히|도착|왔|들어|사람|누수|귀가|외출",
+                    clause)) or bool(find_clock(clause))
+                if transition or not has_event:
                     self._build_segment_trigger(clause)
                 else:
                     self._build_segment_condition(clause)
                 return
 
     def _emit_numeric_aspect(self, clause, as_trigger=False):
-        if not re.search(r"이상|이하|초과|미만|넘|올라가|내려가|떨어지", clause):
+        if not re.search(r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮",
+                         clause):
             return
-        # 온도/습도 등 센서 개념이 있어야 numeric_state
-        if not _find_concept(clause):
+        # 센서 개념(온도/습도)이 없어도 'N도' 온도 리터럴이 있으면 온도 센서로 추론(F1).
+        if _find_concept(clause) is None and find_temperature(clause) is None:
             return
         self._build_numeric(clause, as_trigger=as_trigger)
 
     def _build_event_clause(self, clause, as_trigger):
+        # B1: 외출(leave) 우선.
+        if _ZONE_LEAVE_RE.search(clause):
+            self._build_zone(clause, "leave", as_trigger)
+            return
+        # 도착/왔/들어오 → 기존 다인 도착 로직 유지(마지막 사람=트리거, 앞 사람=조건).
         if "도착" in clause or "왔" in clause or "들어오" in clause:
             self._build_arrival(clause, as_trigger)
-        elif re.search(r"움직임|모션|인기척|동작|사람", clause):
+            return
+        # B1: 그 외 귀가 표현(귀가/퇴근/집에 오·와·돌아) → zone enter.
+        if _ZONE_ENTER_RE.search(clause):
+            self._build_zone(clause, "enter", as_trigger)
+            return
+        # B6: 누수/침수 → moisture 센서 이벤트.
+        if _LEAK_RE.search(clause):
+            self._build_leak(clause, as_trigger)
+            return
+        if re.search(r"움직임|모션|인기척|동작|사람|움직이", clause):
             self._build_motion(clause, as_trigger)
+            return
+        self._build_state_event(clause, as_trigger)
+
+    def _build_zone(self, clause, event, as_trigger):
+        """B1: 귀가/외출 zone 트리거(person 매칭, 미검출 시 기본 사용자)."""
+        persons = _find_persons(self.gz, clause)
+        if not persons:
+            pid = (self.settings.get("persons") or {}).get("나") or "person.user"
+            persons = [("나", pid)]
+        if as_trigger:
+            for surf, pid in persons:
+                self.triggers.append({"type": "zone", "entity_id": pid,
+                                      "zone": "zone.home", "event": event})
+                self.chips.append(_Chip(
+                    surf, "trigger", f"triggers[{len(self.triggers)-1}].entity_id",
+                    [{"id": pid, "label": surf,
+                      "sublabel": "집 도착" if event == "enter" else "외출",
+                      "score": 1.0}]))
         else:
-            self._build_state_event(clause, as_trigger)
+            state = (self.settings.get("near_home") or {}).get("zone_state", "home")
+            for surf, pid in persons:
+                self._person_state_condition(surf, pid, state)
+
+    def _build_leak(self, clause, as_trigger):
+        """B6: 누수/침수 → binary_sensor(moisture) 상태 이벤트."""
+        concept = {"domain": "binary_sensor", "device_class": "moisture", "label": "누수"}
+        area = _find_area(self.gz, clause) or self.default_area
+        cands = self.gz.resolve_concept(concept, area, clause)
+        slot = (f"triggers[{len(self.triggers)}].entity_id" if as_trigger
+                else f"conditions[{len(self.conditions)}].entity_id")
+        chip = self._chip("누수", "trigger" if as_trigger else "condition", slot, cands)
+        if as_trigger:
+            self.triggers.append({"type": "state", "entity_id": chip.chosen, "to": "on"})
+        else:
+            self.conditions.append({"type": "state", "entity_id": chip.chosen, "state": "on"})
 
     # ---- held(지속) → state_held / group_held ----
     def _build_held(self, sentinel, frames):
@@ -859,15 +1028,21 @@ class _Parser:
             m = re.search(r"(\d+(?:\.\d+)?)", clause)
             if m:
                 num = float(m.group(1))
+        # 영하/마이너스 → 음수.
+        if num is not None and re.search(r"영하|마이너스", clause):
+            num = -abs(num)
         above = below = None
         if re.search(r"이상|초과|넘|올라가|높", clause):
             above = num
-        elif re.search(r"이하|미만|떨어지|낮|내려가", clause):
+        elif re.search(r"이하|미만|떨어지|낮|내려가|밑", clause):
             below = num
         else:
             above = num
         if concept is None:
             concept = {"domain": "sensor", "device_class": "temperature"} if temp else None
+        # E5: 트리거 방을 기본 방으로 전파(뒤 액션 대상 해석 힌트) — 미설정일 때만.
+        if area and self.default_area is None:
+            self.default_area = area
         cands = self.gz.resolve_concept(concept, area, clause) if concept else []
         bucket = self.triggers if as_trigger else self.conditions
         slot = f"{'triggers' if as_trigger else 'conditions'}[{len(bucket)}].entity_id"
@@ -942,7 +1117,8 @@ class _Parser:
         for name, spec in self.gz.mode_surfaces.items():
             if name in clause:
                 canon = self.gz.mode_canonical.get(name, name)
-                to = "off" if re.search(r"꺼|끄|해제|off", clause) else "on"
+                # A9: off 표현에 취소|풀|해지|종료 추가.
+                to = "off" if re.search(r"꺼|끄|해제|취소|풀|해지|종료|off", clause) else "on"
                 # v3 신형 모드 스펙(initial/on_action/off_action) → set_mode 노드(side-effect는
                 # 엔진 담당). 구형 스펙({action,target,data})은 하위호환으로 service 노드 유지.
                 is_v3 = isinstance(spec, dict) and any(
@@ -977,11 +1153,13 @@ class _Parser:
                                     self._span_of(dm.group(0).strip())))
             clause = (clause[:dm.start()] + " " + clause[dm.end():]).strip()
 
-        # 명령 판정
-        turn_off = bool(re.search(r"꺼|끄|멈춰|정지|닫아", clause))
-        turn_on = bool(re.search(r"켜|틀|열어|가동|작동|실행|바꿔", clause)) and not turn_off
-        # 값
-        pct = find_percent(clause)
+        # 명령 판정 (B6: 잠가/잠그/차단/소등 → off. lock 도메인은 _domain_service 에서 처리.)
+        turn_off = bool(re.search(r"꺼|끄|멈춰|정지|닫아|잠가|잠그|잠궈|차단|소등", clause))
+        # B1: 잠금 풀어/해제 → unlock(=turn_on). '풀리'(모드 트리거)와 구분해 액션 존만.
+        turn_on = bool(re.search(r"켜|틀|열어|가동|작동|실행|바꿔|풀어|풀고|해제|점등|밝게",
+                                 clause)) and not turn_off
+        # 값(B2: 절반/최대/약하게/단위없는 N으로 확장) — find_percent 상위집합.
+        pct = _value_dict(clause)
         # 프리셋(…로/으로) — 모드 외 climate fan_mode 등
         preset = None
         pm = re.search(r"([가-힣A-Za-z0-9]+)\s*(?:으로|로)\s*(?:틀|켜|바꿔|설정)", clause)
@@ -989,6 +1167,65 @@ class _Parser:
             cand = pm.group(1)
             if not find_percent(cand) and cand not in ("그것", "거기"):
                 preset = cand
+
+        # B/스코프 확장: '전체/온 집/집 안/집 전체/모두 … 다' 전량 스코프(모든 외 표현).
+        # 배제 스코프(빼고/제외/남기고)는 아래에서 처리하므로 여기선 제외.
+        if (turn_on or turn_off) \
+                and re.search(r"전체|전부|온\s*집|집\s*안|집안|집\s*전체|모두|온집", clause) \
+                and not re.search(r"빼|제외|남기", clause):
+            concept = _find_concept(clause) or {"domain": "light", "label": "조명"}
+            ids = self.gz.entities_by_concept(concept)
+            if ids:
+                action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
+                self.actions.append({"type": "service", "action": action,
+                                     "target": {"entity_id": ids}})
+                self.chips.append(_Chip(
+                    "전체", "action", f"actions[{len(self.actions)-1}].target",
+                    [{"id": f"all:{concept['domain']}",
+                      "label": f"모든 {concept.get('label','')}", "sublabel": f"{len(ids)}개",
+                      "score": 0.9}]))
+                return
+
+        # B5 배제 스코프: "X 빼고/제외하고/(만) 남기고/말고 (나머지) 다" → 해당 도메인 전체 중
+        # 방 X 를 제외한 off/on. concept 미검출 시 조명 전체로 가정.
+        em = re.search(r"([가-힣]+)\s*(?:빼고|제외하고|남기고|말고)", clause)
+        if em and (turn_on or turn_off):
+            area_word = em.group(1)
+            if area_word.endswith("만"):
+                area_word = area_word[:-1]
+            except_area = _find_area(self.gz, area_word)
+            concept = _find_concept(clause) or {"domain": "light", "label": "조명"}
+            if except_area:
+                ids = self.gz.entities_by_concept(concept, except_area_id=except_area)
+                action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
+                self.actions.append({"type": "service", "action": action,
+                                     "target": {"entity_id": ids}})
+                self.chips.append(_Chip(
+                    em.group(0).strip(), "action",
+                    f"actions[{len(self.actions)-1}].target",
+                    [{"id": f"except:{concept['domain']}",
+                      "label": f"{area_word} 제외 {concept.get('label','')}",
+                      "sublabel": f"{len(ids)}개", "score": 0.9}]))
+                return
+
+        # A3/A10: 선두 스코프어(모든/집의 모든/전부/다) → 전량 스코프. 기기어가 있으면 그
+        # 도메인 전체, 없으면 조명 전체(A10). "다른/다시" 는 _SCOPE_RE 의 (?=\s) 로 배제.
+        sm = _SCOPE_RE.match(clause)
+        if sm and (turn_on or turn_off):
+            concept = _find_concept(clause)
+            if concept is None:
+                concept = {"domain": "light", "label": "조명"}  # A10
+            ids = self.gz.entities_by_concept(concept)
+            action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
+            self.actions.append({"type": "service", "action": action,
+                                 "target": {"entity_id": ids}})
+            self.chips.append(_Chip(
+                sm.group(0).strip() or "전체", "action",
+                f"actions[{len(self.actions)-1}].target",
+                [{"id": f"all:{concept['domain']}",
+                  "label": f"모든 {concept.get('label','')}",
+                  "sublabel": f"{len(ids)}개", "score": 0.9}]))
+            return
 
         # 대상들(체언 병렬: 와/과/하고/,)
         targets, unresolved_targets = self._split_targets(clause)
@@ -1154,17 +1391,50 @@ class _Parser:
 
     def _domain_service(self, domain, eid, turn_on, turn_off, pct, preset, clause):
         data = {}
+        # B1/B6: '문 잠가/잠금 풀어' 처럼 도어센서에 잠금 동사가 오면 같은 방 lock 으로 재매핑.
+        if domain == "binary_sensor" and re.search(r"잠그|잠가|잠궈|잠금|풀어|풀고", clause):
+            e = self.gz.entity(eid)
+            area = e.get("area_id") if e else None
+            locks = [x["entity_id"] for x in self.gz.entities
+                     if x["domain"] == "lock" and (area is None or x.get("area_id") == area)]
+            if locks:
+                act = "lock.unlock" if turn_on else "lock.lock"
+                self.actions.append({"type": "service", "action": act,
+                                     "target": {"entity_id": [locks[0]]}})
+                return
         if domain == "light":
             action = "light.turn_off" if turn_off else "light.turn_on"
             if pct and not turn_off:
                 data["brightness_pct"] = pct["value"]
         elif domain == "fan":
+            # B2: 값이 있고 켜/끄 명령이 아니면 set_percentage.
+            if pct is not None and not turn_on and not turn_off:
+                self.actions.append({"type": "service", "action": "fan.set_percentage",
+                                     "target": {"entity_id": [eid]},
+                                     "data": {"percentage": pct["value"]}})
+                return
             action = "fan.turn_off" if turn_off else "fan.turn_on"
             if pct and not turn_off:
                 data["percentage"] = pct["value"]
         elif domain == "climate":
+            # B3: "N도로 맞춰/설정/해" → set_temperature (켜/끄 명령이 아닐 때).
+            tm = find_temperature(clause)
+            if tm is not None and not turn_off and not turn_on \
+                    and re.search(r"맞춰|맞추|맞게|설정|해줘|해\b|로\s*해", clause):
+                self.actions.append({"type": "service",
+                                     "action": "climate.set_temperature",
+                                     "target": {"entity_id": [eid]},
+                                     "data": {"temperature": int(tm["value"])}})
+                return
             action = "climate.turn_off" if turn_off else "climate.turn_on"
         elif domain == "cover":
+            # B2: 값이 있으면 위치 설정(절반만 열어 → position 50).
+            if pct is not None:
+                self.actions.append({"type": "service",
+                                     "action": "cover.set_cover_position",
+                                     "target": {"entity_id": [eid]},
+                                     "data": {"position": pct["value"]}})
+                return
             # 커튼/블라인드 동사: 내려/닫아/쳐/접어=close, 올려/열어/걷어/펼쳐=open.
             close_v = re.search(r"내려|닫|쳐|접", clause)
             open_v = re.search(r"올려|열|걷|펼|젖", clause)
@@ -1175,6 +1445,13 @@ class _Parser:
             else:
                 action = "cover.close_cover" if turn_off else "cover.open_cover"
         elif domain == "media_player":
+            # B7: 볼륨 값이 있고 켜/끄 명령이 아니면 volume_set(20% → 0.2).
+            if pct is not None and not turn_on and not turn_off:
+                self.actions.append({"type": "service",
+                                     "action": "media_player.volume_set",
+                                     "target": {"entity_id": [eid]},
+                                     "data": {"volume_level": round(pct["value"] / 100.0, 2)}})
+                return
             action = "media_player.turn_off" if turn_off else "media_player.turn_on"
         elif domain == "lock":
             action = "lock.unlock" if turn_on else "lock.lock"
