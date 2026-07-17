@@ -22,6 +22,10 @@ KNOWN_SERVICES: dict[str, list[str]] = {
     "humidifier": ["turn_on", "turn_off", "set_humidity"],
     "button": ["press"],
     "input_boolean": ["turn_on", "turn_off", "toggle"],
+    # S6(§2.6): 도메인 무관 서비스. 혼합/불명 도메인 toggle(§3.2) 및 turn_on/off 를
+    # 여기서 인지한다. rule_model._ALLOWED_ACTION_DOMAINS = set(KNOWN_SERVICES) | {...}
+    # 이므로 이 한 줄로 화이트리스트에도 homeassistant 가 편입된다.
+    "homeassistant": ["turn_on", "turn_off", "toggle"],
 }
 
 _TIME_RE = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$")
@@ -38,6 +42,8 @@ _REQUIRED_SERVICE_DATA: dict[str, tuple[str, str]] = {
     "fan.set_percentage": ("percentage", "팬 세기(%)를 입력해 주세요."),
     "cover.set_cover_position": ("position", "커버 위치(%)를 입력해 주세요."),
     "humidifier.set_humidity": ("humidity", "설정 습도(%)를 입력해 주세요."),
+    # S6(§3.3): 알림은 반드시 메시지가 있어야 한다(v1 검증에도 안전 강화).
+    "notify.notify": ("message", "알림 메시지를 입력해 주세요."),
 }
 
 

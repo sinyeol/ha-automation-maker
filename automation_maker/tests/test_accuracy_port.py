@@ -357,10 +357,30 @@ def test_postpass_repeat_count(gz):
 
 
 def test_postpass_toggle_domain_only(gz):
-    """#28 toggle: '반대로' → <domain>.toggle(단일 도메인). homeassistant.toggle 은 S6."""
+    """#28 toggle: '반대로' → 단일 도메인은 <domain>.toggle."""
     r = _p(gz, "거실 조명 반대로 해줘")
     assert r["model"]["actions"] == [
         _svc("light.toggle", ["light.living_room_main"])]
+    # 스위치 병렬(단일 도메인) 도 domain.toggle 유지.
+    r2 = _p(gz, "가스밸브랑 대기전력 반대로 해줘")
+    assert r2["model"]["actions"] == [
+        _svc("switch.toggle", ["switch.gas_valve", "switch.standby_power"])]
+
+
+def test_postpass_toggle_homeassistant_mixed(gz):
+    """#28 toggle(S6): 혼합 도메인(조명+커튼) '반대로' → homeassistant.toggle 한 노드."""
+    r = _p(gz, "거실 조명이랑 커튼 반대로 해줘")
+    assert r["model"]["actions"] == [
+        _svc("homeassistant.toggle",
+             ["light.living_room_main", "cover.living_room_curtain"])]
+
+
+def test_light_concept_main_bare(gz):
+    """#18(S6): 방 미지정 '메인등'도 개념→'메인' 선호로 light.*_main 라우팅.
+    ('무드등'은 test_defect2 불변식 보존을 위해 개념화하지 않는다 — gazetteer 주석 참조.)"""
+    r = _p(gz, "메인등 켜줘")
+    assert r["model"]["actions"] == [
+        _svc("light.turn_on", ["light.living_room_main"])]
 
 
 def test_postpass_light_color(gz):

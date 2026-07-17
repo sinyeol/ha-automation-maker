@@ -67,6 +67,63 @@ _ALLOWED_ACTION_DOMAINS = set(KNOWN_SERVICES) | {
 _DOMAIN_AGNOSTIC_SERVICE_DOMAINS = {"homeassistant", "notify"}
 
 
+def _is_int(v) -> bool:
+    """정수(bool 제외)."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _is_num(v) -> bool:
+    """수(int/float, bool 제외)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _check_service_data(action: str, data, path, errors) -> None:
+    """service 액션 data 필드 검증(SPEC-SCHEMA-90 §3.1·§3.3, S6).
+
+    - light.turn_on: brightness_pct(1~100)·brightness_step_pct(-100~100·≠0)·
+      rgb_color([0~255]×3)·color_temp_kelvin(2000~6500)·transition(≥0),
+      절대 밝기(brightness_pct)와 상대 밝기(brightness_step_pct) 동시 지정 금지.
+    - notify.notify: data.message 는 비어있지 않은 문자열 필수.
+    다른 액션의 data 는 관여하지 않는다(HA 네이티브 통과).
+    """
+    d = data if isinstance(data, dict) else {}
+    if action == "notify.notify":
+        msg = d.get("message")
+        if not isinstance(msg, str) or not msg.strip():
+            errors.append({"path": path + ".data.message",
+                           "message": "알림 메시지를 입력해 주세요."})
+        return
+    if action != "light.turn_on":
+        return
+    dp = path + ".data"
+    bp = d.get("brightness_pct")
+    if bp is not None and (not _is_int(bp) or not 1 <= bp <= 100):
+        errors.append({"path": dp + ".brightness_pct",
+                       "message": "밝기는 1~100 사이의 정수여야 합니다."})
+    bs = d.get("brightness_step_pct")
+    if bs is not None:
+        if not _is_int(bs) or bs == 0 or not -100 <= bs <= 100:
+            errors.append({"path": dp + ".brightness_step_pct",
+                           "message": "상대 밝기는 -100~100(0 제외)의 정수여야 합니다."})
+        if bp is not None:
+            errors.append({"path": dp + ".brightness_step_pct",
+                           "message": "절대 밝기와 상대 밝기를 동시에 지정할 수 없습니다."})
+    rgb = d.get("rgb_color")
+    if rgb is not None and (
+            not isinstance(rgb, (list, tuple)) or len(rgb) != 3
+            or any(not _is_int(x) or not 0 <= x <= 255 for x in rgb)):
+        errors.append({"path": dp + ".rgb_color",
+                       "message": "색은 0~255 값 3개의 목록이어야 합니다."})
+    kelvin = d.get("color_temp_kelvin")
+    if kelvin is not None and (not _is_int(kelvin) or not 2000 <= kelvin <= 6500):
+        errors.append({"path": dp + ".color_temp_kelvin",
+                       "message": "색온도는 2000~6500K 사이의 정수여야 합니다."})
+    trans = d.get("transition")
+    if trans is not None and (not _is_num(trans) or trans < 0):
+        errors.append({"path": dp + ".transition",
+                       "message": "전환 시간(초)은 0 이상이어야 합니다."})
+
+
 def _p(prefix: str, key: str) -> str:
     return f"{prefix}.{key}" if prefix else key
 
@@ -342,6 +399,8 @@ def _scan_service_actions(actions, base_path, errors, valid_ids) -> None:
                 domain = action.split(".", 1)[0] if "." in action else ""
                 if domain and domain not in _ALLOWED_ACTION_DOMAINS:
                     errors.append({"path": base_path, "message": f"지원하지 않는 동작이에요: {action}"})
+                # S6(§3.1·§3.3): service data 범위·필수 검증(light 파라미터·notify 메시지).
+                _check_service_data(action, node.get("data"), base_path, errors)
                 tgt = node.get("target")
                 has_target = isinstance(tgt, dict) and "entity_id" in tgt
                 ids = tgt.get("entity_id") if isinstance(tgt, dict) else None

@@ -225,6 +225,8 @@ class MockHAClient:
         # v2 이벤트 소스(MockEventSource)가 구독하는 상태 변경 훅.
         # 시그니처: (entity_id, old_state: dict|None, new_state: dict|None)
         self.on_state_changed = None
+        # S6(§2.7): notify/tts 수신 로그(DEV E2E 알림 검증용, 상한 100).
+        self.notifications: list[dict] = []
 
     async def start(self) -> None:
         pass
@@ -297,6 +299,18 @@ class MockHAClient:
 
     async def call_service(self, domain: str, service: str, data: dict) -> None:
         data = data if isinstance(data, dict) else {}
+        # S6(§2.7·§3.3): notify/tts 는 대상 엔티티 없이 메시지를 수신 로그에 적재한다.
+        if domain in ("notify", "tts"):
+            self.notifications.append({
+                "domain": domain, "service": service,
+                "message": data.get("message"),
+                "title": data.get("title"),
+                "target": data.get("target"),
+                "ts": datetime.now(timezone.utc).isoformat(),
+            })
+            del self.notifications[:-100]  # 상한 100
+            log.info("mock %s 수신: %s", domain, data.get("message"))
+            return
         targets = data.get("entity_id")
         if isinstance(targets, str):
             targets = [targets]
@@ -324,8 +338,20 @@ class MockHAClient:
                 st["state"] = "on"
                 if "brightness_pct" in data:
                     attrs["brightness"] = round(float(data["brightness_pct"]) * 255 / 100)
+                elif "brightness_step_pct" in data:
+                    # S6(§2.7): 현재 밝기(%) ± step, 1~100 클램프 후 0~255 로 환산.
+                    cur_pct = (attrs.get("brightness") or 0) / 255 * 100
+                    new_pct = min(100, max(1, cur_pct + float(data["brightness_step_pct"])))
+                    attrs["brightness"] = round(new_pct * 255 / 100)
                 elif "brightness" in data:
                     attrs["brightness"] = data["brightness"]
+                # S6(§2.7·§3.1): 색/색온도/전환 속성 반영(전환은 저장만).
+                if "rgb_color" in data:
+                    attrs["rgb_color"] = list(data["rgb_color"])
+                if "color_temp_kelvin" in data:
+                    attrs["color_temp_kelvin"] = data["color_temp_kelvin"]
+                if "transition" in data:
+                    attrs["transition"] = data["transition"]
                 return True
             if service == "turn_off":
                 st["state"] = "off"
@@ -403,5 +429,19 @@ class MockHAClient:
                 return True
             if service == "trigger":
                 attrs["last_triggered"] = datetime.now(timezone.utc).isoformat()
+                return True
+        elif domain == "homeassistant":
+            # S6(§2.7·§3.2): 대상 엔티티의 실제 도메인 기준으로 반전/설정(혼합 도메인 toggle).
+            ent_domain = st["entity_id"].split(".", 1)[0]
+            if service == "toggle":
+                if ent_domain == "cover":
+                    st["state"] = "closed" if st["state"] == "open" else "open"
+                elif ent_domain == "lock":
+                    st["state"] = "unlocked" if st["state"] == "locked" else "locked"
+                else:
+                    st["state"] = "off" if st["state"] == "on" else "on"
+                return True
+            if service in ("turn_on", "turn_off"):
+                st["state"] = "on" if service == "turn_on" else "off"
                 return True
         return False

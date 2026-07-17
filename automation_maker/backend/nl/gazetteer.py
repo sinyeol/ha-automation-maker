@@ -46,10 +46,16 @@ DEVICE_CONCEPTS: dict[str, dict] = {
     "온도": {"domain": "sensor", "device_class": "temperature", "label": "온도"},
     "습도": {"domain": "sensor", "device_class": "humidity", "label": "습도"},
     "미세먼지": {"domain": "sensor", "device_class": "pm25", "label": "미세먼지"},
-    # #18(보류): 무드등/메인등 라벨 개념은 오버레이가 +2.7%p 를 주지만, 이 인벤토리에서
-    #   '무드등을 켜줘'가 light.living_room_mood 로 해석돼 test_defect2(명시 미해석 대상은
-    #   조용히 상속/해석하지 않는다) 불변식을 깬다. APP-PORT-PLAN §5.1 리스크2 규칙(앱 불변식
-    #   우선)에 따라 S1 에서 보류 — 인벤토리 방별 무드등 라우팅 정교화 후 재도입(S6/후속).
+    # #18(S6, 부분 도입): 조명 라벨 개념. '메인등/메인 조명/메인조명' 만 개념으로 넣는다.
+    #   resolve_concept 의 '메인' 선호(+0.03)로 방 없는 '메인등'도 light.*_main 으로 라우팅되고,
+    #   '거실 메인등'은 정확 이름일치가 우선하므로 무해하다(test_light_suffix_main 유지).
+    #   '무드등' 은 제외한다 — 오버레이는 개념화하지만, 이 인벤토리에선 방 미지정 '무드등'이
+    #   앞 서브룰 방(area 보너스)으로 조용히 상속돼 test_defect2(명시 미해석 대상 비상속) 불변식을
+    #   깬다. APP-PORT-PLAN §5.1 리스크2(충돌 시 앱 불변식 우선)에 따라 무드등만 보류한다.
+    #   bare '등'(1글자) 도 제외('등록/고등' 오매칭 + 무드등 삼킴 — gazetteer 하단 A6 주석 참조).
+    "메인등": {"domain": "light", "label": "메인등"},
+    "메인 조명": {"domain": "light", "label": "메인등"},
+    "메인조명": {"domain": "light", "label": "메인등"},
 }
 
 # A6: 조명 접미사('등') 처리.

@@ -7,8 +7,8 @@ apply(result, sentence, normalized, gz, settings, now_fn=None) -> result
 
 S1 범위(APP-PORT-PLAN 게이트): **기존 엔진 노드로 실행 가능한 항목만** 이식한다.
   #19 환기팬→ERV 재매핑 · #24 수치 에지 마무리 · #25 held-for · #26 부정 NOT ·
-  #27 light params(색/색온도/상대밝기/transition) · #28 toggle(단 domain.toggle 만 —
-  homeassistant.toggle 은 S6) · #29 notify(인용/-다고) · #30 repeat(count/until) ·
+  #27 light params(색/색온도/상대밝기/transition) · #28 toggle(단일→<domain>.toggle,
+  혼합→homeassistant.toggle) · #29 notify(인용/-다고) · #30 repeat(count/until) ·
   #31 duration revert · 날씨형 전이 numeric_state.
 S2 범위: #20 sun 트리거 / sun_window 조건(일몰·일출±오프셋·밤창) 활성화 — 엔진(_schedule_sun)·
   evaluator(sun_window)·검증기(rule_model)가 이 노드를 알므로 auto_disabled 되지 않는다.
@@ -536,7 +536,7 @@ def _apply_light_params(text: str, sub: dict) -> None:
 
 
 # ===========================================================================
-# #28 toggle — 반대로/토글 → <domain>.toggle. S1 은 단일 도메인만(homeassistant.toggle 은 S6).
+# #28 toggle — 반대로/토글 → 단일 도메인은 <domain>.toggle, 혼합/불명 도메인은 homeassistant.toggle(S6).
 # ===========================================================================
 _TOGGLE_RE = re.compile(r"반대\s*(?:로|상태)|토글")
 _TOGGLABLE = {"turn_on", "turn_off", "open_cover", "close_cover", "lock", "unlock"}
@@ -558,10 +558,8 @@ def _apply_toggle(sub: dict) -> bool:
         d = x.split(".")[0]
         if d not in doms:
             doms.append(d)
-    # S1: 단일 도메인만 domain.toggle. 혼합 도메인(homeassistant.toggle)은 S6 까지 미적용.
-    if len(doms) != 1:
-        return False
-    act = f"{doms[0]}.toggle"
+    # S6(§3.2): 단일 도메인→<domain>.toggle, 혼합/불명 도메인→homeassistant.toggle.
+    act = f"{doms[0]}.toggle" if len(doms) == 1 else "homeassistant.toggle"
     others = [a for a in sub["actions"] if a not in svc]
     sub["actions"] = [{"type": "service", "action": act,
                        "target": {"entity_id": ids}}] + others
