@@ -482,3 +482,249 @@
                    target: {entity_id: ["light.living_room_main"]}}]
   slots: []
   tags: [single, regression, segment-trigger]
+
+# ===========================================================================
+# NUMERIC 영역 — 수치 임계 트리거(numeric_state above/below) → 냉난방/환기.
+# ===========================================================================
+- id: numeric_temp_ac_on
+  area: numeric
+  template: "{sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "{sensor_temp.entity}",
+                    above: "{temp_value.value}"}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["{device_climate.entity}"]}}]
+  slots: [sensor_temp, temp_value, device_climate]
+  tags: [numeric, above, climate]
+
+- id: numeric_temp_boiler_on
+  area: numeric
+  template: "{sensor_temp}{가} {temp_value} 이하이면 {device_boiler}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "{sensor_temp.entity}",
+                    below: "{temp_value.value}"}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["{device_boiler.entity}"]}}]
+  slots: [sensor_temp, temp_value, device_boiler]
+  tags: [numeric, below, climate]
+
+- id: numeric_humidity_erv_on
+  area: numeric
+  template: "{sensor_humidity}{가} {humidity_value} 이상이면 {device_erv}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "{sensor_humidity.entity}",
+                    above: "{humidity_value.value}"}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["{device_erv.entity}"]}}]
+  slots: [sensor_humidity, humidity_value, device_erv]
+  tags: [numeric, above, fan]
+
+- id: numeric_season_temp_ac
+  area: numeric
+  template: "{season} {sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "{sensor_temp.entity}",
+                    above: "{temp_value.value}"}]
+        conditions: [{type: season, seasons: ["{season.value}"]}]
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["{device_climate.entity}"]}}]
+  slots: [season, sensor_temp, temp_value, device_climate]
+  tags: [numeric, above, climate, season]
+
+# ===========================================================================
+# TIME-RANGE 영역 — 시각 트리거(daily)/시간대·요일 조건.
+# ===========================================================================
+- id: timerange_daily_light_off
+  area: time-range
+  template: "밤 11시가 되면 {device_light}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:00"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [device_light]
+  tags: [time-range, daily-trigger]
+
+- id: timerange_daytype_seg_light
+  area: time-range
+  template: "{day_type} {segment} {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: "{segment.value}"}]
+        conditions: [{type: day_type, types: ["{day_type.value}"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [day_type, segment, device_light]
+  tags: [time-range, day-type, segment-trigger, misparse]
+  misparse_note: >-
+    '{segment}' 표면형에 '되면' 전환 표현이 없어(예: '주말에 저녁에 거실 조명을 켜줘')
+    파서가 segment 를 트리거로 승격하지 않고 조건(time_segment)으로 읽어 트리거 부재가
+    될 수 있다. gold 는 '저녁이 되면'식 전환 의도를 정답으로 둔다.
+
+# ===========================================================================
+# COVER 영역 — 커튼/블라인드 열고 닫기(cover.open_cover/close_cover).
+# ===========================================================================
+- id: cover_seg_close
+  area: cover
+  template: "저녁이 되면 {device_cover}{을} <close>"
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: evening}]
+        conditions: []
+        actions: [{type: service, action: "cover.close_cover",
+                   target: {entity_id: ["{device_cover.entity}"]}}]
+  slots: [device_cover]
+  tags: [cover, segment-trigger, close]
+
+- id: cover_seg_open
+  area: cover
+  template: "아침이 되면 {device_cover}{을} <open>"
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: morning}]
+        conditions: []
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["{device_cover.entity}"]}}]
+  slots: [device_cover]
+  tags: [cover, segment-trigger, open]
+
+- id: cover_motion_open
+  area: cover
+  template: "{motion}{가} 감지되면 {device_cover}{을} <open>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["{device_cover.entity}"]}}]
+  slots: [motion, device_cover]
+  tags: [cover, motion-trigger, open]
+
+# ===========================================================================
+# CLIMATE-SET 영역 — 목표 온도 설정(climate.set_temperature). 현 파서 갭(오판).
+# ===========================================================================
+- id: climateset_temp_target
+  area: climate-set
+  template: "{sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} {temp_set}로 설정해줘"
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "{sensor_temp.entity}",
+                    above: "{temp_value.value}"}]
+        conditions: []
+        actions: [{type: service, action: "climate.set_temperature",
+                   target: {entity_id: ["{device_climate.entity}"]},
+                   data: {temperature: "{temp_set.value}"}}]
+  slots: [sensor_temp, temp_value, device_climate, temp_set]
+  tags: [climate-set, set-temperature, misparse]
+  misparse_note: >-
+    'N도로 설정' 은 climate.set_temperature(목표 온도) 의도지만 현재 파서는 '…로'를
+    프리셋(fan_mode)으로 읽어 climate.turn_on + set_fan_mode(fan_mode="24도")로 오판한다.
+
+# ===========================================================================
+# MEDIA 영역 — TV 켜기/끄기(media_player.turn_on/off).
+# ===========================================================================
+- id: media_motion_on
+  area: media
+  template: "{motion}{가} 감지되면 {device_media}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_on",
+                   target: {entity_id: ["{device_media.entity}"]}}]
+  slots: [motion, device_media]
+  tags: [media, motion-trigger]
+
+- id: media_daily_off
+  area: media
+  template: "밤 11시가 되면 {device_media}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:00"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["{device_media.entity}"]}}]
+  slots: [device_media]
+  tags: [media, daily-trigger]
+
+- id: media_mode_off
+  area: media
+  template: "{mode}{가} 켜지면 {device_media}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["{device_media.entity}"]}}]
+  slots: [mode, device_media]
+  tags: [media, mode-trigger]
+
+# ===========================================================================
+# SAFETY 영역 — 문/도어락/밸브 안전 동작.
+# ===========================================================================
+- id: safety_door_lock
+  area: safety
+  template: "현관문이 닫히면 {device_lock}{을} <lock>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "lock.lock",
+                   target: {entity_id: ["{device_lock.entity}"]}}]
+  slots: [device_lock]
+  tags: [safety, lock]
+
+- id: safety_mode_lock
+  area: safety
+  template: "{mode}{가} 켜지면 {device_lock}{을} <lock>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "lock.lock",
+                   target: {entity_id: ["{device_lock.entity}"]}}]
+  slots: [mode, device_lock]
+  tags: [safety, lock, mode-trigger]
+
+- id: safety_moisture_valve_off
+  area: safety
+  template: "욕실에 누수가 감지되면 {device_switch}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_moisture", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "switch.turn_off",
+                   target: {entity_id: ["{device_switch.entity}"]}}]
+  slots: [device_switch]
+  tags: [safety, misparse]
+  misparse_note: >-
+    '누수' 는 개념어/이름 사전에 표면형이 없어 트리거 센서(binary_sensor.bathroom_moisture)를
+    해석하지 못하고, '잠가/꺼' 도 switch 를 turn_off 로 못 내려 트리거 부재로 실패한다.
+
+# ===========================================================================
+# SCOPE-EXCLUDE 영역 — 특정 방을 빼고 도메인 전체(손라벨 엔티티 리스트). 현 파서 갭.
+# ===========================================================================
+- id: scopeexclude_mode_light_off
+  area: scope-exclude
+  template: "{mode}{가} 켜지면 거실 빼고 모든 조명을 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom", "light.entrance",
+                     "light.kitchen", "light.master_bedroom", "light.small_room",
+                     "light.veranda"]}}]
+  slots: [mode]
+  tags: [scope-exclude, misparse]
+  misparse_note: >-
+    '거실 빼고 모든 조명' 은 거실(메인등·무드등)을 제외한 나머지 조명 전체가 정답이지만
+    현재 파서는 '빼고' 배제 스코프를 지원하지 않는다(도메인 전체 또는 미해석).

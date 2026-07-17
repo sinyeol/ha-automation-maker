@@ -15,6 +15,9 @@
 expansion_rules:
   "<off>": "(꺼|꺼줘|꺼주세요|끄다)"
   "<on>": "(켜|켜줘|틀어줘|켜주세요)"
+  "<open>": "(열어|열어줘|열어주세요)"
+  "<close>": "(닫아|닫아줘|닫아주세요)"
+  "<lock>": "(잠가|잠가줘|잠가주세요)"
 
 # ---------------------------------------------------------------------------
 # device_light — 방별 조명. 개념(조명/불/등/전등) × 방 이형태.
@@ -26,6 +29,9 @@ device_light:
   - {surface: "거실 불", entity: "light.living_room_main", area: living_room}
   - {surface: "거실 전등", entity: "light.living_room_main", area: living_room}
   - {surface: "거실등", entity: "light.living_room_main", area: living_room}
+  - {surface: "거실 메인등", entity: "light.living_room_main", area: living_room}
+  - {surface: "메인등", entity: "light.living_room_main", area: living_room}
+  - {surface: "거실 천장등", entity: "light.living_room_main", area: living_room}
   - {surface: "안방 조명", entity: "light.master_bedroom", area: master_bedroom}
   - {surface: "안방 불", entity: "light.master_bedroom", area: master_bedroom}
   - {surface: "안방등", entity: "light.master_bedroom", area: master_bedroom}
@@ -42,6 +48,15 @@ device_light:
   - {surface: "욕실 불", entity: "light.bathroom", area: bathroom}
 
 # ---------------------------------------------------------------------------
+# device_mood — 무드등(거실 무드등). 개념어/이름 사전에 '무드등' 표면형이 없어
+#   붙여쓰기·무접미 형태는 파서 미해석(수동매핑 갭). 실존: light.living_room_mood.
+# ---------------------------------------------------------------------------
+device_mood:
+  - {surface: "거실 무드등", entity: "light.living_room_mood", area: living_room}
+  - {surface: "무드등", entity: "light.living_room_mood", area: living_room}
+  - {surface: "무드 조명", entity: "light.living_room_mood", area: living_room}
+
+# ---------------------------------------------------------------------------
 # device_fan / device_climate — 환풍기·에어컨(실존 엔티티 소수)
 # ---------------------------------------------------------------------------
 device_fan:
@@ -49,10 +64,62 @@ device_fan:
   - {surface: "욕실 환기팬", entity: "fan.bathroom_fan", area: bathroom}
   - {surface: "환풍기", entity: "fan.bathroom_fan", area: bathroom}
 
+# device_erv — 전열교환기(베란다, 이름 매칭이라 방 없이도 명확). 습도/미세먼지 환기 액션용.
+device_erv:
+  - {surface: "전열교환기", entity: "fan.veranda_erv", area: veranda}
+  - {surface: "환기장치", entity: "fan.veranda_erv", area: veranda}
+
 device_climate:
   - {surface: "거실 에어컨", entity: "climate.living_room_ac", area: living_room}
   - {surface: "거실 냉방", entity: "climate.living_room_ac", area: living_room}
   - {surface: "에어컨", entity: "climate.living_room_ac", area: living_room}
+
+# device_boiler — 보일러/난방(heat hint). 실존: climate.living_room_boiler, master_bedroom_boiler.
+device_boiler:
+  - {surface: "거실 보일러", entity: "climate.living_room_boiler", area: living_room}
+  - {surface: "안방 보일러", entity: "climate.master_bedroom_boiler", area: master_bedroom}
+  - {surface: "보일러", entity: "climate.living_room_boiler", area: living_room}
+
+# device_cover — 커튼/블라인드. 실존 커버는 거실 커튼 하나(cover.living_room_curtain).
+#   '블라인드'는 개념어엔 있으나 실존 엔티티가 커튼뿐이라 거실 커튼으로 매핑.
+device_cover:
+  - {surface: "거실 커튼", entity: "cover.living_room_curtain", area: living_room}
+  - {surface: "커튼", entity: "cover.living_room_curtain", area: living_room}
+
+# device_media — TV. 실존: media_player.living_room_tv.
+device_media:
+  - {surface: "거실 TV", entity: "media_player.living_room_tv", area: living_room}
+  - {surface: "거실 티비", entity: "media_player.living_room_tv", area: living_room}
+  - {surface: "TV", entity: "media_player.living_room_tv", area: living_room}
+  - {surface: "티비", entity: "media_player.living_room_tv", area: living_room}
+  - {surface: "텔레비전", entity: "media_player.living_room_tv", area: living_room}
+
+# device_switch — 콘센트/밸브(switch). 실존: switch.standby_power, switch.gas_valve.
+device_switch:
+  - {surface: "대기전력 콘센트", entity: "switch.standby_power", area: living_room}
+  - {surface: "콘센트", entity: "switch.standby_power", area: living_room}
+  - {surface: "가스밸브", entity: "switch.gas_valve", area: kitchen}
+
+# device_lock — 도어락(lock). 실존: lock.entrance_door.
+device_lock:
+  - {surface: "현관 도어락", entity: "lock.entrance_door", area: entrance}
+  - {surface: "도어락", entity: "lock.entrance_door", area: entrance}
+
+# sensor_temp — numeric_state 트리거/조건용 온도 센서 개념(방 이형태).
+#   파서는 '거실 온도' 클로즈에서 concept(온도)+area 로 sensor.* 를 해석한다.
+sensor_temp:
+  - {surface: "거실 온도", entity: "sensor.living_room_temperature", area: living_room}
+  - {surface: "안방 온도", entity: "sensor.master_bedroom_temperature", area: master_bedroom}
+  - {surface: "주방 온도", entity: "sensor.kitchen_temperature", area: kitchen}
+
+# sensor_humidity — 습도 센서.
+sensor_humidity:
+  - {surface: "거실 습도", entity: "sensor.living_room_humidity", area: living_room}
+  - {surface: "안방 습도", entity: "sensor.master_bedroom_humidity", area: master_bedroom}
+
+# sensor_pm25 — 미세먼지 센서.
+sensor_pm25:
+  - {surface: "베란다 미세먼지", entity: "sensor.veranda_pm25", area: veranda}
 
 # ---------------------------------------------------------------------------
 # motion — 모션/움직임/인기척 이형태 × 방. (트리거 절 "감지되면/작동하면" 용)
@@ -76,6 +143,13 @@ mode:
   - {surface: "슬립모드", value: "슬립 모드"}
   - {surface: "취침 모드", value: "슬립 모드"}
   - {surface: "취침모드", value: "슬립 모드"}
+  - {surface: "수면 모드", value: "슬립 모드"}
+  - {surface: "수면모드", value: "슬립 모드"}
+  - {surface: "자기 전 모드", value: "슬립 모드"}
+# 주의: DEV settings.modes 에는 '슬립 모드' 하나만 존재하므로 gold 의 mode 값은 전부
+#   '슬립 모드' 로 정규화한다. '외출/귀가' 는 별도 모드가 아니라 사람(person)의 zone
+#   진입/이탈로 모델링한다(heldout 의 zone/person 영역 참고). 취침/수면/자기전 계열
+#   동의어는 파서 mode_surfaces('슬립 모드'/'슬립모드')에 없어 현재는 미인식 갭 신호다.
 
 # ---------------------------------------------------------------------------
 # segment — 시간대. 표면형에 처소격(에) 포함, value 는 파서/엔진 키.
@@ -84,8 +158,25 @@ segment:
   - {surface: "새벽에", value: dawn}
   - {surface: "새벽시간에", value: dawn}
   - {surface: "아침에", value: morning}
+  - {surface: "낮에", value: day}
   - {surface: "저녁에", value: evening}
   - {surface: "밤에", value: night}
+
+# ---------------------------------------------------------------------------
+# day_type — 요일 구분(주말/평일/공휴일). value 는 day_type 노드 키.
+# ---------------------------------------------------------------------------
+day_type:
+  - {surface: "주말에", value: weekend}
+  - {surface: "평일에", value: weekday}
+  - {surface: "공휴일에", value: holiday}
+  - {surface: "휴일에", value: holiday}
+
+# season — 계절 조건.
+season:
+  - {surface: "봄에", value: spring}
+  - {surface: "여름에", value: summer}
+  - {surface: "가을에", value: autumn}
+  - {surface: "겨울에", value: winter}
 
 # ---------------------------------------------------------------------------
 # percent — 밝기/세기. %/퍼센트/프로 이형태.
@@ -99,6 +190,38 @@ percent:
   - {surface: "50%", value: 50}
   - {surface: "50프로", value: 50}
   - {surface: "70%", value: 70}
+  - {surface: "절반", value: 50}
+  - {surface: "최대", value: 100}
+  - {surface: "최대로", value: 100}
+
+# ---------------------------------------------------------------------------
+# temp_value — numeric_state 임계 온도 표면형 → 값(도). '영하 N도' 는 음수.
+#   파서는 find_temperature 로 '28도'/'영하 5도' 를 해석한다.
+# ---------------------------------------------------------------------------
+temp_value:
+  - {surface: "28도", value: 28}
+  - {surface: "26도", value: 26}
+  - {surface: "30도", value: 30}
+  - {surface: "18도", value: 18}
+  - {surface: "영하 5도", value: -5}
+
+# temp_set — climate.set_temperature 목표 온도(설정값).
+temp_set:
+  - {surface: "24도", value: 24}
+  - {surface: "26도", value: 26}
+  - {surface: "22도", value: 22}
+  - {surface: "20도", value: 20}
+
+# humidity_value — 습도 임계값(%).
+humidity_value:
+  - {surface: "60%", value: 60}
+  - {surface: "40%", value: 40}
+  - {surface: "70%", value: 70}
+
+# pm25_value — 미세먼지 임계값(㎍/㎥).
+pm25_value:
+  - {surface: "35", value: 35}
+  - {surface: "75", value: 75}
 
 # ---------------------------------------------------------------------------
 # duration — 지속시간 표면형 → dur 객체(hours/minutes/seconds). "N분 동안" 절에서 사용.
@@ -117,8 +240,14 @@ duration:
 scope:
   - {surface: "모든", expand: true}
   - {surface: "집의 모든", expand: true}
+  - {surface: "집안 모든", expand: true}
+  - {surface: "전체", expand: true}
   - {surface: "전부", expand: true}
   - {surface: "다", expand: true}
+# 주의: '{scope.expand}' 는 문맥 도메인(액션 대상 기기, device_* 슬롯) 전체로 전개된다
+#   (generate.py 골드버그 교정 반영). '빼고/제외' 스코프 배제는 도메인-전체에서 특정 방을
+#   빼야 하므로 자동 전개로 표현 불가 → templates 의 scope-exclude 영역과 heldout 에서
+#   손라벨(엔티티 리스트 명시)로 다룬다.
 
 # ---------------------------------------------------------------------------
 # connective_pair — 다중 규칙 경계·액션 연결 이형태(§2.1). templates 인라인 참고용.

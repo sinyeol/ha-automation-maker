@@ -11,3 +11,5 @@ devdata/
 claude-work/
 tools/corpus/out/results.jsonl
 tools/corpus/out/corpus_*.jsonl
+tools/corpus/out/cli_cache.jsonl
+tools/corpus/out/pattern_library_overlay.yaml

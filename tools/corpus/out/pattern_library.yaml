@@ -3,15 +3,15 @@
   template: '{mode}{가} 켜지면 {device_light}{을} <on>'
   tags:
   - mode-trigger
-  status: partial
+  status: gap
   counts:
-    exact: 23
-    partial: 3
-    fail: 20
+    exact: 7
+    partial: 1
+    fail: 38
   examples:
-  - 취침모드가 켜지면 주방 조명을 켜주세요
-  - 취침 모드가 켜지면 현관 조명을 켜줘
-  - 슬립 모드가 켜지면 안방등을 켜주세요
+  - 슬립모드가 켜지면 부엌 조명을 틀어줘
+  - 수면 모드가 켜지면 화장실 조명을 켜줘
+  - 수면모드가 켜지면 작은방 조명을 켜
   gold:
     subrules:
     - triggers:
@@ -32,13 +32,13 @@
   - mode-trigger
   status: gap
   counts:
-    exact: 20
-    partial: 1
-    fail: 23
+    exact: 9
+    partial: 4
+    fail: 31
   examples:
-  - 취침모드가 꺼지면 안방등을 꺼
-  - 슬립모드가 꺼지면 안방 불을 꺼줘
-  - 취침 모드가 꺼지면 현관 불을 꺼
+  - 수면 모드가 꺼지면 거실 조명을 꺼주세요
+  - 자기 전 모드가 꺼지면 욕실 불을 꺼
+  - 슬립 모드가 꺼지면 거실 메인등을 꺼
   gold:
     subrules:
     - triggers:
@@ -60,13 +60,13 @@
   - scope-all
   status: gap
   counts:
-    exact: 9
-    partial: 13
-    fail: 21
+    exact: 3
+    partial: 11
+    fail: 29
   examples:
-  - 슬립모드가 켜지면 다 주방 불을 꺼
-  - 슬립모드가 켜지면 전부 부엌 조명을 꺼주세요
-  - 취침모드가 켜지면 전부 거실등을 꺼주세요
+  - 취침 모드가 켜지면 전체 메인등을 끄다
+  - 취침모드가 켜지면 다 화장실 조명을 꺼주세요
+  - 슬립 모드가 켜지면 집안 모든 거실 전등을 꺼줘
   gold:
     subrules:
     - triggers:
@@ -87,13 +87,13 @@
   - motion-trigger
   status: partial
   counts:
-    exact: 20
-    partial: 24
+    exact: 5
+    partial: 39
     fail: 1
   examples:
-  - 취침 모드이고 거실 움직임이 감지되면 베란다 조명을 켜
-  - 슬립 모드이고 거실 모션이 감지되면 작은방 조명을 켜주세요
-  - 슬립 모드이고 거실 모션이 감지되면 주방 조명을 켜주세요
+  - 수면 모드이고 욕실 움직임이 감지되면 작은방 불을 틀어줘
+  - 취침모드이고 안방 움직임이 감지되면 메인등을 켜줘
+  - 취침 모드이고 거실 모션이 감지되면 거실 불을 켜
   gold:
     subrules:
     - triggers:
@@ -118,13 +118,13 @@
   - motion-trigger
   status: partial
   counts:
-    exact: 15
-    partial: 27
+    exact: 7
+    partial: 35
     fail: 1
   examples:
-  - 슬립 모드이고 안방 모션이 작동하면 거실 불을 꺼
-  - 슬립모드이고 거실 인기척이 작동하면 안방 조명을 꺼주세요
-  - 취침 모드이고 거실 움직임이 작동하면 거실 불을 꺼줘
+  - 자기 전 모드이고 거실 움직임이 작동하면 거실등을 꺼줘
+  - 수면 모드이고 욕실 모션이 작동하면 안방 조명을 끄다
+  - 수면 모드이고 안방 모션이 작동하면 주방 조명을 끄다
   gold:
     subrules:
     - triggers:
@@ -150,13 +150,13 @@
   - motion-trigger
   status: partial
   counts:
-    exact: 7
-    partial: 24
-    fail: 13
+    exact: 9
+    partial: 26
+    fail: 9
   examples:
-  - 밤에 취침모드이고 거실 모션이 감지되면 안방 조명을 켜
-  - 저녁에 슬립모드이고 거실 인기척이 감지되면 안방 불을 켜줘
-  - 밤에 취침 모드이고 욕실 움직임이 감지되면 현관 불을 켜
+  - 새벽시간에 수면 모드이고 욕실 움직임이 감지되면 안방 조명을 틀어줘
+  - 아침에 슬립 모드이고 거실 움직임이 감지되면 욕실 불을 켜
+  - 낮에 수면모드이고 거실 움직임이 감지되면 작은방 조명을 켜
   gold:
     subrules:
     - triggers:
@@ -184,13 +184,13 @@
   - motion-trigger
   status: partial
   counts:
-    exact: 19
-    partial: 24
+    exact: 6
+    partial: 37
     fail: 0
   examples:
-  - 취침 모드일 때 욕실 움직임이 감지되면 작은방 조명을 켜줘
-  - 취침모드일 때 안방 움직임이 감지되면 거실 불을 켜줘
-  - 슬립 모드일 때 거실 모션이 감지되면 주방 조명을 켜
+  - 자기 전 모드일 때 안방 모션이 감지되면 안방 불을 틀어줘
+  - 수면모드일 때 거실 모션이 감지되면 거실 전등을 틀어줘
+  - 취침 모드일 때 안방 모션이 감지되면 주방 조명을 켜줘
   gold:
     subrules:
     - triggers:
@@ -219,9 +219,9 @@
     partial: 0
     fail: 43
   examples:
-  - 취침 모드가 해제되면 부엌 조명을 켜줘
-  - 취침 모드가 해제되면 작은방 불을 켜줘
-  - 슬립 모드가 해제되면 거실 조명을 틀어줘
+  - 수면모드가 해제되면 부엌 조명을 켜줘
+  - 자기 전 모드가 해제되면 베란다 조명을 켜줘
+  - 수면 모드가 해제되면 거실 천장등을 켜주세요
   gold:
     subrules:
     - triggers:
@@ -245,13 +245,13 @@
   - mode-condition
   status: partial
   counts:
-    exact: 20
-    partial: 20
+    exact: 7
+    partial: 33
     fail: 6
   examples:
-  - 새벽에 취침 모드이고 안방 움직임이 작동하면 베란다 조명을 10퍼센트 켜주고 3분 동안 모션이 없으면 끄다
-  - 아침에 취침 모드이고 안방 움직임이 작동하면 욕실 불을 30% 켜주고 3분 동안 모션이 없으면 꺼줘
-  - 밤에 슬립모드이고 욕실 움직임이 작동하면 안방 불을 30퍼센트 켜주고 10분 동안 모션이 없으면 꺼주세요
+  - 새벽에 수면 모드이고 안방 모션이 작동하면 거실 전등을 10% 켜주고 3분 동안 모션이 없으면 꺼
+  - 새벽에 취침모드이고 거실 모션이 작동하면 욕실 불을 50프로 켜주고 3분 동안 모션이 없으면 꺼
+  - 낮에 자기 전 모드이고 욕실 움직임이 작동하면 작은방 불을 10프로 켜주고 3분 동안 모션이 없으면 꺼
   gold:
     subrules:
     - triggers:
@@ -295,13 +295,13 @@
   - time-segment
   status: partial
   counts:
-    exact: 36
-    partial: 4
+    exact: 20
+    partial: 20
     fail: 4
   examples:
-  - 아침에 안방 모션이 작동하면 거실 불을 50프로 켜주고 10분 동안 움직임이 없으면 꺼
-  - 저녁에 거실 인기척이 작동하면 욕실 조명을 50프로 켜주고 10분 동안 움직임이 없으면 꺼
-  - 새벽에 거실 움직임이 작동하면 현관 조명을 30퍼센트 켜주고 3분 동안 움직임이 없으면 끄다
+  - 저녁에 거실 움직임이 작동하면 거실등을 30% 켜주고 30분 동안 움직임이 없으면 꺼주세요
+  - 새벽시간에 욕실 모션이 작동하면 안방등을 50% 켜주고 10분 동안 움직임이 없으면 꺼주세요
+  - 낮에 거실 모션이 작동하면 거실 불을 30퍼센트 켜주고 10분 동안 움직임이 없으면 꺼주세요
   gold:
     subrules:
     - triggers:
@@ -341,13 +341,13 @@
   - context-inherit
   status: partial
   counts:
-    exact: 39
-    partial: 3
+    exact: 20
+    partial: 22
     fail: 2
   examples:
-  - 안방 움직임이 감지되면 현관 조명을 30% 켜주고 5분 동안 움직임이 없으면 꺼주세요
-  - 거실 움직임이 감지되면 안방등을 10프로 켜주고 5분 동안 움직임이 없으면 꺼주세요
-  - 욕실 모션이 감지되면 부엌 조명을 70% 켜주고 10분 동안 움직임이 없으면 끄다
+  - 욕실 모션이 감지되면 욕실 조명을 70% 켜주고 5분 동안 움직임이 없으면 꺼
+  - 안방 움직임이 감지되면 거실 천장등을 30퍼센트 켜주고 3분 동안 움직임이 없으면 꺼줘
+  - 거실 모션이 감지되면 작은방 불을 50% 켜주고 10분 동안 움직임이 없으면 끄다
   gold:
     subrules:
     - triggers:
@@ -383,13 +383,13 @@
   - context-inherit
   status: partial
   counts:
-    exact: 35
-    partial: 7
+    exact: 32
+    partial: 10
     fail: 3
   examples:
-  - 안방 모션이 감지되면 거실 불을 켜주고 3분 동안 움직임이 없으면 꺼
-  - 안방 움직임이 감지되면 안방등을 켜주고 10분 동안 움직임이 없으면 끄다
-  - 욕실 움직임이 감지되면 욕실 불을 켜주고 5분 동안 움직임이 없으면 끄다
+  - 안방 모션이 감지되면 거실 천장등을 켜주고 5분 동안 움직임이 없으면 꺼주세요
+  - 거실 인기척이 감지되면 안방 조명을 켜주고 3분 동안 움직임이 없으면 꺼주세요
+  - 거실 움직임이 감지되면 메인등을 켜주고 30분 동안 움직임이 없으면 꺼줘
   gold:
     subrules:
     - triggers:
@@ -425,13 +425,13 @@
   - mode-condition
   status: partial
   counts:
-    exact: 18
-    partial: 24
+    exact: 13
+    partial: 29
     fail: 2
   examples:
-  - 취침모드이고 거실 인기척이 작동하면 베란다 조명을 켜주고 30분 동안 움직임이 없으면 꺼
-  - 취침모드이고 거실 모션이 작동하면 욕실 불을 켜주고 30분 동안 움직임이 없으면 꺼주세요
-  - 취침모드이고 거실 모션이 작동하면 주방 불을 켜주고 3분 동안 움직임이 없으면 꺼주세요
+  - 슬립 모드이고 안방 모션이 작동하면 욕실 조명을 켜주고 3분 동안 움직임이 없으면 끄다
+  - 수면모드이고 욕실 움직임이 작동하면 거실 메인등을 켜주고 30분 동안 움직임이 없으면 꺼주세요
+  - 취침모드이고 거실 움직임이 작동하면 욕실 조명을 켜주고 3분 동안 움직임이 없으면 꺼
   gold:
     subrules:
     - triggers:
@@ -471,13 +471,13 @@
   - scope-all
   status: gap
   counts:
-    exact: 0
-    partial: 20
-    fail: 23
+    exact: 5
+    partial: 9
+    fail: 29
   examples:
-  - 거실 움직임이 감지되면 안방등을 켜주고 5분 동안 움직임이 없으면 안방등을 꺼주고 슬립모드가 켜지면 집의 모든 조명을 끄다
-  - 거실 인기척이 감지되면 욕실 조명을 켜주고 10분 동안 움직임이 없으면 욕실 조명을 꺼주고 취침 모드가 켜지면 다 조명을 꺼줘
-  - 거실 인기척이 감지되면 부엌 조명을 켜주고 30분 동안 움직임이 없으면 부엌 조명을 꺼주고 취침모드가 켜지면 모든 조명을 꺼
+  - 안방 움직임이 감지되면 거실 메인등을 켜주고 30분 동안 움직임이 없으면 거실 메인등을 꺼주고 자기 전 모드가 켜지면 모든 조명을 꺼
+  - 안방 모션이 감지되면 주방 조명을 켜주고 5분 동안 움직임이 없으면 주방 조명을 꺼주고 슬립모드가 켜지면 전부 조명을 꺼줘
+  - 거실 인기척이 감지되면 거실등을 켜주고 5분 동안 움직임이 없으면 거실등을 꺼주고 수면 모드가 켜지면 다 조명을 꺼주세요
   gold:
     subrules:
     - triggers:
@@ -566,9 +566,9 @@
     partial: 0
     fail: 43
   examples:
-  - 욕실 움직임이 감지되면 베란다 조명을 켜주고 5분간 움직임이 없으면 꺼
-  - 욕실 모션이 감지되면 거실등을 켜주고 5분간 움직임이 없으면 꺼주세요
-  - 안방 모션이 감지되면 작은방 조명을 켜주고 5분간 움직임이 없으면 꺼
+  - 거실 인기척이 감지되면 작은방 조명을 켜주고 5분간 움직임이 없으면 꺼
+  - 욕실 모션이 감지되면 거실 불을 켜주고 5분간 움직임이 없으면 꺼줘
+  - 욕실 움직임이 감지되면 주방 불을 켜주고 5분간 움직임이 없으면 꺼
   gold:
     subrules:
     - triggers:
@@ -609,9 +609,9 @@
     partial: 5
     fail: 3
   examples:
-  - 욕실 모션이 감지되면 작은방 조명을 켜주세요
-  - 욕실 움직임이 감지되면 안방 조명을 켜주세요
-  - 욕실 움직임이 감지되면 안방등을 켜줘
+  - 안방 움직임이 감지되면 베란다 조명을 켜줘
+  - 안방 모션이 감지되면 주방 불을 켜
+  - 거실 움직임이 감지되면 작은방 불을 켜줘
   gold:
     subrules:
     - triggers:
@@ -633,13 +633,13 @@
   - motion-trigger
   status: partial
   counts:
-    exact: 40
-    partial: 3
+    exact: 32
+    partial: 11
     fail: 1
   examples:
-  - 거실 모션이 없으면 거실 전등을 꺼줘
-  - 욕실 움직임이 없으면 욕실 불을 꺼주세요
-  - 거실 모션이 없으면 거실등을 꺼줘
+  - 안방 움직임이 없으면 주방 조명을 꺼줘
+  - 거실 움직임이 없으면 거실 조명을 꺼줘
+  - 안방 모션이 없으면 메인등을 꺼주세요
   gold:
     subrules:
     - triggers:
@@ -661,13 +661,13 @@
   - scope-all
   status: partial
   counts:
-    exact: 0
-    partial: 43
+    exact: 20
+    partial: 23
     fail: 0
   examples:
-  - 거실 움직임이 감지되면 모든 거실 조명을 꺼줘
-  - 거실 움직임이 감지되면 집의 모든 거실 전등을 끄다
-  - 욕실 모션이 감지되면 전부 거실 불을 꺼줘
+  - 안방 움직임이 감지되면 다 거실 전등을 끄다
+  - 거실 모션이 감지되면 전부 안방 조명을 꺼주세요
+  - 욕실 모션이 감지되면 다 현관 조명을 끄다
   gold:
     subrules:
     - triggers:
@@ -744,13 +744,13 @@
   - multi-action
   status: partial
   counts:
-    exact: 36
-    partial: 7
+    exact: 34
+    partial: 9
     fail: 1
   examples:
-  - 욕실 움직임이 감지되면 현관 불을 켜고 환풍기를 켜
-  - 안방 움직임이 감지되면 현관 조명을 켜고 욕실 환풍기를 켜줘
-  - 욕실 모션이 감지되면 부엌 조명을 켜고 욕실 환기팬을 틀어줘
+  - 안방 모션이 감지되면 메인등을 켜고 욕실 환풍기를 켜
+  - 욕실 모션이 감지되면 베란다 조명을 켜고 환풍기를 켜
+  - 거실 움직임이 감지되면 거실 전등을 켜고 욕실 환기팬을 켜
   gold:
     subrules:
     - triggers:
@@ -777,13 +777,13 @@
   - brightness
   status: partial
   counts:
-    exact: 40
-    partial: 4
+    exact: 26
+    partial: 18
     fail: 1
   examples:
-  - 거실 모션이 감지되면 현관 불을 10퍼센트 켜줘
-  - 거실 모션이 감지되면 작은방 조명을 10% 켜줘
-  - 거실 인기척이 감지되면 거실 불을 70% 켜줘
+  - 거실 모션이 감지되면 거실 전등을 30% 켜줘
+  - 거실 모션이 감지되면 안방 조명을 50프로 켜줘
+  - 안방 움직임이 감지되면 화장실 조명을 최대로 켜줘
   gold:
     subrules:
     - triggers:
@@ -1081,3 +1081,499 @@
         target:
           entity_id:
           - light.living_room_main
+- id: numeric_temp_ac_on
+  area: numeric
+  template: '{sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} <on>'
+  tags:
+  - numeric
+  - above
+  - climate
+  status: partial
+  counts:
+    exact: 33
+    partial: 0
+    fail: 7
+  examples:
+  - 거실 온도가 18도 이상이면 거실 에어컨을 켜줘
+  - 안방 온도가 영하 5도 이상이면 거실 에어컨을 켜
+  - 주방 온도가 28도 이상이면 거실 에어컨을 켜주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: '{sensor_temp.entity}'
+        above: '{temp_value.value}'
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - '{device_climate.entity}'
+- id: numeric_temp_boiler_on
+  area: numeric
+  template: '{sensor_temp}{가} {temp_value} 이하이면 {device_boiler}{을} <on>'
+  tags:
+  - numeric
+  - below
+  - climate
+  status: partial
+  counts:
+    exact: 31
+    partial: 0
+    fail: 9
+  examples:
+  - 거실 온도가 28도 이하이면 보일러를 켜
+  - 주방 온도가 28도 이하이면 안방 보일러를 켜주세요
+  - 안방 온도가 28도 이하이면 안방 보일러를 켜
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: '{sensor_temp.entity}'
+        below: '{temp_value.value}'
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - '{device_boiler.entity}'
+- id: numeric_humidity_erv_on
+  area: numeric
+  template: '{sensor_humidity}{가} {humidity_value} 이상이면 {device_erv}{을} <on>'
+  tags:
+  - numeric
+  - above
+  - fan
+  status: partial
+  counts:
+    exact: 19
+    partial: 21
+    fail: 0
+  examples:
+  - 안방 습도가 60% 이상이면 전열교환기를 켜
+  - 안방 습도가 60% 이상이면 환기장치를 틀어줘
+  - 안방 습도가 60% 이상이면 전열교환기를 켜줘
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: '{sensor_humidity.entity}'
+        above: '{humidity_value.value}'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - '{device_erv.entity}'
+- id: numeric_season_temp_ac
+  area: numeric
+  template: '{season} {sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} <on>'
+  tags:
+  - numeric
+  - above
+  - climate
+  - season
+  status: partial
+  counts:
+    exact: 32
+    partial: 0
+    fail: 8
+  examples:
+  - 봄에 안방 온도가 28도 이상이면 에어컨을 켜줘
+  - 봄에 주방 온도가 영하 5도 이상이면 거실 에어컨을 켜
+  - 겨울에 거실 온도가 18도 이상이면 거실 에어컨을 켜줘
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: '{sensor_temp.entity}'
+        above: '{temp_value.value}'
+      conditions:
+      - type: season
+        seasons:
+        - '{season.value}'
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - '{device_climate.entity}'
+- id: timerange_daily_light_off
+  area: time-range
+  template: 밤 11시가 되면 {device_light}{을} <off>
+  tags:
+  - time-range
+  - daily-trigger
+  status: partial
+  counts:
+    exact: 31
+    partial: 9
+    fail: 0
+  examples:
+  - 밤 11시가 되면 작은방 조명을 꺼줘
+  - 밤 11시가 되면 현관 조명을 꺼줘
+  - 밤 11시가 되면 메인등을 꺼
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: timerange_daytype_seg_light
+  area: time-range
+  template: '{day_type} {segment} {device_light}{을} <on>'
+  tags:
+  - time-range
+  - day-type
+  - segment-trigger
+  - misparse
+  status: gap
+  counts:
+    exact: 0
+    partial: 0
+    fail: 40
+  examples:
+  - 주말에 아침에 베란다 조명을 틀어줘
+  - 공휴일에 밤에 메인등을 틀어줘
+  - 공휴일에 낮에 욕실 불을 켜
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: '{segment.value}'
+      conditions:
+      - type: day_type
+        types:
+        - '{day_type.value}'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: cover_seg_close
+  area: cover
+  template: 저녁이 되면 {device_cover}{을} <close>
+  tags:
+  - cover
+  - segment-trigger
+  - close
+  status: covered
+  counts:
+    exact: 6
+    partial: 0
+    fail: 0
+  examples:
+  - 저녁이 되면 거실 커튼을 닫아
+  - 저녁이 되면 커튼을 닫아주세요
+  - 저녁이 되면 거실 커튼을 닫아주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: evening
+      conditions: []
+      actions:
+      - type: service
+        action: cover.close_cover
+        target:
+          entity_id:
+          - '{device_cover.entity}'
+- id: cover_seg_open
+  area: cover
+  template: 아침이 되면 {device_cover}{을} <open>
+  tags:
+  - cover
+  - segment-trigger
+  - open
+  status: covered
+  counts:
+    exact: 6
+    partial: 0
+    fail: 0
+  examples:
+  - 아침이 되면 거실 커튼을 열어줘
+  - 아침이 되면 커튼을 열어
+  - 아침이 되면 거실 커튼을 열어주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: morning
+      conditions: []
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - '{device_cover.entity}'
+- id: cover_motion_open
+  area: cover
+  template: '{motion}{가} 감지되면 {device_cover}{을} <open>'
+  tags:
+  - cover
+  - motion-trigger
+  - open
+  status: covered
+  counts:
+    exact: 40
+    partial: 0
+    fail: 0
+  examples:
+  - 거실 움직임이 감지되면 거실 커튼을 열어줘
+  - 욕실 모션이 감지되면 커튼을 열어주세요
+  - 거실 인기척이 감지되면 거실 커튼을 열어주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - '{device_cover.entity}'
+- id: climateset_temp_target
+  area: climate-set
+  template: '{sensor_temp}{가} {temp_value} 이상이면 {device_climate}{을} {temp_set}로 설정해줘'
+  tags:
+  - climate-set
+  - set-temperature
+  - misparse
+  status: partial
+  counts:
+    exact: 0
+    partial: 33
+    fail: 7
+  examples:
+  - 안방 온도가 30도 이상이면 거실 냉방을 20도로 설정해줘
+  - 안방 온도가 18도 이상이면 거실 냉방을 22도로 설정해줘
+  - 거실 온도가 18도 이상이면 에어컨을 26도로 설정해줘
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: '{sensor_temp.entity}'
+        above: '{temp_value.value}'
+      conditions: []
+      actions:
+      - type: service
+        action: climate.set_temperature
+        target:
+          entity_id:
+          - '{device_climate.entity}'
+        data:
+          temperature: '{temp_set.value}'
+- id: media_motion_on
+  area: media
+  template: '{motion}{가} 감지되면 {device_media}{을} <on>'
+  tags:
+  - media
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 20
+    partial: 20
+    fail: 0
+  examples:
+  - 욕실 모션이 감지되면 텔레비전을 켜줘
+  - 욕실 움직임이 감지되면 티비를 틀어줘
+  - 안방 모션이 감지되면 TV을(를) 켜
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_on
+        target:
+          entity_id:
+          - '{device_media.entity}'
+- id: media_daily_off
+  area: media
+  template: 밤 11시가 되면 {device_media}{을} <off>
+  tags:
+  - media
+  - daily-trigger
+  status: partial
+  counts:
+    exact: 12
+    partial: 8
+    fail: 0
+  examples:
+  - 밤 11시가 되면 텔레비전을 꺼주세요
+  - 밤 11시가 되면 티비를 꺼
+  - 밤 11시가 되면 티비를 꺼주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - '{device_media.entity}'
+- id: media_mode_off
+  area: media
+  template: '{mode}{가} 켜지면 {device_media}{을} <off>'
+  tags:
+  - media
+  - mode-trigger
+  status: gap
+  counts:
+    exact: 8
+    partial: 6
+    fail: 26
+  examples:
+  - 취침 모드가 켜지면 거실 티비를 꺼줘
+  - 수면 모드가 켜지면 TV을(를) 꺼줘
+  - 슬립 모드가 켜지면 TV을(를) 꺼
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - '{device_media.entity}'
+- id: safety_door_lock
+  area: safety
+  template: 현관문이 닫히면 {device_lock}{을} <lock>
+  tags:
+  - safety
+  - lock
+  status: covered
+  counts:
+    exact: 6
+    partial: 0
+    fail: 0
+  examples:
+  - 현관문이 닫히면 도어락을 잠가주세요
+  - 현관문이 닫히면 현관 도어락을 잠가주세요
+  - 현관문이 닫히면 도어락을 잠가
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - '{device_lock.entity}'
+- id: safety_mode_lock
+  area: safety
+  template: '{mode}{가} 켜지면 {device_lock}{을} <lock>'
+  tags:
+  - safety
+  - lock
+  - mode-trigger
+  status: gap
+  counts:
+    exact: 11
+    partial: 0
+    fail: 29
+  examples:
+  - 자기 전 모드가 켜지면 도어락을 잠가줘
+  - 수면 모드가 켜지면 현관 도어락을 잠가
+  - 슬립모드가 켜지면 현관 도어락을 잠가줘
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - '{device_lock.entity}'
+- id: safety_moisture_valve_off
+  area: safety
+  template: 욕실에 누수가 감지되면 {device_switch}{을} <off>
+  tags:
+  - safety
+  - misparse
+  status: gap
+  counts:
+    exact: 0
+    partial: 0
+    fail: 12
+  examples:
+  - 욕실에 누수가 감지되면 콘센트를 꺼줘
+  - 욕실에 누수가 감지되면 가스밸브를 끄다
+  - 욕실에 누수가 감지되면 대기전력 콘센트를 꺼주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - '{device_switch.entity}'
+- id: scopeexclude_mode_light_off
+  area: scope-exclude
+  template: '{mode}{가} 켜지면 거실 빼고 모든 조명을 <off>'
+  tags:
+  - scope-exclude
+  - misparse
+  status: gap
+  counts:
+    exact: 0
+    partial: 8
+    fail: 20
+  examples:
+  - 취침 모드가 켜지면 거실 빼고 모든 조명을 꺼주세요
+  - 수면 모드가 켜지면 거실 빼고 모든 조명을 꺼
+  - 수면모드가 켜지면 거실 빼고 모든 조명을 꺼주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.bathroom
+          - light.entrance
+          - light.kitchen
+          - light.master_bedroom
+          - light.small_room
+          - light.veranda

@@ -190,6 +190,9 @@ def _domain_ids(inventory: dict, domain: str) -> list[str]:
                   if e.get("domain") == domain)
 
 
+_SENSOR_DOMAINS = {"binary_sensor", "sensor"}
+
+
 def _resolve_ph(slot: str, attr: str, combo: dict, inventory: dict):
     filler = combo.get(slot)
     if attr == "expand":  # {scope.expand}
@@ -197,12 +200,21 @@ def _resolve_ph(slot: str, attr: str, combo: dict, inventory: dict):
         if filler:
             domain = filler.get("domain")
         if not domain:
-            # device_light 등 다른 슬롯의 엔티티 도메인에서 유추
+            # {scope.expand} 는 '액션 대상 기기' 도메인(문맥 도메인)으로 전개해야 한다.
+            # 트리거/조건에 쓰인 모션·센서 슬롯(binary_sensor/sensor)은 스코프 대상이
+            # 아니므로, 제어 기기 슬롯(device_*)을 1순위로, 그 외 비센서 엔티티 슬롯을
+            # 2순위로 도메인을 유추한다(결정적: 슬롯 선언 순서 유지).
             for k, f in combo.items():
                 eid = f.get("entity")
-                if eid and "." in eid:
+                if eid and "." in eid and str(k).startswith("device_"):
                     domain = eid.split(".", 1)[0]
                     break
+            if not domain:
+                for k, f in combo.items():
+                    eid = f.get("entity")
+                    if eid and "." in eid and eid.split(".", 1)[0] not in _SENSOR_DOMAINS:
+                        domain = eid.split(".", 1)[0]
+                        break
         return _domain_ids(inventory, domain) if domain else []
     if filler is None:
         return None

@@ -1,0 +1,1184 @@
+# heldout.yaml — 정직 지표(held-out) 평가 전용 테스트셋 (SPEC-ACCURACY §0·§1.1)
+#
+# 목적: 리서치가 수집한 '실사용 자연 문장'에 대해 **사용자 의도 정답(gold)**을 손으로 라벨한
+#   평가 전용 코퍼스. 라이브러리(templates/slots/paraphrases) 구축에 **쓰지 않는다**
+#   (teaching-to-test 금지). evaluate_hybrid 가 이 파일로 L1/L2/L3 누적 정확도를 측정한다.
+#
+# 스키마: paraphrases.yaml 의 '명시 gold형'과 동일(augment.load_paraphrases 가 로드).
+#   - id / area / difficulty(easy|medium|hard) / tags 부여
+#   - gold: subrules 래퍼(구체 엔티티). 상태값은 "on"/"off" 문자열로 인용(YAML bool 회피).
+#   - variants: 같은 gold 를 공유하는 자연 문장(어순·조사·존대·표현 변형).
+#   entity 는 mock_data 실존 id, mode 는 settings.modes('슬립 모드')만 사용 → 전부
+#   validate_rule_model 통과(자체검증). difficulty 는 tags 에도 'diff:*' 로 복제.
+#
+# 정직성 주의: 여기 문장들은 라이브러리 표면형과 겹치지 않도록 새 어순/축약/구어체로 작성했다.
+#   현재 파서(L1)가 상당수를 fail/partial 로 처리하는 것이 정상이며, 그 격차가 정직한 리프트
+#   측정의 대상이다.
+
+# ===========================================================================
+# EASY — 단일 절, 기본 트리거→액션 (모션/문/시각). 자연 구어체.
+# ===========================================================================
+- id: ho_easy_motion_lr_on
+  area: single
+  difficulty: easy
+  tags: [motion-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "거실에서 인기척이 느껴지면 거실 불 켜줘"
+    - "거실에 움직임 있으면 거실 조명 좀 켜줘"
+    - "거실 지나갈 때 불 자동으로 켜지게 해줘"
+
+- id: ho_easy_motion_bed_on
+  area: single
+  difficulty: easy
+  tags: [motion-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.master_bedroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "안방에 들어가면 안방 조명 켜줘"
+    - "안방에서 움직임 감지되면 안방 불 켜"
+
+- id: ho_easy_motion_bath_on
+  area: single
+  difficulty: easy
+  tags: [motion-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.bathroom"]}}]
+  variants:
+    - "화장실 들어가면 불 켜줘"
+    - "욕실에 사람 감지되면 욕실 조명 켜"
+
+- id: ho_easy_door_open_light
+  area: single
+  difficulty: easy
+  tags: [door-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.entrance"]}}]
+  variants:
+    - "현관문 열리면 현관 불 켜줘"
+    - "문 열면 현관 조명 자동으로 켜지게"
+
+- id: ho_easy_seg_evening_on
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: evening}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "저녁 되면 거실 불 켜줘"
+    - "해질녘엔 거실 조명 켜줘"
+
+- id: ho_easy_kitchen_on
+  area: single
+  difficulty: easy
+  tags: [motion-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.kitchen"]}}]
+  variants:
+    - "거실에 움직임 있으면 주방 불도 켜줘"
+
+- id: ho_easy_tv_off_night
+  area: single
+  difficulty: easy
+  tags: [daily-trigger, media, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:00"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "밤 11시엔 거실 티비 꺼줘"
+    - "매일 밤 열한시에 TV 꺼"
+
+- id: ho_easy_curtain_close
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, cover, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: evening}]
+        conditions: []
+        actions: [{type: service, action: "cover.close_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "저녁엔 거실 커튼 쳐줘"
+    - "어두워지면 커튼 닫아줘"
+
+# ===========================================================================
+# MEDIUM — 조건(모드/시간대/요일/계절) 결합, 값(밝기), 도착.
+# ===========================================================================
+- id: ho_med_mode_light_off
+  area: mode
+  difficulty: medium
+  tags: [mode-trigger, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "잘 때 되면 안방 불 꺼줘"
+    - "취침모드 켜지면 안방 조명 꺼"
+    - "수면모드 들어가면 안방등 꺼줘"
+
+- id: ho_med_mode_release_on
+  area: mode
+  difficulty: medium
+  tags: [mode-trigger, mode-off, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "취침모드 풀리면 안방 불 켜줘"
+    - "슬립모드 해제되면 안방 조명 켜"
+
+- id: ho_med_mode_cond_motion
+  area: mode
+  difficulty: medium
+  tags: [mode-condition, motion-trigger, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: mode, mode: "슬립 모드", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_mood"]},
+                   data: {brightness_pct: 10}}]
+  variants:
+    - "슬립모드일 때 거실에 움직이면 무드등만 10%로 켜줘"
+    - "취침모드에서 거실 인기척 있으면 무드등 살짝 켜줘"
+
+- id: ho_med_seg_brightness
+  area: single
+  difficulty: medium
+  tags: [segment-condition, motion-trigger, brightness, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: time_segment, segments: ["dawn"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]},
+                   data: {brightness_pct: 30}}]
+  variants:
+    - "새벽에 거실에서 움직이면 거실 불 30%로만 켜줘"
+    - "새벽 시간대에 인기척 있으면 거실 조명 살짝만 켜"
+
+- id: ho_med_arrival_light
+  area: zone
+  difficulty: medium
+  tags: [zone-enter, arrival, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.user", zone: "zone.home", event: "enter"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.entrance"]}}]
+  variants:
+    - "내가 집에 오면 현관 불 켜줘"
+    - "귀가하면 현관 조명 켜"
+    - "집 도착하면 현관등 켜줘"
+
+- id: ho_med_arrival_wife
+  area: zone
+  difficulty: medium
+  tags: [zone-enter, arrival, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.wife", zone: "zone.home", event: "enter"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "와이프 들어오면 거실 불 켜줘"
+    - "아내가 집에 도착하면 거실 조명 켜"
+
+- id: ho_med_numeric_ac
+  area: numeric
+  difficulty: medium
+  tags: [numeric, above, climate, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature", above: 28}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_ac"]}}]
+  variants:
+    - "거실이 28도 넘으면 에어컨 틀어줘"
+    - "거실 온도가 28도보다 높아지면 냉방 가동해줘"
+
+- id: ho_med_numeric_boiler
+  area: numeric
+  difficulty: medium
+  tags: [numeric, below, climate, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.master_bedroom_temperature", below: 18}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.master_bedroom_boiler"]}}]
+  variants:
+    - "안방이 18도 아래로 떨어지면 보일러 켜줘"
+    - "안방 온도 18도 밑으로 내려가면 난방 돌려"
+
+- id: ho_med_numeric_humidity_fan
+  area: numeric
+  difficulty: medium
+  tags: [numeric, above, fan, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_humidity", above: 60}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.veranda_erv"]}}]
+  variants:
+    - "거실 습도가 60 넘으면 전열교환기 돌려줘"
+    - "거실이 습해지면(60% 이상) 환기장치 켜줘"
+
+- id: ho_med_season_numeric
+  area: numeric
+  difficulty: medium
+  tags: [numeric, season, climate, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature", above: 26}]
+        conditions: [{type: season, seasons: ["summer"]}]
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_ac"]}}]
+  variants:
+    - "여름철 거실이 26도 넘으면 에어컨 켜줘"
+    - "여름엔 거실 온도 26도 이상이면 냉방 틀어"
+
+- id: ho_med_daytype_light
+  area: time-range
+  difficulty: medium
+  tags: [day-type, daily-trigger, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "07:00"}]
+        conditions: [{type: day_type, types: ["weekday"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "평일 아침 7시에 안방 불 켜줘"
+    - "주중 오전 7시면 안방 조명 켜"
+
+- id: ho_med_curtain_open_morning
+  area: cover
+  difficulty: medium
+  tags: [cover, segment-trigger, open, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: morning}]
+        conditions: []
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "아침 되면 거실 커튼 걷어줘"
+    - "날 밝으면 커튼 열어줘"
+
+- id: ho_med_tv_on_motion
+  area: media
+  difficulty: medium
+  tags: [media, motion-trigger, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_on",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "거실에 사람 오면 티비 켜줘"
+    - "거실 움직임 감지되면 텔레비전 켜"
+
+- id: ho_med_tv_off_mode
+  area: media
+  difficulty: medium
+  tags: [media, mode-trigger, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "취침모드 되면 거실 TV 꺼줘"
+    - "잘 때 티비 자동으로 꺼지게 해줘"
+
+- id: ho_med_valve_off_mode
+  area: safety
+  difficulty: medium
+  tags: [safety, mode-trigger, switch, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "switch.turn_off",
+                   target: {entity_id: ["switch.gas_valve"]}}]
+  variants:
+    - "취침모드 켜지면 가스밸브 잠가줘"
+    - "잘 때 가스 차단해줘"
+
+- id: ho_med_door_lock_mode
+  area: safety
+  difficulty: medium
+  tags: [safety, mode-trigger, lock, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "lock.lock",
+                   target: {entity_id: ["lock.entrance_door"]}}]
+  variants:
+    - "취침모드 들어가면 현관 도어락 잠가줘"
+    - "잘 때 현관문 잠가"
+
+- id: ho_med_standby_off_mode
+  area: safety
+  difficulty: medium
+  tags: [safety, mode-trigger, switch, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "switch.turn_off",
+                   target: {entity_id: ["switch.standby_power"]}}]
+  variants:
+    - "취침모드면 대기전력 콘센트 꺼줘"
+    - "잘 때 대기전력 차단해"
+
+- id: ho_med_fan_bath_motion
+  area: single
+  difficulty: medium
+  tags: [motion-trigger, fan, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.bathroom_fan"]}}]
+  variants:
+    - "화장실 들어가면 환풍기 켜줘"
+    - "욕실에 사람 감지되면 환기팬 돌려"
+
+- id: ho_med_scope_all_off
+  area: scope
+  difficulty: medium
+  tags: [scope-all, mode-trigger, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom", "light.entrance",
+                     "light.kitchen", "light.living_room_main", "light.living_room_mood",
+                     "light.master_bedroom", "light.small_room", "light.veranda"]}}]
+  variants:
+    - "취침모드 켜지면 집 안 모든 불 꺼줘"
+    - "잘 때 온 집 조명 다 꺼"
+    - "슬립모드 되면 전체 조명 소등해줘"
+
+- id: ho_med_scope_all_daily
+  area: scope
+  difficulty: medium
+  tags: [scope-all, daily-trigger, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "00:00"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom", "light.entrance",
+                     "light.kitchen", "light.living_room_main", "light.living_room_mood",
+                     "light.master_bedroom", "light.small_room", "light.veranda"]}}]
+  variants:
+    - "자정엔 모든 조명 꺼줘"
+    - "밤 12시에 집 전체 불 다 꺼"
+
+# ===========================================================================
+# HARD — 다중 규칙쌍/컨텍스트 상속/지연/배제 스코프/설정값/외출.
+# ===========================================================================
+- id: ho_hard_motion_dim_off
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, context-inherit, held, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "거실에 움직이면 불 켜고 5분 동안 인기척 없으면 꺼줘"
+    - "거실 모션 뜨면 거실 조명 켰다가 5분간 안 움직이면 다시 꺼"
+
+- id: ho_hard_bed_dim_hold
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, context-inherit, brightness, held, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.master_bedroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]},
+                   data: {brightness_pct: 30}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.master_bedroom_motion",
+                    to: "off", for: {hours: 0, minutes: 10, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "안방에 움직임 감지되면 안방 불 30%로 켜고 10분간 인기척 없으면 꺼줘"
+    - "안방 모션 뜨면 조명 30퍼센트로 켰다가 십분 동안 안 움직이면 소등"
+
+- id: ho_hard_bath_fan_light_hold
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, held, multi-action, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.bathroom_motion",
+                    to: "off", for: {hours: 0, minutes: 3, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_off",
+                   target: {entity_id: ["fan.bathroom_fan"]}},
+                  {type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom"]}}]
+  variants:
+    - "욕실에 3분간 아무도 없으면 환풍기랑 불 꺼줘"
+    - "화장실 3분 동안 인기척 없으면 조명이랑 환기팬 꺼"
+
+- id: ho_hard_delay_off
+  area: multiclause
+  difficulty: hard
+  tags: [delay, light, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.entrance"]}},
+                  {type: delay, duration: {hours: 0, minutes: 3, seconds: 0}},
+                  {type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.entrance"]}}]
+  variants:
+    - "현관문 열리면 현관 불 켜고 3분 뒤에 꺼줘"
+    - "문 열리면 현관 조명 켠 다음 3분 후에 자동으로 꺼"
+
+- id: ho_hard_two_rooms
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, two-rules, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+      - triggers: [{type: state, entity_id: "binary_sensor.master_bedroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "거실에 움직이면 거실 불, 안방에 움직이면 안방 불 켜줘"
+    - "거실 모션이면 거실 조명 켜고 안방 모션이면 안방 조명 켜"
+
+- id: ho_hard_climate_set
+  area: climate-set
+  difficulty: hard
+  tags: [climate-set, set-temperature, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature", above: 26}]
+        conditions: []
+        actions: [{type: service, action: "climate.set_temperature",
+                   target: {entity_id: ["climate.living_room_ac"]},
+                   data: {temperature: 24}}]
+  variants:
+    - "거실 온도 26도 넘으면 에어컨 24도로 맞춰줘"
+    - "거실이 26도보다 더워지면 냉방 24도로 설정해"
+
+- id: ho_hard_climate_set_boiler
+  area: climate-set
+  difficulty: hard
+  tags: [climate-set, set-temperature, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.master_bedroom_temperature", below: 20}]
+        conditions: []
+        actions: [{type: service, action: "climate.set_temperature",
+                   target: {entity_id: ["climate.master_bedroom_boiler"]},
+                   data: {temperature: 22}}]
+  variants:
+    - "안방 20도 아래로 내려가면 보일러 22도로 설정해줘"
+    - "안방 추워지면 난방 22도로 맞춰"
+
+- id: ho_hard_scope_exclude
+  area: scope-exclude
+  difficulty: hard
+  tags: [scope-exclude, mode-trigger, light, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom", "light.entrance",
+                     "light.kitchen", "light.master_bedroom", "light.small_room",
+                     "light.veranda"]}}]
+  variants:
+    - "취침모드 켜지면 거실 빼고 모든 불 꺼줘"
+    - "잘 때 거실만 남기고 나머지 조명 다 꺼"
+
+- id: ho_hard_leave_all_off
+  area: zone
+  difficulty: hard
+  tags: [zone-leave, scope-all, light, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.user", zone: "zone.home", event: "leave"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom", "light.entrance",
+                     "light.kitchen", "light.living_room_main", "light.living_room_mood",
+                     "light.master_bedroom", "light.small_room", "light.veranda"]}}]
+  variants:
+    - "외출하면 집 안 모든 불 꺼줘"
+    - "내가 나가면 전체 조명 다 꺼"
+
+- id: ho_hard_leave_curtain
+  area: zone
+  difficulty: hard
+  tags: [zone-leave, cover, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.user", zone: "zone.home", event: "leave"}]
+        conditions: []
+        actions: [{type: service, action: "cover.close_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "외출하면 거실 커튼 닫아줘"
+    - "집 나서면 커튼 쳐"
+
+- id: ho_hard_pm25_fan
+  area: numeric
+  difficulty: hard
+  tags: [numeric, above, fan, pm25, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.veranda_pm25", above: 75}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.veranda_erv"]}}]
+  variants:
+    - "미세먼지 나쁨이면 전열교환기 돌려줘"
+    - "베란다 미세먼지 75 넘으면 환기장치 켜"
+
+- id: ho_hard_moisture_valve
+  area: safety
+  difficulty: hard
+  tags: [safety, moisture, switch, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_moisture", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "switch.turn_off",
+                   target: {entity_id: ["switch.gas_valve"]}}]
+  variants:
+    - "욕실에 물 새면 가스밸브 잠가줘"
+    - "화장실 누수 감지되면 가스 차단해"
+
+- id: ho_hard_window_climate_off
+  area: multiclause
+  difficulty: hard
+  tags: [window, climate, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.small_room_window", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_off",
+                   target: {entity_id: ["climate.master_bedroom_boiler"]}}]
+  variants:
+    - "작은방 창문 열리면 안방 보일러 꺼줘"
+    - "작은방 창 열면 난방 꺼"
+
+- id: ho_hard_seg_mode_multi
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, mode-condition, time-segment, held, brightness, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: time_segment, segments: ["dawn"]},
+                     {type: mode, mode: "슬립 모드", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_mood"]},
+                   data: {brightness_pct: 10}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 3, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_mood"]}}]
+  variants:
+    - "새벽에 취침모드일 때 거실에서 움직이면 무드등 10%로 켜고 3분간 인기척 없으면 꺼줘"
+    - "슬립모드 켜져 있고 새벽에 거실 모션 뜨면 무드등 살짝 켰다가 3분 동안 안 움직이면 다시 꺼"
+
+# ===========================================================================
+# 확장 배치 2 — 문장 수 확보(150+) + 난이도 균형. 새 어순/구어체 유지.
+# ===========================================================================
+
+# ---- EASY 추가 ----
+- id: ho_easy_small_room_on
+  area: single
+  difficulty: easy
+  tags: [motion-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.master_bedroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.small_room"]}}]
+  variants:
+    - "안방에 움직이면 작은방 불도 켜줘"
+    - "안방 인기척 있으면 작은방 조명 켜"
+
+- id: ho_easy_veranda_seg
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: night}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.veranda"]}}]
+  variants:
+    - "밤 되면 베란다 불 켜줘"
+    - "밤엔 베란다 조명 켜"
+
+- id: ho_easy_kitchen_seg_off
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: night}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.kitchen"]}}]
+  variants:
+    - "밤 되면 주방 불 꺼줘"
+    - "밤엔 부엌 조명 꺼"
+
+- id: ho_easy_bath_off_daily
+  area: single
+  difficulty: easy
+  tags: [daily-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "01:00"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom"]}}]
+  variants:
+    - "새벽 1시엔 욕실 불 꺼줘"
+    - "매일 새벽 한시에 화장실 조명 꺼"
+
+- id: ho_easy_mood_on
+  area: single
+  difficulty: easy
+  tags: [motion-trigger, mood-light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_mood"]}}]
+  variants:
+    - "거실에 움직이면 무드등 켜줘"
+    - "거실 인기척 있으면 무드 조명 켜"
+
+- id: ho_easy_curtain_open_seg
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, cover, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: morning}]
+        conditions: []
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "아침엔 커튼 열어줘"
+    - "아침 되면 거실 커튼 걷어"
+
+- id: ho_easy_tv_on_seg
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, media, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: evening}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_on",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "저녁 되면 거실 티비 켜줘"
+    - "저녁엔 TV 켜"
+
+- id: ho_easy_entrance_light_off
+  area: single
+  difficulty: easy
+  tags: [door-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.entrance"]}}]
+  variants:
+    - "현관문 닫히면 현관 불 꺼줘"
+    - "문 닫으면 현관 조명 꺼"
+
+# ---- MEDIUM 추가 ----
+- id: ho_med_numeric_kitchen
+  area: numeric
+  difficulty: medium
+  tags: [numeric, above, fan, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.kitchen_temperature", above: 30}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.bathroom_fan"]}}]
+  variants:
+    - "주방이 30도 넘으면 환풍기 켜줘"
+    - "부엌 온도 30도 이상이면 환기팬 돌려"
+
+- id: ho_med_winter_boiler
+  area: numeric
+  difficulty: medium
+  tags: [numeric, season, climate, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature", below: 20}]
+        conditions: [{type: season, seasons: ["winter"]}]
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_boiler"]}}]
+  variants:
+    - "겨울에 거실이 20도 밑으로 떨어지면 보일러 켜줘"
+    - "겨울철 거실 온도 20도 이하면 난방 가동"
+
+- id: ho_med_volume_set
+  area: media
+  difficulty: medium
+  tags: [media, volume, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.volume_set",
+                   target: {entity_id: ["media_player.living_room_tv"]},
+                   data: {volume_level: 0.2}}]
+  variants:
+    - "취침모드 되면 거실 티비 볼륨 20%로 줄여줘"
+    - "잘 때 TV 소리 작게(20%) 낮춰"
+
+- id: ho_med_fan_max
+  area: media
+  difficulty: medium
+  tags: [fan, set-percentage, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_humidity", above: 70}]
+        conditions: []
+        actions: [{type: service, action: "fan.set_percentage",
+                   target: {entity_id: ["fan.veranda_erv"]},
+                   data: {percentage: 100}}]
+  variants:
+    - "거실 습도 70 넘으면 전열교환기 최대로 돌려줘"
+    - "거실이 많이 습하면 환기장치 풀파워로 켜"
+
+- id: ho_med_cover_half
+  area: cover
+  difficulty: medium
+  tags: [cover, set-position, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: day}]
+        conditions: []
+        actions: [{type: service, action: "cover.set_cover_position",
+                   target: {entity_id: ["cover.living_room_curtain"]},
+                   data: {position: 50}}]
+  variants:
+    - "낮에는 거실 커튼 절반만 열어줘"
+    - "한낮엔 커튼 반쯤 쳐줘"
+
+- id: ho_med_arrival_unlock
+  area: zone
+  difficulty: medium
+  tags: [zone-enter, lock, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.user", zone: "zone.home", event: "enter"}]
+        conditions: []
+        actions: [{type: service, action: "lock.unlock",
+                   target: {entity_id: ["lock.entrance_door"]}}]
+  variants:
+    - "내가 도착하면 현관 도어락 열어줘"
+    - "귀가하면 현관문 잠금 풀어"
+
+- id: ho_med_weekend_segment
+  area: time-range
+  difficulty: medium
+  tags: [day-type, segment-trigger, cover, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: morning}]
+        conditions: [{type: day_type, types: ["weekend"]}]
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "주말 아침엔 거실 커튼 열어줘"
+    - "주말 오전에 커튼 걷어"
+
+- id: ho_med_time_after_cond
+  area: time-range
+  difficulty: medium
+  tags: [time-condition, motion-trigger, light, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: time, after: "22:00:00"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_mood"]}}]
+  variants:
+    - "밤 10시 이후에 거실에서 움직이면 무드등 켜줘"
+    - "22시 넘어서 거실 인기척 있으면 무드 조명만 켜"
+
+- id: ho_med_mode_cond_kitchen
+  area: mode
+  difficulty: medium
+  tags: [mode-condition, motion-trigger, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_motion", to: "on"}]
+        conditions: [{type: mode, mode: "슬립 모드", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.bathroom"]},
+                   data: {brightness_pct: 10}}]
+  variants:
+    - "취침모드일 때 화장실 가면 욕실 불 10%로만 켜줘"
+    - "슬립모드에서 욕실 움직임 감지되면 조명 아주 약하게 켜"
+
+- id: ho_med_gas_close_daily
+  area: safety
+  difficulty: medium
+  tags: [safety, daily-trigger, switch, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:30"}]
+        conditions: []
+        actions: [{type: service, action: "switch.turn_off",
+                   target: {entity_id: ["switch.gas_valve"]}}]
+  variants:
+    - "밤 11시 반엔 가스밸브 잠가줘"
+    - "매일 밤 열한시 반에 가스 차단해"
+
+# ---- HARD 추가 ----
+- id: ho_hard_three_rules
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, three-rules, scope-all, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 10, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_main"]}}]
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom", "light.entrance",
+                     "light.kitchen", "light.living_room_main", "light.living_room_mood",
+                     "light.master_bedroom", "light.small_room", "light.veranda"]}}]
+  variants:
+    - "거실에 움직이면 거실 불 켜고 10분간 없으면 끄고, 취침모드 되면 모든 불 꺼줘"
+
+- id: ho_hard_bed_inherit_two
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, context-inherit, held, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.bathroom"]}},
+                  {type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.bathroom_fan"]}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.bathroom_motion",
+                    to: "off", for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom"]}},
+                  {type: service, action: "fan.turn_off",
+                   target: {entity_id: ["fan.bathroom_fan"]}}]
+  variants:
+    - "화장실 들어가면 불이랑 환풍기 켜고 5분 동안 아무도 없으면 둘 다 꺼줘"
+
+- id: ho_hard_nested_mode_numeric
+  area: multiclause
+  difficulty: hard
+  tags: [mode-condition, numeric, climate, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.master_bedroom_temperature", above: 27}]
+        conditions: [{type: mode, mode: "슬립 모드", state: "on"}]
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_ac"]}}]
+  variants:
+    - "취침모드일 때 안방이 27도 넘으면 에어컨 켜줘"
+    - "잘 때 안방 온도 27도 이상이면 냉방 틀어"
+
+- id: ho_hard_leave_lock
+  area: zone
+  difficulty: hard
+  tags: [zone-leave, lock, switch, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.user", zone: "zone.home", event: "leave"}]
+        conditions: []
+        actions: [{type: service, action: "lock.lock",
+                   target: {entity_id: ["lock.entrance_door"]}},
+                  {type: service, action: "switch.turn_off",
+                   target: {entity_id: ["switch.gas_valve"]}}]
+  variants:
+    - "외출하면 현관문 잠그고 가스밸브도 잠가줘"
+    - "집 나가면 도어락 잠그고 가스 차단해"
+
+- id: ho_hard_two_person_arrival
+  area: zone
+  difficulty: hard
+  tags: [zone-enter, arrival, condition, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.wife", zone: "zone.home", event: "enter"}]
+        conditions: [{type: state, entity_id: "person.user", state: "home"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "내가 집에 있을 때 와이프까지 들어오면 거실 불 켜줘"
+    - "나 있는데 아내도 도착하면 거실 조명 켜"
+
+- id: ho_hard_dim_off_kitchen
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, context-inherit, brightness, held, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: time_segment, segments: ["night"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.kitchen"]},
+                   data: {brightness_pct: 50}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.kitchen"]}}]
+  variants:
+    - "밤에 거실에서 움직이면 주방 불 절반 밝기로 켜고 5분간 없으면 꺼줘"
+
+# ===========================================================================
+# 확장 배치 3 — 150+ 확보. 새 대상/어순 유지.
+# ===========================================================================
+- id: ho_easy_veranda_off_daily
+  area: single
+  difficulty: easy
+  tags: [daily-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "22:00"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.veranda"]}}]
+  variants:
+    - "밤 10시엔 베란다 불 꺼줘"
+    - "매일 밤 열시에 베란다 조명 꺼"
+
+- id: ho_easy_small_seg_on
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, light, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: evening}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.small_room"]}}]
+  variants:
+    - "저녁 되면 작은방 불 켜줘"
+    - "저녁엔 작은방 조명 켜"
+
+- id: ho_easy_tv_off_mode2
+  area: single
+  difficulty: easy
+  tags: [mode-trigger, media, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "슬립모드 켜지면 티비 꺼줘"
+    - "취침모드면 거실 TV 꺼"
+
+- id: ho_easy_curtain_leave
+  area: single
+  difficulty: easy
+  tags: [segment-trigger, cover, diff:easy]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: night}]
+        conditions: []
+        actions: [{type: service, action: "cover.close_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "밤 되면 커튼 닫아줘"
+    - "밤엔 거실 커튼 쳐"
+
+- id: ho_med_mode_curtain
+  area: mode
+  difficulty: medium
+  tags: [mode-trigger, cover, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "cover.close_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "취침모드 되면 거실 커튼 닫아줘"
+    - "잘 때 커튼 쳐"
+
+- id: ho_med_numeric_bed_hum
+  area: numeric
+  difficulty: medium
+  tags: [numeric, above, fan, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.master_bedroom_humidity", above: 65}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.veranda_erv"]}}]
+  variants:
+    - "안방 습도가 65 넘으면 전열교환기 켜줘"
+    - "안방이 눅눅해지면(65% 이상) 환기장치 돌려"
+
+- id: ho_med_arrival_boiler
+  area: zone
+  difficulty: medium
+  tags: [zone-enter, climate, diff:medium]
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.user", zone: "zone.home", event: "enter"}]
+        conditions: [{type: season, seasons: ["winter"]}]
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_boiler"]}}]
+  variants:
+    - "겨울에 귀가하면 거실 보일러 켜줘"
+    - "겨울철 집에 도착하면 난방 틀어"
+
+- id: ho_hard_mode_multi_off
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, mode-trigger, multi-action, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["media_player.living_room_tv"]}},
+                  {type: service, action: "switch.turn_off",
+                   target: {entity_id: ["switch.standby_power"]}},
+                  {type: service, action: "lock.lock",
+                   target: {entity_id: ["lock.entrance_door"]}}]
+  variants:
+    - "취침모드 켜지면 티비 끄고 대기전력 차단하고 현관문 잠가줘"
+    - "잘 때 TV 끄고 콘센트 내리고 도어락 잠가"
+
+- id: ho_hard_window_multi
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, window, climate, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.small_room_window", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_off",
+                   target: {entity_id: ["climate.master_bedroom_boiler"]}}]
+      - triggers: [{type: state, entity_id: "binary_sensor.small_room_window", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.master_bedroom_boiler"]}}]
+  variants:
+    - "작은방 창문 열리면 안방 난방 끄고 닫히면 다시 켜줘"
+
+- id: ho_hard_dawn_mood_hold_bath
+  area: multiclause
+  difficulty: hard
+  tags: [multiclause, time-segment, held, brightness, diff:hard]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_motion", to: "on"}]
+        conditions: [{type: time_segment, segments: ["dawn"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.bathroom"]},
+                   data: {brightness_pct: 10}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.bathroom_motion",
+                    to: "off", for: {hours: 0, minutes: 2, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom"]}}]
+  variants:
+    - "새벽에 화장실 가면 욕실 불 10%로 켜고 2분간 없으면 꺼줘"
+    - "새벽 시간에 욕실 움직이면 조명 최소로 켰다가 2분 동안 인기척 없으면 소등"
