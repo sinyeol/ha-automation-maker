@@ -320,3 +320,59 @@ def test_normalize_duration_gan_scalar():
     assert N.find_duration("5분간")["seconds"] == 300
     assert N.find_duration("5분 동안")["seconds"] == 300
     assert N.find_duration("10분 동안 없으면")["value"] == 10
+
+
+# ===========================================================================
+# S1 이식 — 표면정규화 · 금지문 게이트 · postpass(기존 노드) 회귀
+#   (APP-PORT-PLAN §1.1·§1.3). 정직 채점기와 별개로 model 구조를 직접 단언한다.
+# ===========================================================================
+def test_surface_honorific_and_ending(gz):
+    """표면정규화: 존칭(-시-)·어미통일(-자마자→-면). '문 열리자마자' → 문 열리면."""
+    r = _p(gz, "현관문이 열리자마자 거실 조명 켜주세요")
+    assert r["model"]["triggers"] == [
+        {"type": "state", "entity_id": "binary_sensor.entrance_door", "to": "on"}]
+    assert r["model"]["actions"] == [
+        _svc("light.turn_on", ["light.living_room_main"])]
+
+
+def test_prohibition_gate_gas_valve(gz):
+    """금지문 게이트: '가스밸브 절대 열지 마' → 모델 미생성(ok=False), switch.turn_on 미방출."""
+    r = _p(gz, "가스밸브 절대 열지 마")
+    assert r["ok"] is False
+    assert r["model"].get("subrules") == []
+    # 정반대 액션(가스밸브 열기)이 어디에도 없어야 한다(안전).
+    assert "가스밸브" in (r.get("unmatched") or [""])[0] or r["model"]["subrules"] == []
+
+
+def test_postpass_repeat_count(gz):
+    """#30 repeat(count): 'N번 깜빡' → repeat kind=count(on,delay,off,delay)."""
+    r = _p(gz, "현관문 열리면 거실 조명 3번 깜빡여줘")
+    acts = r["model"]["subrules"][0]["actions"] if r["model"].get("subrules") \
+        else r["model"]["actions"]
+    assert acts[0]["type"] == "repeat"
+    assert acts[0]["kind"] == "count"
+    assert acts[0]["count"] == 3
+    assert [s["action"] for s in acts[0]["sequence"] if s["type"] == "service"] == \
+        ["light.turn_on", "light.turn_off"]
+
+
+def test_postpass_toggle_domain_only(gz):
+    """#28 toggle: '반대로' → <domain>.toggle(단일 도메인). homeassistant.toggle 은 S6."""
+    r = _p(gz, "거실 조명 반대로 해줘")
+    assert r["model"]["actions"] == [
+        _svc("light.toggle", ["light.living_room_main"])]
+
+
+def test_postpass_light_color(gz):
+    """#27 light params: 색 이름 → rgb_color 팔레트."""
+    r = _p(gz, "거실 조명 빨간색으로 켜줘")
+    assert r["model"]["actions"] == [
+        _svc("light.turn_on", ["light.living_room_main"], {"rgb_color": [255, 0, 0]})]
+
+
+def test_duration_p3_subject_omitted(gz):
+    """#6 P3: 주어 생략 부정 모션 지속 '5분간 안 움직이면' → state_held off."""
+    r = _p(gz, "화장실에서 5분간 안 움직이면 환풍기를 꺼줘")
+    assert r["model"]["triggers"] == [{
+        "type": "state_held", "entity_id": "binary_sensor.bathroom_motion",
+        "to": "off", "for": {"hours": 0, "minutes": 5, "seconds": 0}}]

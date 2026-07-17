@@ -1,0 +1,702 @@
+"""SPEC-ACCURACY-90 §4 — 모델 후처리(augment) 일급 모듈.
+
+Phase 7 이식(APP-PORT-PLAN §1.3): 오프라인 오버레이의 `parse_patched` 후처리(1196~2558행)를
+앱 일급 모듈로 이식한다. `parser.parse()` 가 `_Parser.parse()` 반환 직후 `apply()` 를 호출한다.
+
+apply(result, sentence, normalized, gz, settings, now_fn=None) -> result
+
+S1 범위(APP-PORT-PLAN 게이트): **기존 엔진 노드로 실행 가능한 항목만** 이식한다.
+  #19 환기팬→ERV 재매핑 · #24 수치 에지 마무리 · #25 held-for · #26 부정 NOT ·
+  #27 light params(색/색온도/상대밝기/transition) · #28 toggle(단 domain.toggle 만 —
+  homeassistant.toggle 은 S6) · #29 notify(인용/-다고) · #30 repeat(count/until) ·
+  #31 duration revert · 날씨형 전이 numeric_state.
+신규 노드(sun/weekday/day_of_month/interval_anchor/time_pattern/presence_agg)를 방출하는
+항목(#20~#23, #32 신규노드 분기)은 S2+ 까지 비활성(방출 시 엔진이 auto_disabled).
+
+내부 순서(오버레이 _augment_time_calendar 의 기존노드 부분 + negation/erv):
+  _remap_erv_fan → 날씨형 numeric → _augment_numeric_edge → _augment_held_for →
+  _augment_actions_only(repeat/notify/revert/toggle/light) → _augment_negation_not
+결정적(Date/random 미사용). result 를 in-place 수정 후 반환한다.
+"""
+from __future__ import annotations
+
+import re
+from typing import Optional
+
+_QUOTE_SPAN_RE = re.compile(r"['\"“”‘’『』「」][^'\"“”‘’『』「」]*['\"“”‘’『』「」]")
+
+
+# ---------------------------------------------------------------------------
+# 공용 유틸 (순환 import 방지 위해 gz 헬퍼는 여기서 최소 재구현)
+# ---------------------------------------------------------------------------
+def _subrules(model: dict) -> list:
+    if not isinstance(model, dict):
+        return []
+    subs = model.get("subrules")
+    if isinstance(subs, list):
+        return [s for s in subs if isinstance(s, dict)]
+    return [model]
+
+
+def _primary_subrule(model: dict):
+    """단일 서브룰 뷰(mutable). 다중 서브룰이면 None(대상 축 아님)."""
+    if not isinstance(model, dict):
+        return None
+    subs = model.get("subrules")
+    if isinstance(subs, list):
+        return subs[0] if len(subs) == 1 else None
+    if "triggers" in model:  # 단일 경로: 최상위가 곧 서브룰
+        return model
+    return None
+
+
+def _find_area(gz, text: str) -> Optional[str]:
+    """gz.room_surfaces 최장일치 방 id(파서 _find_area 와 동형 — 순환 import 회피용 사본)."""
+    if gz is None or not text:
+        return None
+    best, best_len = None, 0
+    for surf, aid in getattr(gz, "room_surfaces", {}).items():
+        if surf in text and len(surf) > best_len:
+            best, best_len = aid, len(surf)
+    return best
+
+
+def _target_ids(node: dict) -> list:
+    """service 액션의 target.entity_id 를 리스트로(문자열/리스트/부재 모두 처리)."""
+    tgt = node.get("target")
+    if not isinstance(tgt, dict):
+        return []
+    ids = tgt.get("entity_id")
+    if isinstance(ids, str):
+        return [ids]
+    if isinstance(ids, list):
+        return [x for x in ids if isinstance(x, str)]
+    return []
+
+
+_UNLOCK_RE = re.compile(r"풀리|풀려|풀린")
+
+
+def _aspect_state(clause: str, eid: Optional[str]) -> str:
+    """결과상 절 + 해석된 엔티티 도메인 → 정확한 상태 문자열(§4.1).
+    극성: 풀리(해제)=양성, 꺼/닫/잠/없=음성, 켜/열/있=양성. '안/못' 부정은 극성 반전(XOR).
+    도메인별: cover=open/closed, lock=unlocked/locked, 그 외=on/off.
+    """
+    neg = bool(re.search(r"(?:^|\s)안\s+[가-힣]", clause)) or bool(re.search(r"(?:^|\s)못\s", clause))
+    if _UNLOCK_RE.search(clause):
+        base_pos = True
+    elif re.search(r"꺼|닫|잠|없", clause):
+        base_pos = False
+    else:
+        base_pos = True
+    positive = base_pos != neg
+    dom = eid.split(".")[0] if eid else None
+    if dom == "cover":
+        return "open" if positive else "closed"
+    if dom == "lock":
+        return "unlocked" if positive else "locked"
+    return "on" if positive else "off"
+
+
+def _mark_savable(result: dict, sub: dict) -> None:
+    """오버레이가 트리거를 세워 모델이 완결(트리거+액션)되면 result 를 저장가능(ok)으로.
+    앱 parse 가 트리거 미검출로 ok=False 로 표시한 문장을 후처리가 살렸을 때, L2 매처가
+    이 exact 결과를 덮어써 회귀내는 것을 막는다(§1.3 결정사항)."""
+    if result is None or not sub.get("triggers") or not sub.get("actions"):
+        return
+    result["ok"] = True
+    result["unmatched"] = []
+    if not result.get("confidence") or result["confidence"] < 0.6:
+        result["confidence"] = 0.7
+
+
+# ===========================================================================
+# #19 환기팬 → 전열교환기(ERV) 재매핑 (습도/공기질 문맥)
+# ===========================================================================
+def _remap_erv_fan(result: dict, normalized: str, gz) -> None:
+    if gz is None or "환기팬" not in normalized:
+        return
+    if not re.search(r"습도|미세먼지|초미세|공기\s*질|공기질", normalized):
+        return
+    erv = next((e["entity_id"] for e in gz.entities if e["domain"] == "fan"
+                and ("전열교환기" in (e.get("name") or "") or e["entity_id"].endswith("erv"))), None)
+    bath = next((e["entity_id"] for e in gz.entities if e["domain"] == "fan"
+                 and "환풍기" in (e.get("name") or "")), None)
+    if not erv or not bath:
+        return
+    model = result.get("model") or {}
+    for sub in _subrules(model):
+        for a in sub.get("actions", []):
+            tgt = a.get("target")
+            if not isinstance(tgt, dict):
+                continue
+            ids = tgt.get("entity_id")
+            if isinstance(ids, str) and ids == bath:
+                tgt["entity_id"] = erv
+            elif isinstance(ids, list):
+                tgt["entity_id"] = [erv if x == bath else x for x in ids]
+
+
+# ===========================================================================
+# 날씨형 전이 → numeric_state(습도/온도). '습해지/눅눅'=습도 above, '더워지'=온도 above,
+#   '추워지'=온도 below. 명시 임계 우선, 없으면 관례 기본(습도 70·추위 20; 더위는 명시 필수).
+# ===========================================================================
+_WEATHER_HUMID_RE = re.compile(r"습해지|눅눅|축축|꿉꿉|습하|후덥")
+_WEATHER_HOT_RE = re.compile(r"더워지|더워|더우|무더|후텁")
+_WEATHER_COLD_RE = re.compile(r"추워지|추워|추우|쌀쌀|서늘|썰렁")
+_WEATHER_THRESH_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|퍼센트|프로|도)?\s*(?:이상|이하|초과|미만|보다)")
+
+
+def _weather_numeric(normalized: str, gz, default_area):
+    if gz is None:
+        return None
+    humid = _WEATHER_HUMID_RE.search(normalized)
+    hot = _WEATHER_HOT_RE.search(normalized)
+    cold = _WEATHER_COLD_RE.search(normalized)
+    if not (humid or hot or cold):
+        return None
+    dc = "humidity" if humid else "temperature"
+    area = _find_area(gz, normalized) or default_area
+    cands = gz.resolve_concept({"domain": "sensor", "device_class": dc}, area, normalized)
+    if not cands:
+        return None
+    node = {"type": "numeric_state", "entity_id": cands[0]["id"]}
+    m = _WEATHER_THRESH_RE.search(normalized)
+    explicit = float(m.group(1)) if m else None
+    if humid:
+        node["above"] = explicit if explicit is not None else 70.0
+    elif hot:
+        if explicit is None:
+            return None
+        node["above"] = explicit
+    else:  # cold
+        node["below"] = explicit if explicit is not None else 20.0
+    return node
+
+
+# ===========================================================================
+# #24 수치 에지 마무리 — 범위이탈/이중에지(두 트리거)·between-트리거·단일에지 fallback
+# ===========================================================================
+_NUM_EXIT_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:에서|부터)\s*(-?\d+(?:\.\d+)?)\s*도?\s*"
+    r"(?:사이|범위)\s*(?:를|에서|밖)?\s*(?:벗어|이탈)")
+_NUM_DUAL_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:아래|밑|이하)\s*로?\s*(?:떨어지|내려가|낮아)"
+    r".*?(?:거나|또는).*?"
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:위|이상|초과)\s*로?\s*(?:올라가|넘|높아|초과)")
+_NUM_BETWEEN_TRIG_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:에서|부터)\s*(-?\d+(?:\.\d+)?)\s*도?\s*사이")
+
+
+def _numeric_sensor_id(text: str, gz) -> Optional[str]:
+    """수치 센서 엔티티를 device_class 키워드로 강제 해석(온도/습도/미세먼지/전력)."""
+    if re.search(r"습도", text):
+        dc = "humidity"
+    elif re.search(r"미세먼지|미세\s*먼지|pm", text, re.I):
+        dc = "pm25"
+    elif re.search(r"전력|와트|소비\s*전력", text):
+        dc = "power"
+    elif re.search(r"온도|\d+\s*도", text):
+        dc = "temperature"
+    else:
+        return None
+    area = _find_area(gz, text)
+    cands = gz.resolve_concept({"domain": "sensor", "device_class": dc}, area, text)
+    return cands[0]["id"] if cands else None
+
+
+def _drop_sensor_service(sub: dict) -> None:
+    """센서(sensor.*)를 대상으로 하는 오파싱 service 액션 제거(센서는 제어 불가)."""
+    sub["actions"] = [a for a in sub["actions"]
+                      if not (a.get("type") == "service"
+                              and any(x.split(".")[0] == "sensor"
+                                      for x in _target_ids(a)))]
+
+
+def _augment_numeric_edge(normalized: str, sub: dict, gz, result=None) -> None:
+    if gz is None:
+        return
+    em = _NUM_EXIT_RE.search(normalized)
+    dm = None if em else _NUM_DUAL_RE.search(normalized)
+    if em or dm:
+        if em:
+            a, b = float(em.group(1)), float(em.group(2))
+            lo, hi = min(a, b), max(a, b)
+        else:
+            lo, hi = float(dm.group(1)), float(dm.group(2))
+        eid = _numeric_sensor_id(normalized, gz)
+        if eid is None:
+            return
+        sub["triggers"] = [
+            {"type": "numeric_state", "entity_id": eid, "below": lo},
+            {"type": "numeric_state", "entity_id": eid, "above": hi},
+        ]
+        _drop_sensor_service(sub)
+        _mark_savable(result, sub)
+        return
+    if sub["triggers"] or any(c.get("type") == "numeric_state" for c in sub["conditions"]):
+        return
+    bm = _NUM_BETWEEN_TRIG_RE.search(normalized)
+    if bm:
+        lo, hi = float(bm.group(1)), float(bm.group(2))
+        eid = _numeric_sensor_id(normalized, gz)
+        if eid is None:
+            return
+        sub["triggers"] = [{"type": "numeric_state", "entity_id": eid,
+                            "above": min(lo, hi), "below": max(lo, hi)}]
+        _drop_sensor_service(sub)
+        _mark_savable(result, sub)
+        return
+    below_m = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:도|와트|퍼센트|프로|%)?\s*(?:이하|미만|밑|아래)", normalized)
+    above_m = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:도|와트|퍼센트|프로|%)?\s*(?:이상|초과)"
+        r"|(\d+(?:\.\d+)?)\s*(?:도|와트|퍼센트|프로|%)?\s*(?:을|를)?\s*넘", normalized)
+    if bool(below_m) == bool(above_m):
+        return
+    eid = _numeric_sensor_id(normalized, gz)
+    if eid is None:
+        return
+    node = {"type": "numeric_state", "entity_id": eid}
+    if below_m:
+        node["below"] = float(below_m.group(1))
+    else:
+        node["above"] = float(above_m.group(1) or above_m.group(2))
+    sub["triggers"] = [node]
+    _drop_sensor_service(sub)
+    _mark_savable(result, sub)
+
+
+# ===========================================================================
+# #25 held-for: "N분/시간 넘게 …켜져/열려 있으면" → state 트리거 for 지속
+# ===========================================================================
+_HELD_FOR_RE = re.compile(r"(\d+)\s*(분|시간|초)\s*(?:넘게|이상|동안|째|내내|계속)")
+
+
+def _augment_held_for(normalized: str, sub: dict) -> None:
+    m = _HELD_FOR_RE.search(normalized)
+    if not m:
+        return
+    if not re.search(r"켜져|열려|꺼져|닫혀|잠겨|풀려|있으면|있을\s*때|있는데|있는\s*동안",
+                     normalized):
+        return
+    unit = {"분": "minutes", "시간": "hours", "초": "seconds"}[m.group(2)]
+    dur = {unit: int(m.group(1))}
+    for i, t in enumerate(list(sub["triggers"])):
+        if t.get("type") == "state" and "for" not in t:
+            t["for"] = dur
+            return
+        if t.get("type") == "numeric_state":
+            eid = t.get("entity_id")
+            dom = eid.split(".")[0] if eid else ""
+            if dom in ("fan", "light", "switch", "media_player", "climate",
+                       "cover", "lock", "binary_sensor"):
+                stv = _aspect_state(_QUOTE_SPAN_RE.sub(" ", normalized), eid)
+                sub["triggers"][i] = {"type": "state", "entity_id": eid,
+                                      "to": stv, "for": dur}
+                sub["conditions"] = [
+                    c for c in sub["conditions"]
+                    if not (c.get("type") == "time"
+                            or (c.get("type") == "state"
+                                and c.get("entity_id") == eid))]
+                return
+
+
+# ===========================================================================
+# #29 notify — 인용 메시지 + 알림 동사 → notify.notify(원문 sentence 에서 인용부 추출)
+# ===========================================================================
+_NOTIFY_VERB_RE = re.compile(
+    r"알려|말해|말하|말씀|보내|방송|안내|얘기|알림|전해|전달|물어|여쭤|공지")
+
+
+def _detect_notify(sent: str):
+    if not _NOTIFY_VERB_RE.search(sent):
+        return None
+    qm = re.search(r"['\"“”‘’『』「」]"
+                   r"([^'\"“”‘’『』「」]+)"
+                   r"['\"“”‘’『』「」]", sent)
+    if qm:
+        message = qm.group(1).strip()
+    else:
+        qm2 = re.search(r"([가-힣]+)(다|라|냐|자)고(?![가-힣])", sent)
+        if not qm2:
+            return None
+        message = (qm2.group(1) + qm2.group(2)).strip()
+    if not message:
+        return None
+    data = {"message": message}
+    phone = re.search(r"폰|휴대폰|핸드폰|모바일|스마트폰", sent)
+    speaker = re.search(r"스피커|방송", sent)
+    phone_neg = re.search(r"(?:폰|휴대폰|핸드폰|모바일|스마트폰)\s*(?:말고|대신|아니라|아니고)", sent)
+    speaker_neg = re.search(r"(?:스피커|방송)\s*(?:말고|대신|아니라|아니고)", sent)
+    if phone and not phone_neg:
+        data["target"] = "mobile"
+    elif speaker and not speaker_neg:
+        data["target"] = "speaker"
+    return data
+
+
+# ===========================================================================
+# #30 repeat 풀구조 — 'N번 깜빡'(count) / '때까지 계속'(until)
+# ===========================================================================
+_NATIVE_CNT = r"(?:\d+|한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|여러)"
+_REPEAT_NATIVE_CNT = {"한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5, "여섯": 6,
+                      "일곱": 7, "여덟": 8, "아홉": 9, "열": 10}
+_REPEAT_CNT_ARABIC_RE = re.compile(r"(\d+)\s*(?:번|차례|회)")
+_REPEAT_CNT_NATIVE_RE = re.compile(
+    r"(한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\s*(?:번|차례|회)")
+
+
+def _is_repeat_action(text: str) -> bool:
+    if re.search(_NATIVE_CNT + r"\s*(?:번|차례|회)\s*(?:만)?\s*"
+                 r"[가-힣]{0,4}?(?:깜빡|반짝|반복|보내|점멸|열었다|껌뻑)", text):
+        return True
+    if re.search(r"깜빡깜빡|깜빡거|반짝반짝", text):
+        return True
+    if re.search(r"때까지\s*(?:.*?)(?:계속|깜빡|반짝|알려|알림|반복)", text):
+        return True
+    if re.search(r"계속\s*[가-힣\s]*?(?:깜빡|반짝|알려|알림)", text):
+        return True
+    return False
+
+
+def _detect_repeat_count(text: str):
+    m = _REPEAT_CNT_ARABIC_RE.search(text)
+    if m:
+        return int(m.group(1))
+    m2 = _REPEAT_CNT_NATIVE_RE.search(text)
+    if m2:
+        return _REPEAT_NATIVE_CNT[m2.group(1)]
+    return None
+
+
+def _repeat_on_off_services(action: str):
+    domain = (action or "").split(".")[0] or "homeassistant"
+    if domain == "cover":
+        return "cover.open_cover", "cover.close_cover"
+    return domain + ".turn_on", domain + ".turn_off"
+
+
+def _build_count_repeat(sub: dict, normalized: str):
+    n = _detect_repeat_count(normalized)
+    if n is None:
+        return None
+    base = next((a for a in (sub.get("actions") or [])
+                 if isinstance(a, dict) and a.get("type") == "service"
+                 and isinstance(a.get("target"), dict)
+                 and a["target"].get("entity_id")), None)
+    if base is None:
+        return None
+    on_svc, off_svc = _repeat_on_off_services(base.get("action", ""))
+    target = base["target"]
+    seq = [
+        {"type": "service", "action": on_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+        {"type": "service", "action": off_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+    ]
+    return {"type": "repeat", "kind": "count", "count": n, "sequence": seq}
+
+
+def _build_until_repeat(sub: dict, normalized: str):
+    if "때까지" not in normalized:
+        return None
+    trigs = [t for t in (sub.get("triggers") or [])
+             if isinstance(t, dict) and t.get("type") == "state"
+             and t.get("entity_id") and t.get("to") in ("on", "off")]
+    if len(trigs) != 1:
+        return None
+    base = next((a for a in (sub.get("actions") or [])
+                 if isinstance(a, dict) and a.get("type") == "service"
+                 and isinstance(a.get("target"), dict)
+                 and a["target"].get("entity_id")), None)
+    if base is None:
+        return None
+    on_svc, off_svc = _repeat_on_off_services(base.get("action", ""))
+    target = base["target"]
+    inv_state = "off" if trigs[0]["to"] == "on" else "on"
+    until_cond = {"type": "state", "entity_id": trigs[0]["entity_id"], "state": inv_state}
+    seq = [
+        {"type": "service", "action": on_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+        {"type": "service", "action": off_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+    ]
+    return {"type": "repeat", "kind": "until", "conditions": [until_cond], "sequence": seq}
+
+
+# ===========================================================================
+# #27 액션 파라미터 — 색 팔레트/색온도/상대밝기/transition
+# ===========================================================================
+_RGB_PALETTE = [
+    (re.compile(r"빨강|빨간|빨갛|붉은|적색|레드"), [255, 0, 0]),
+    (re.compile(r"주황|주홍|오렌지"), [255, 126, 0]),
+    (re.compile(r"노랑|노란|노랗|옐로"), [255, 220, 0]),
+    (re.compile(r"초록|녹색|연두|그린"), [0, 255, 0]),
+    (re.compile(r"파랑|파란|파랗|블루"), [0, 0, 255]),
+    (re.compile(r"보라|자주색|퍼플|바이올렛"), [160, 32, 240]),
+    (re.compile(r"분홍|핑크"), [255, 105, 180]),
+    (re.compile(r"흰색|하얀색|백색|화이트"), [255, 255, 255]),
+]
+_KELVIN_PALETTE = [
+    (re.compile(r"전구색|따뜻한\s*색|따뜻한색|따뜻하게|웜\s*화이트|온백색"), 2700),
+    (re.compile(r"주백색|중백색|자연색"), 4000),
+    (re.compile(r"주광색|하얀\s*불|하얀불|시원한\s*색|쿨\s*화이트|형광색"), 6500),
+]
+
+
+def _light_service_data(text: str, action: str) -> dict:
+    data: dict = {}
+    is_off = action.endswith("turn_off")
+    if not is_off:
+        matched = False
+        for rx, kelvin in _KELVIN_PALETTE:
+            if rx.search(text):
+                data["color_temp_kelvin"] = kelvin
+                matched = True
+                break
+        if not matched:
+            for rx, rgb in _RGB_PALETTE:
+                if rx.search(text):
+                    data["rgb_color"] = list(rgb)
+                    break
+        step_sign = None
+        if re.search(r"더\s*밝게|더밝게|밝게\s*좀|더\s*환하게", text):
+            step_sign = 1
+        elif re.search(r"어둡게", text) and not re.search(r"제일\s*어둡|가장\s*어둡|최소", text):
+            step_sign = -1
+        if step_sign is not None:
+            pm = re.search(r"(\d+)\s*(?:퍼센트|프로|%|퍼)", text)
+            data["brightness_step_pct"] = step_sign * (int(pm.group(1)) if pm else 20)
+    tm = re.search(r"(\d+)\s*초\s*(?:에\s*걸쳐|동안|만큼|간)", text)
+    if tm:
+        data["transition"] = int(tm.group(1))
+    elif re.search(r"천천히", text):
+        data["transition"] = 10
+    elif re.search(r"서서히|부드럽게|살살|스르르|자연스럽게", text):
+        data["transition"] = 5
+    return data
+
+
+def _apply_light_params(text: str, sub: dict) -> None:
+    for a in sub["actions"]:
+        if a.get("type") != "service":
+            continue
+        act = a.get("action")
+        if not (isinstance(act, str) and act.startswith("light.turn_")):
+            continue
+        extra = _light_service_data(text, act)
+        if not extra:
+            continue
+        data = dict(a.get("data") or {})
+        if "brightness_step_pct" in extra:
+            data.pop("brightness_pct", None)   # 상대/절대 동시 금지(§3.1)
+        data.update(extra)
+        a["data"] = data
+
+
+# ===========================================================================
+# #28 toggle — 반대로/토글 → <domain>.toggle. S1 은 단일 도메인만(homeassistant.toggle 은 S6).
+# ===========================================================================
+_TOGGLE_RE = re.compile(r"반대\s*(?:로|상태)|토글")
+_TOGGLABLE = {"turn_on", "turn_off", "open_cover", "close_cover", "lock", "unlock"}
+
+
+def _apply_toggle(sub: dict) -> bool:
+    svc = [a for a in sub["actions"]
+           if a.get("type") == "service" and isinstance(a.get("action"), str)
+           and a["action"].split(".", 1)[-1] in _TOGGLABLE]
+    ids: list = []
+    for a in svc:
+        for x in _target_ids(a):
+            if x not in ids:
+                ids.append(x)
+    if not ids:
+        return False
+    doms: list = []
+    for x in ids:
+        d = x.split(".")[0]
+        if d not in doms:
+            doms.append(d)
+    # S1: 단일 도메인만 domain.toggle. 혼합 도메인(homeassistant.toggle)은 S6 까지 미적용.
+    if len(doms) != 1:
+        return False
+    act = f"{doms[0]}.toggle"
+    others = [a for a in sub["actions"] if a not in svc]
+    sub["actions"] = [{"type": "service", "action": act,
+                       "target": {"entity_id": ids}}] + others
+    return True
+
+
+# ===========================================================================
+# #31 한정지속 복원 — "N분만 켰다가 꺼" → [act1, delay, act2] (결과상 트리거 승격)
+# ===========================================================================
+_REVERT_RE = re.compile(
+    r"(\d+)\s*(분|시간|초)\s*(?:만|정도|가량|쯤|동안)?\s*(?:좀\s*|딱\s*|그냥\s*|정도\s*)*"
+    r"(?:[가-힣]+\s+)?"
+    r"(?P<v1>켰다|켜졌|켜놨|켜놓|켜뒀|틀었|틀어|돌리|돌려|열었|열어|껐다|꺼놨|꺼졌|꺼뒀|껐)")
+_REVERT_SERVICES = {
+    "light": ("light.turn_on", "light.turn_off"),
+    "fan": ("fan.turn_on", "fan.turn_off"),
+    "switch": ("switch.turn_on", "switch.turn_off"),
+    "climate": ("climate.turn_on", "climate.turn_off"),
+    "media_player": ("media_player.turn_on", "media_player.turn_off"),
+    "cover": ("cover.open_cover", "cover.close_cover"),
+    "lock": ("lock.unlock", "lock.lock"),
+}
+_REVERT_OFF_FIRST = {"껐다", "꺼놨", "꺼졌", "꺼뒀", "껐"}
+
+
+def _apply_revert(normalized: str, sub: dict) -> bool:
+    m = _REVERT_RE.search(normalized)
+    if not m:
+        return False
+    ids = domain = None
+    for a in sub["actions"]:
+        if a.get("type") != "service":
+            continue
+        t = _target_ids(a)
+        if t:
+            ids, domain = t, t[0].split(".")[0]
+            break
+    if not ids or domain not in _REVERT_SERVICES:
+        return False
+    on_svc, off_svc = _REVERT_SERVICES[domain]
+    off_first = m.group("v1") in _REVERT_OFF_FIRST
+    unit = {"분": "minutes", "시간": "hours", "초": "seconds"}[m.group(2)]
+    dur = {unit: int(m.group(1))}
+    first, second = (off_svc, on_svc) if off_first else (on_svc, off_svc)
+    sub["actions"] = [
+        {"type": "service", "action": first, "target": {"entity_id": list(ids)}},
+        {"type": "delay", "duration": dur},
+        {"type": "service", "action": second, "target": {"entity_id": list(ids)}},
+    ]
+    if not sub["triggers"] and len(ids) == 1:
+        am = re.search(r"(?:켜져|꺼져|열려|닫혀|잠겨|풀려)\s*있", normalized)
+        if am:
+            stv = _aspect_state(_QUOTE_SPAN_RE.sub(" ", normalized), ids[0])
+            sub["triggers"] = [{"type": "state", "entity_id": ids[0], "to": stv}]
+    return True
+
+
+# ===========================================================================
+# 액션측 후처리 — repeat → notify → revert → toggle → light params (기존 노드만)
+# ===========================================================================
+def _augment_actions_only(sentence: str, normalized: str, sub: dict, is_repeat: bool) -> None:
+    if is_repeat:
+        if not sub["triggers"]:
+            for c in list(sub["conditions"]):
+                if c.get("type") == "state":
+                    sub["triggers"].append({"type": "state",
+                                            "entity_id": c.get("entity_id"),
+                                            "to": c.get("state")})
+                    sub["conditions"].remove(c)
+                    break
+                if c.get("type") == "numeric_state":
+                    nt = {"type": "numeric_state", "entity_id": c.get("entity_id")}
+                    if c.get("above") is not None:
+                        nt["above"] = c["above"]
+                    if c.get("below") is not None:
+                        nt["below"] = c["below"]
+                    sub["triggers"].append(nt)
+                    sub["conditions"].remove(c)
+                    break
+        rep = _build_count_repeat(sub, normalized)
+        if rep is None:
+            rep = _build_until_repeat(sub, normalized)
+        sub["actions"] = [rep] if rep is not None else [{"type": "repeat"}]
+        # S1: 잔여 조건 중 신규 노드(weekday/day_of_month/interval_anchor/sun_window)만 보존
+        #     — 이들은 S2+ 이전엔 방출되지 않으므로 실질적으로 조건을 비운다(repeat gold 규약).
+        sub["conditions"] = [c for c in sub["conditions"]
+                             if c.get("type") in ("weekday", "day_of_month",
+                                                  "interval_anchor", "sun_window")]
+        return
+    nd = _detect_notify(sentence)
+    if nd is not None:
+        sub["actions"] = [{"type": "service", "action": "notify.notify", "data": nd}]
+        return
+    if _apply_revert(normalized, sub):
+        return
+    if _TOGGLE_RE.search(normalized) and _apply_toggle(sub):
+        return
+    _apply_light_params(sentence, sub)
+
+
+# ===========================================================================
+# #26 부정 NOT 래퍼 — "N 넘지 않으면/안 넘으면" = NOT[numeric_state above N]
+# ===========================================================================
+_NUM_NEG_ABOVE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:도|퍼센트|프로|%|와트)?\s*(?:을|를)?\s*"
+    r"(?:(?:안|못)\s*넘|넘지\s*않|초과하지\s*않|이상\s*(?:이\s*)?아니)")
+_NUM_NEG_BELOW_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:도|퍼센트|프로|%|와트)?\s*(?:이하|미만)?\s*(?:로\s*)?"
+    r"(?:(?:안|못)\s*(?:내려가|떨어지)|내려가지\s*않|떨어지지\s*않|이하\s*아니|미만\s*아니)")
+
+
+def _augment_negation_not(sentence: str, normalized: str, result: dict, gz) -> None:
+    if not isinstance(result, dict) or gz is None:
+        return
+    model = result.get("model")
+    if not isinstance(model, dict):
+        return
+    sub = _primary_subrule(model)
+    if sub is None:
+        return
+    am = _NUM_NEG_ABOVE_RE.search(normalized)
+    bm = None if am else _NUM_NEG_BELOW_RE.search(normalized)
+    if not (am or bm):
+        return
+    if any(t.get("type") == "numeric_state" for t in sub.get("triggers", []) or []):
+        return
+    if any(c.get("type") == "numeric_state" for c in sub.get("conditions", []) or []):
+        return
+    eid = _numeric_sensor_id(normalized, gz)
+    if eid is None:
+        return
+    key = "above" if am else "below"
+    val = float((am or bm).group(1))
+    inner = {"type": "numeric_state", "entity_id": eid, key: val}
+    sub.setdefault("conditions", [])
+    if not any(c.get("type") == "not" for c in sub["conditions"]):
+        sub["conditions"].append({"type": "not", "conditions": [inner]})
+
+
+# ---------------------------------------------------------------------------
+# 공개 진입점
+# ---------------------------------------------------------------------------
+def apply(result: dict, sentence: str, normalized: str, gz, settings,
+          now_fn=None) -> dict:
+    """모델 후처리 파이프라인(기존 노드 범위, S1). result 를 수정 후 반환.
+
+    신규 노드(sun/weekday/day_of_month/interval_anchor/time_pattern/presence_agg)는
+    방출하지 않는다(S2+). now_fn 은 신규노드 결정성용 — S1 미사용.
+    """
+    if not isinstance(result, dict):
+        return result
+    _remap_erv_fan(result, normalized, gz)
+    sub = _primary_subrule(result.get("model") or {})
+    if sub is None:
+        # 다중 서브룰/비정형: 액션 후처리 대상 아님(else/다중절은 S7).
+        return result
+    sub.setdefault("triggers", [])
+    sub.setdefault("conditions", [])
+    sub.setdefault("actions", [])
+
+    is_repeat = _is_repeat_action(normalized)
+
+    # 날씨형 전이 → numeric_state(기존 노드). 수치 노드가 아직 없을 때만.
+    if not any(t.get("type") == "numeric_state" for t in sub["triggers"]) \
+            and not any(c.get("type") == "numeric_state" for c in sub["conditions"]):
+        wnode = _weather_numeric(normalized, gz, None)
+        if wnode is not None:
+            sub["triggers"] = [t for t in sub["triggers"]
+                               if t.get("type") not in ("segment", "daily")]
+            sub["triggers"].insert(0, wnode)
+            _drop_sensor_service(sub)
+            _mark_savable(result, sub)
+
+    _augment_numeric_edge(normalized, sub, gz, result)
+    _augment_held_for(normalized, sub)
+    _augment_actions_only(sentence, normalized, sub, is_repeat)
+    _augment_negation_not(sentence, normalized, result, gz)
+    return result

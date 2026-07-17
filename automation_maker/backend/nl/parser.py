@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from . import postpass, surface
 from .gazetteer import (DAY_TYPE_WORDS, DEVICE_CONCEPTS, MOTION_CONCEPT,
                         MOTION_WORDS, SEASON_WORDS, SEGMENT_WORDS, Gazetteer)
 from .normalize import (find_clock, find_percent, find_temperature,
@@ -28,6 +29,8 @@ VERB_STEMS = [
     "아니",  # 모드 부정 조건('슬립모드가 아니면')의 '면' 경계 인식용(§6)
     # A5(라운드1): 절 경계('면') 인식용 어간 확장 — 잡히면/움직이면/나서면/비우면/새면.
     "잡히", "움직이", "나서", "비우", "새",
+    # L1(#3): 수치 레벨 형용사(높으면/낮으면)·입실/통과(들어가면/지나가면)·임계도달(찍으면).
+    "높", "낮", "들어가", "지나가", "찍",
 ]
 # 이벤트(→트리거) 키워드
 EVENT_KEYWORDS = ["도착", "열리", "열림", "열려", "닫히", "닫힘", "감지", "눌리",
@@ -56,6 +59,115 @@ _ZONE_LEAVE_RE = re.compile(
     r"외출|(?<![가-힣])나가|집\s*비우|집을?\s*비우|(?<![가-힣])나서|집을?\s*나\b")
 # B6: 누수/침수(moisture) 이벤트.
 _LEAK_RE = re.compile(r"누수|물\s*새|물이\s*새|샘|침수")
+# #17: 동사 관형형('-는/-은')은 주제어가 아니라 트리거 절이다. _extract_topic 이
+#      'X 움직이는 …'의 '움직이는'을 주제로 오삼키지 않도록 배제.
+_VERB_ADNOMINAL_RE = re.compile(
+    r"(?:움직이|감지되|잡히|열리|닫히|켜지|꺼지|들어오|들어가|나가|지나가|풀리|잠기|울리"
+    r"|생기|떨어지|올라가|내려가|오|되|나|가|넘|높아지|낮아지|없어지)는$")
+
+# ---------------------------------------------------------------------------
+# P2 상(aspect) 라우팅 헬퍼 (#8·#9·#10·#11·#14) — SPEC-SCHEMA-90 §4.1.
+#   결과상('-어 있-')/지속상(-ㄹ 때, -는 동안)은 상태(조건), 전이형(켜지면/열리면/되면)은 트리거.
+# ---------------------------------------------------------------------------
+_RESULTATIVE_RE = re.compile(
+    r"(?:켜져|꺼져|열려|닫혀|잠겨|풀려|채워|비워|걸려|놓여|담겨|덮여|서|앉아|누워|들어와)\s*있"
+    r"|(?:켜진|꺼진|열린|닫힌|잠긴|풀린|열려있는|닫혀있는)\s*상태")
+_DURATIVE_RE = re.compile(r"(?:을|ㄹ|일|는)\s*때|(?:는|은|인)\s*동안")
+_UNLOCK_RE = re.compile(r"풀리|풀려|풀린")
+_ROOM_ENTER_RE = re.compile(r"들어가|지나가|지나쳐")
+_BETWEEN_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:에서|부터)\s*(-?\d+(?:\.\d+)?)\s*도?\s*(?:사이|까지)")
+# L1: 수치 비교 표층 — 도달/찍/닿(임계 도달=above)도 포함.
+_NUM_CMP_RE = r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮|도달|닿|찍"
+# 지속상 조건이 액션존 앞에 붙는 경우('… 감지되는 동안엔 조명 켜'/'… 닫혀 있을 때만 켜').
+_DURATIVE_SPLIT_RE = re.compile(
+    r"^(?P<cond>.*?(?:(?:을|ㄹ|일|는)\s*때(?:만|는|엔|에)?"
+    r"|(?:는|은|인)\s*동안(?:엔|은|에)?))\s+(?P<act>.+)$")
+
+
+def _is_state_aspect(clause: str) -> bool:
+    """절이 결과상/지속상(상태) 절인가 → 트리거가 아니라 조건(승격 규칙 대상)."""
+    return bool(_RESULTATIVE_RE.search(clause) or _DURATIVE_RE.search(clause))
+
+
+def _between(clause: str):
+    m = _BETWEEN_RE.search(clause)
+    if not m:
+        return None
+    a, b = float(m.group(1)), float(m.group(2))
+    return (min(a, b), max(a, b))
+
+
+def _is_weather_clause(clause: str) -> bool:
+    return bool(postpass._WEATHER_HUMID_RE.search(clause)
+                or postpass._WEATHER_HOT_RE.search(clause)
+                or postpass._WEATHER_COLD_RE.search(clause))
+
+
+def _clause_has_numeric(clause: str) -> bool:
+    """이 절이 numeric_state 트리거/조건을 만들 후보인가(_emit_numeric_aspect 게이트와 동일)."""
+    weather = _is_weather_clause(clause)
+    if not (weather or re.search(_NUM_CMP_RE, clause) or _between(clause)):
+        return False
+    if not weather and _find_concept(clause) is None and find_temperature(clause) is None:
+        return False
+    return True
+
+
+def _aspect_state(clause: str, eid: Optional[str]) -> str:
+    """결과상 절 + 해석된 엔티티 도메인 → 정확한 상태 문자열(§4.1).
+    극성: 풀리(해제)=양성, 꺼/닫/잠/없=음성, 켜/열/있=양성. '안/못' 부정은 극성 반전(XOR).
+    도메인별: cover=open/closed, lock=unlocked/locked, 그 외=on/off.
+    """
+    neg = bool(re.search(r"(?:^|\s)안\s+[가-힣]", clause)) or bool(re.search(r"(?:^|\s)못\s", clause))
+    if _UNLOCK_RE.search(clause):
+        base_pos = True
+    elif re.search(r"꺼|닫|잠|없", clause):
+        base_pos = False
+    else:
+        base_pos = True
+    positive = base_pos != neg
+    dom = eid.split(".")[0] if eid else None
+    if dom == "cover":
+        return "open" if positive else "closed"
+    if dom == "lock":
+        return "unlocked" if positive else "locked"
+    return "on" if positive else "off"
+
+
+def _room_enter_motion_area(gz: Gazetteer, clause: str):
+    """방 입실/통과 트리거 절이면 그 방 area, 아니면 None(그 방 모션 센서로 라우팅용)."""
+    area = _find_area(gz, clause)
+    if area is None:
+        return None
+    if _ROOM_ENTER_RE.search(clause):
+        return area
+    if _ZONE_ENTER_RE.search(clause) or _ZONE_LEAVE_RE.search(clause) \
+            or _LEAK_RE.search(clause):
+        return None
+    if re.search(r"움직임|모션|인기척|동작|움직이|누수|밸브|온도|습도|미세먼지"
+                 r"|열리|열려|닫히|닫혀|감지|도착|왔|눌리|울리", clause):
+        return None
+    if re.search(r"(?<![가-힣])가(?:면|서|고)(?![가-힣])", clause):
+        return area
+    return None
+
+
+def _split_durative_condition(clause: str):
+    """#9: 액션 절이 '지속상 조건 + 액션'이면 (조건부, 액션부)로 분리. 아니면 (None, clause).
+    '… 감지되는 동안엔 조명 켜' / '… 닫혀 있을 때만 켜'의 선행 지속상 절을 조건으로 뗀다."""
+    m = _DURATIVE_SPLIT_RE.match(clause)
+    if not m:
+        return None, clause
+    cond = m.group("cond").strip()
+    act = m.group("act").strip()
+    # 가드: 조건부에 상태/수치/모션 신호가 있고, 액션부에 실제 명령 동사가 있을 때만 분리.
+    if not (_RESULTATIVE_RE.search(cond) or _between(cond)
+            or re.search(r"감지|모션|움직|인기척|사람|높|낮|사이", cond)):
+        return None, clause
+    if not any(h in act for h in COMMAND_HINTS):
+        return None, clause
+    return cond, act
 
 
 def _value_pct(clause: str):
@@ -123,6 +235,14 @@ def _duration_frames(text: str):
         r"(?P<locpre>[가-힣]+(?:에서|에는|에)\s+)?"
         r"(?P<n>\d+)\s*(?P<u>초|분|시간)\s*(?:동안|간)\s*(?P<loc>[가-힣]+(?:에서|에는|에)\s+)?"
         r"(?P<subj>[가-힣A-Za-z]+)\s*(?:이|가)?\s*(?P<neg>없|있)으?면")
+    # #6(P3): 주어 생략·주어선행·부정 모션 지속 held. p1(주어후행 없/있)이 못 잡는 부재형
+    #   ('5분간 안 움직이면'·'모션이 10분 동안 없으면'·'1시간 넘게 감지 못 되면') → 모션 off 지속.
+    p3 = re.compile(
+        r"(?P<locpre>[가-힣]+(?:에서|에는|에)\s+)?"
+        r"(?:[가-힣]+\s*(?:이|가)\s+)?"                     # 선행 주어(모션이/사람이) 소비
+        r"(?P<n>\d+)\s*(?P<u>초|분|시간)\s*(?:동안|간|넘게)\s*(?:아무도\s*)?"
+        r"(?:안\s*움직이|움직임\s*이?\s*없|인기척\s*이?\s*없|사람\s*이?\s*없"
+        r"|감지\s*(?:안|못)\s*되|반응\s*이?\s*없|없)\s*(?:으)?면")
 
     unit = {"초": 1, "분": 60, "시간": 3600}
 
@@ -133,11 +253,14 @@ def _duration_frames(text: str):
         loc = (gd.get("loc") or gd.get("locpre") or "").strip()
         return repl(gd["subj"].strip(), loc, gd["neg"] == "없", secs)
 
-    _sub_p2 = _sub
-    _sub_p1 = _sub
+    def _sub3(m):
+        gd = m.groupdict()
+        secs = int(gd["n"]) * unit[gd["u"]]
+        return repl("움직임", (gd.get("locpre") or "").strip(), True, secs)
 
-    text = p2.sub(_sub_p2, text)
-    text = p1.sub(_sub_p1, text)
+    text = p2.sub(_sub, text)
+    text = p1.sub(_sub, text)
+    text = p3.sub(_sub3, text)
     return text, frames
 
 
@@ -145,6 +268,9 @@ _SENTINEL_RE = re.compile(r"\x00F(\d+)\x00")
 
 
 def _is_myeon_boundary(word: str) -> bool:
+    # #5: 후행 쉼표 허용('높으면,' 처럼 쉼표가 붙어도 절 경계). 마침표·말줄임표는
+    #     문장 흐름을 바꿀 수 있어 제외(회귀 방지).
+    word = word.rstrip(",")
     if not word.endswith("면"):
         return False
     body = word[:-1]
@@ -282,8 +408,12 @@ class _Chip:
 
 
 class _Parser:
-    def __init__(self, sentence: str, gz: Gazetteer, settings: dict, pins: dict):
+    def __init__(self, sentence: str, gz: Gazetteer, settings: dict, pins: dict,
+                 normalized: Optional[str] = None):
         self.sentence = sentence
+        # 표면정규화된 파싱용 텍스트. 원문(sentence)은 alias·칩 스팬·인용 메시지 기준으로
+        # 보존한다(§1.1). 직접 _Parser 구성(테스트) 시 normalized 미지정이면 원문을 쓴다.
+        self.normalized = normalized if normalized is not None else sentence
         self.gz = gz
         self.settings = settings or {}
         self.pins = pins or {}
@@ -357,6 +487,8 @@ class _Parser:
         for i in range(min(3, len(tokens))):
             tok = tokens[i]
             if tok.endswith("은") or tok.endswith("는"):
+                if _VERB_ADNOMINAL_RE.search(tok):
+                    continue  # #17: 동사 관형형(주제 아님) → 다음 후보 확인
                 topic_txt = " ".join(tokens[: i + 1])
                 base = topic_txt[:-1].strip()
                 area = _find_area(self.gz, base)
@@ -389,7 +521,8 @@ class _Parser:
         return pivots
 
     def parse(self):
-        text = normalize_ws(self.sentence)
+        # §1.1: 파싱은 표면정규화된 텍스트로 하되 alias·스팬은 원문(self.sentence) 기준.
+        text = normalize_ws(self.normalized)
         # 2) 지속시간 선추출
         text, frames = _duration_frames(text)
 
@@ -490,7 +623,8 @@ class _Parser:
         if not region:
             return -1
         for j in range(len(region) - 1, -1, -1):
-            tok = region[j]
+            # #16: 후행 구두점 허용('끄고,'처럼 쉼표가 붙어도 액션 경계).
+            tok = region[j].rstrip(",.…")
             if not ((tok.endswith("고") or tok.endswith("며"))
                     and any(h in tok for h in COMMAND_HINTS)):
                 continue
@@ -611,12 +745,19 @@ class _Parser:
 
     # ---- 절이 이벤트(→트리거 후보)인가 ----
     def _clause_is_event(self, clause: str) -> bool:
+        # #11: 방 입실/통과(들어가/지나가/방+가)도 이벤트(그 방 모션).
+        if _room_enter_motion_area(self.gz, clause) is not None:
+            return True
         # B1/B6: 귀가·외출·누수 표현도 이벤트로 인식.
         if _ZONE_ENTER_RE.search(clause) or _ZONE_LEAVE_RE.search(clause):
             return True
         if _LEAK_RE.search(clause):
             return True
         if any(k in clause for k in EVENT_KEYWORDS):
+            return True
+        # #11(P2): 결과상('켜져 있으면')·잠금해제('풀리면')도 상태 이벤트 후보로 인정
+        #   ('켜져'≠'켜지'라 EVENT_KEYWORDS 로는 안 잡힘). aspect 라우팅이 트리거/조건을 결정.
+        if _RESULTATIVE_RE.search(clause) or _UNLOCK_RE.search(clause):
             return True
         if re.search(r"움직임|모션|인기척|동작|움직이", clause):
             return True
@@ -658,6 +799,10 @@ class _Parser:
         # enabler: 모드 트리거 어미 확장 — 되면/들어가/진입/시작(전환) → 모드 트리거(on).
         if re.search(r"되면|들어가|진입|시작|전환", tail):
             return ("trigger", name, "on")
+        # #7(충돌점): 오버레이는 bare '모드+면'을 트리거로 폴백하나, 앱은 복합절('슬립모드이고
+        #   모션 작동하면')에서 모드=조건·이벤트=트리거 불변식(test_multiclause golden_b)을 지킨다.
+        #   같은 절에 이벤트가 함께 있으면 강등 규칙이 절 단위로 동작하지 못하므로, 앱 불변식을
+        #   우선해 기본값을 condition 으로 유지한다(APP-PORT-PLAN §5.1 리스크2 규칙).
         return ("condition", name, "on")
 
     def _emit_mode_trigger(self, name, state, clause):
@@ -679,6 +824,8 @@ class _Parser:
                                 self._span_of(name)))
 
     def _process_antecedent(self, clauses, frames):
+        """#8(P2): 상(aspect) 라우팅. 결과상/지속상 절은 조건, 전이형만 주 트리거 후보.
+        트리거가 하나도 없을 때만 첫 상태 절을 진입에지 트리거로 승격(§4.1)."""
         held = [c for c in clauses if _SENTINEL_RE.fullmatch(c.strip())]
         other = [c for c in clauses if not _SENTINEL_RE.fullmatch(c.strip())]
 
@@ -686,14 +833,23 @@ class _Parser:
             self._build_held(c, frames)
 
         modes = [self._detect_mode(c) for c in other]
-        # 트리거-모드 절은 그 자체가 트리거이므로 이벤트(상태) 처리에서 제외한다.
         event_clauses = [c for c, mi in zip(other, modes)
                          if self._clause_is_event(c) and not (mi and mi[0] == "trigger")]
-        has_primary = bool(held) or bool(event_clauses) \
+        # 상태상(결과상/지속상) 절 vs 전이 절. 전이 절만 '주 트리거' 후보다.
+        state_events = [c for c in event_clauses if _is_state_aspect(c)]
+        trans_events = [c for c in event_clauses if c not in state_events]
+
+        # #8 L1: 실제 이벤트(모션/상태/held/수치) 트리거가 있으면 문두 상태 모드('잘 때'·'슬립모드
+        #   켜져 있고')는 트리거가 아니라 조건이다 → mode 'trigger'를 'condition'으로 강등.
+        numeric_present = any(_clause_has_numeric(c) for c in other)
+        if bool(held) or bool(event_clauses) or numeric_present:
+            modes = [("condition", mi[1], mi[2]) if (mi and mi[0] == "trigger") else mi
+                     for mi in modes]
+
+        has_primary = bool(held) or bool(trans_events) \
             or any(mi and mi[0] == "trigger" for mi in modes)
         boundary_clause = other[-1] if other else None
 
-        # 각 절의 달력/시간/모드조건/수치 측면. 수치 비교는 트리거가 없고 경계 절이면 승격.
         for c, mi in zip(other, modes):
             self._emit_calendar_aspect(c)
             self._emit_time_aspect(c)
@@ -702,15 +858,30 @@ class _Parser:
             promote = (c is boundary_clause) and not has_primary and not self.triggers
             self._emit_numeric_aspect(c, as_trigger=promote)
 
-        # 트리거-모드 절 → mode 트리거
         for c, mi in zip(other, modes):
             if mi and mi[0] == "trigger":
                 self._emit_mode_trigger(mi[1], mi[2], c)
 
-        # 이벤트 절: held 가 있으면 전부 조건, 없으면 마지막 절이 트리거
-        for i, c in enumerate(event_clauses):
-            as_trigger = (not held) and (i == len(event_clauses) - 1)
+        # 전이 이벤트: held 있으면 전부 조건, 없으면 마지막이 트리거.
+        for i, c in enumerate(trans_events):
+            as_trigger = (not held) and (i == len(trans_events) - 1)
             self._build_event_clause(c, as_trigger)
+
+        # 상태상 절: 기본 조건. 트리거가 하나도 없으면 첫 상태 절만 진입에지 트리거로 승격(§4.1).
+        for i, c in enumerate(state_events):
+            promote = (not held) and (not self.triggers) and (i == 0)
+            self._build_event_clause(c, promote)
+
+        # #13 방 전파(catch-all): 대상-생략 액션이 방을 상속하도록, 트리거/조건에서 해석된 첫
+        #   엔티티(방 있는 것)의 방을 기본 방으로 — 미설정일 때만.
+        if self.default_area is None:
+            for n in list(self.triggers) + list(self.conditions):
+                eid = n.get("entity_id")
+                if isinstance(eid, str) and "." in eid:
+                    e = self.gz.entity(eid)
+                    if e and e.get("area_id"):
+                        self.default_area = e["area_id"]
+                        break
 
     def _emit_calendar_aspect(self, clause):
         """주말/평일/공휴일 → day_type, 봄/여름/가을/겨울 → season 조건 (§3)."""
@@ -785,15 +956,22 @@ class _Parser:
                 return
 
     def _emit_numeric_aspect(self, clause, as_trigger=False):
-        if not re.search(r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮",
-                         clause):
+        # #14: 비교어에 도달|닿|찍(임계 도달) 추가 + between('N에서 M 사이').
+        if not (re.search(_NUM_CMP_RE, clause) or _between(clause)):
             return
-        # 센서 개념(온도/습도)이 없어도 'N도' 온도 리터럴이 있으면 온도 센서로 추론(F1).
-        if _find_concept(clause) is None and find_temperature(clause) is None:
+        # 센서 개념(온도/습도)이 없어도 'N도' 온도 리터럴이 있거나 앞 서브룰 센서를 물려받을
+        # 수 있으면 진행(F1 + §2.1 재참조, '100을 넘으면 켜줘').
+        if _find_concept(clause) is None and find_temperature(clause) is None \
+                and not self.inh_trigger_entity:
             return
         self._build_numeric(clause, as_trigger=as_trigger)
 
     def _build_event_clause(self, clause, as_trigger):
+        # #11: 방 입실/통과(들어가/지나가/방+가) → 그 방 모션(집 도착 zone·다인 도착보다 먼저).
+        #   앱의 _build_arrival(다인 도착) 분기는 유지하고 앞에 이 분기만 삽입.
+        if _room_enter_motion_area(self.gz, clause) is not None:
+            self._build_motion(clause, as_trigger)
+            return
         # B1: 외출(leave) 우선.
         if _ZONE_LEAVE_RE.search(clause):
             self._build_zone(clause, "leave", as_trigger)
@@ -975,6 +1153,10 @@ class _Parser:
         neg = "없" in clause
         to = "off" if neg else "on"
         area = _find_area(self.gz, clause) or self.default_area
+        # #12: 모션 방을 기본 방으로 전파(미설정일 때만) — 뒤따르는 대상-생략 기기어
+        #      ('거실 인기척 있으면 무드 조명 켜')가 같은 방을 상속하게 한다.
+        if area and self.default_area is None:
+            self.default_area = area
         cands = self.gz.resolve_concept(MOTION_CONCEPT, area, clause)
         if as_trigger:
             slot = f"triggers[{len(self.triggers)}].entity_id"
@@ -995,8 +1177,12 @@ class _Parser:
         return best
 
     def _build_state_event(self, clause, as_trigger):
-        neg = ("닫" in clause or "꺼지" in clause) and "열" not in clause
-        to = "off" if neg else "on"
+        """#10(P2): 도메인·부정·결과상 극성을 반영한 상태 이벤트.
+
+        - 상태값을 `_aspect_state` 로 계산: cover=open/closed, lock=unlocked/locked, 그 외 on/off.
+        - '안/못' 부정과 결과상(꺼져/닫혀/잠겨)·잠금해제(풀리)를 정확히 반영, bare 문/창→door/window,
+          앞 서브룰 센서 재참조, 도어센서+잠금표현→같은 방 lock 재매핑, 방 전파, 제어대상 상속.
+        """
         role = "trigger" if as_trigger else "condition"
         slot = (f"triggers[{len(self.triggers)}].entity_id" if as_trigger
                 else f"conditions[{len(self.conditions)}].entity_id")
@@ -1008,13 +1194,43 @@ class _Parser:
         else:
             concept = _find_concept(clause)
             area = _find_area(self.gz, clause) or self.default_area
+            # #10 L1: 명명 엔티티도 기기개념도 없는 개폐 이벤트의 bare '문/창(문)' → door/window 센서.
+            if concept is None and re.search(r"열리|열려|열린|열|닫히|닫혀|닫힌|닫", clause):
+                if re.search(r"창문|창(?!고)", clause):
+                    concept = {"domain": "binary_sensor", "device_class": "window", "label": "창문"}
+                elif "문" in clause:
+                    concept = {"domain": "binary_sensor", "device_class": "door", "label": "문"}
             cands = self.gz.resolve_concept(concept, area, clause) if concept else []
             chip = self._chip(clause.strip(), role, slot, cands)
         eid = chip.chosen
+        # §2.1: 개폐 대상 없는 뒤 서브룰 전이('닫히면'/'열리면')는 앞 서브룰 센서 재참조.
+        if eid is None and self.inh_trigger_entity:
+            eid = self.inh_trigger_entity
+        # #10(P2): 도어센서에 잠금/해제 표현이 붙으면 같은 방의 lock 으로 재매핑.
+        if eid and eid.split(".")[0] == "binary_sensor" \
+                and (_UNLOCK_RE.search(clause)
+                     or re.search(r"잠그|잠가|잠궈|잠금|잠기|잠겨|도어\s*락", clause)):
+            e = self.gz.entity(eid)
+            area = e.get("area_id") if e else None
+            locks = [x["entity_id"] for x in self.gz.entities
+                     if x["domain"] == "lock" and (area is None or x.get("area_id") == area)]
+            if locks:
+                eid = locks[0]
+        st = _aspect_state(clause, eid)
+        # #10/#13 방 전파: 해석된 엔티티의 방을 기본 방으로(미설정일 때만).
+        if self.default_area is None and eid:
+            e2 = self.gz.entity(eid)
+            prop_area = (e2.get("area_id") if e2 else None) or _find_area(self.gz, clause)
+            if prop_area:
+                self.default_area = prop_area
         if as_trigger:
-            self.triggers.append({"type": "state", "entity_id": eid, "to": to})
+            self.triggers.append({"type": "state", "entity_id": eid, "to": st})
         else:
-            self.conditions.append({"type": "state", "entity_id": eid, "state": to})
+            self.conditions.append({"type": "state", "entity_id": eid, "state": st})
+        # #10(P2): 제어 가능한 상태 대상은 뒤따르는 대상-생략 액션이 물려받게 한다.
+        if eid and eid.split(".")[0] in (
+                "light", "switch", "fan", "media_player", "climate", "cover", "lock"):
+            self.inh_action_entity = eid
 
     # ---- numeric_state (조건 또는 트리거) ----
     def _build_numeric(self, clause, as_trigger=False):
@@ -1032,7 +1248,10 @@ class _Parser:
         if num is not None and re.search(r"영하|마이너스", clause):
             num = -abs(num)
         above = below = None
-        if re.search(r"이상|초과|넘|올라가|높", clause):
+        btw = _between(clause)
+        if btw:
+            above, below = btw            # #14: '20도에서 24도 사이' → above 20 + below 24
+        elif re.search(r"이상|초과|넘|올라가|높", clause):
             above = num
         elif re.search(r"이하|미만|떨어지|낮|내려가|밑", clause):
             below = num
@@ -1048,7 +1267,11 @@ class _Parser:
         slot = f"{'triggers' if as_trigger else 'conditions'}[{len(bucket)}].entity_id"
         chip = self._chip(concept.get("label", "센서") if concept else clause,
                           "trigger" if as_trigger else "condition", slot, cands)
-        node = {"type": "numeric_state", "entity_id": chip.chosen}
+        eid = chip.chosen
+        # #14/§2.1: 개념 없이 수치만 있는 뒤 서브룰('100을 넘으면 켜줘')은 앞 서브룰 센서 재참조.
+        if eid is None and self.inh_trigger_entity:
+            eid = self.inh_trigger_entity
+        node = {"type": "numeric_state", "entity_id": eid}
         if above is not None:
             node["above"] = above
         if below is not None:
@@ -1108,9 +1331,36 @@ class _Parser:
                                   "sublabel": "시간대 조건", "score": 1.0}]))
 
     # ---- 액션 절 처리 ----
+    def _route_condition_segment(self, seg: str):
+        """#9: 지속상 조건부 세그먼트를 수치/모션/상태 조건으로 방출(as_trigger=False).
+        세그먼트에 방이 안 적혀 있으면 트리거 엔티티의 방을 임시 기본값으로 써 해석한다."""
+        saved_area = self.default_area
+        if self.default_area is None and self.triggers:
+            teid = self.triggers[0].get("entity_id")
+            if isinstance(teid, str):
+                te = self.gz.entity(teid)
+                if te and te.get("area_id"):
+                    self.default_area = te["area_id"]
+        try:
+            if _between(seg) or re.search(r"이상|이하|초과|미만|넘|높아|낮아|높|낮", seg):
+                self._emit_numeric_aspect(seg, as_trigger=False)
+            elif re.search(r"움직임|모션|인기척|동작|감지|사람|움직이", seg):
+                self._build_event_clause(seg, False)
+            else:
+                self._build_state_event(seg, False)
+        finally:
+            self.default_area = saved_area
+
     def _process_consequent(self, clauses):
         for clause in clauses:
-            self._build_action(clause)
+            seg, rest = _split_durative_condition(clause)
+            # #9: 지속상 조건은 트리거가 이미 있을 때만 떼어낸다(순수 명령문 보호).
+            if seg is not None and self.triggers:
+                self._route_condition_segment(seg)
+                if rest.strip():
+                    self._build_action(rest)
+            else:
+                self._build_action(clause)
 
     def _build_action(self, clause):
         # 모드 전환("슬립 모드로 바꿔/켜/꺼")
@@ -1154,7 +1404,8 @@ class _Parser:
             clause = (clause[:dm.start()] + " " + clause[dm.end():]).strip()
 
         # 명령 판정 (B6: 잠가/잠그/차단/소등 → off. lock 도메인은 _domain_service 에서 처리.)
-        turn_off = bool(re.search(r"꺼|끄|멈춰|정지|닫아|잠가|잠그|잠궈|차단|소등", clause))
+        # #15①: '잠근'(잠근 채로 둬)도 off.
+        turn_off = bool(re.search(r"꺼|끄|멈춰|정지|닫아|잠가|잠그|잠궈|잠근|차단|소등", clause))
         # B1: 잠금 풀어/해제 → unlock(=turn_on). '풀리'(모드 트리거)와 구분해 액션 존만.
         turn_on = bool(re.search(r"켜|틀|열어|가동|작동|실행|바꿔|풀어|풀고|해제|점등|밝게",
                                  clause)) and not turn_off
@@ -1170,8 +1421,9 @@ class _Parser:
 
         # B/스코프 확장: '전체/온 집/집 안/집 전체/모두 … 다' 전량 스코프(모든 외 표현).
         # 배제 스코프(빼고/제외/남기고)는 아래에서 처리하므로 여기선 제외.
+        # #15④: '전부' 는 후행 한글이 없을 때만(전부다→전부 오매칭 방지).
         if (turn_on or turn_off) \
-                and re.search(r"전체|전부|온\s*집|집\s*안|집안|집\s*전체|모두|온집", clause) \
+                and re.search(r"전체|전부(?![가-힣])|온\s*집|집\s*안|집안|집\s*전체|모두|온집", clause) \
                 and not re.search(r"빼|제외|남기", clause):
             concept = _find_concept(clause) or {"domain": "light", "label": "조명"}
             ids = self.gz.entities_by_concept(concept)
@@ -1186,26 +1438,66 @@ class _Parser:
                       "score": 0.9}]))
                 return
 
-        # B5 배제 스코프: "X 빼고/제외하고/(만) 남기고/말고 (나머지) 다" → 해당 도메인 전체 중
-        # 방 X 를 제외한 off/on. concept 미검출 시 조명 전체로 가정.
-        em = re.search(r"([가-힣]+)\s*(?:빼고|제외하고|남기고|말고)", clause)
-        if em and (turn_on or turn_off):
-            area_word = em.group(1)
-            if area_word.endswith("만"):
-                area_word = area_word[:-1]
-            except_area = _find_area(self.gz, area_word)
-            concept = _find_concept(clause) or {"domain": "light", "label": "조명"}
-            if except_area:
-                ids = self.gz.entities_by_concept(concept, except_area_id=except_area)
+        # #15②: L1 후치 전량 스코프 '[기기] (싹) 다 꺼/켜' → 해당 도메인 전량. 방이 명시되면
+        #   그 방 한정('거실 조명 다 꺼'→거실 라이트), 아니면 전역('불 싹 다 꺼'→집 전체).
+        #   도메인 혼재(보일러/AC) 오검출 방지로 라이트(또는 개념 미검출)에만 안전 적용.
+        if (turn_on or turn_off) \
+                and re.search(r"싹|(?<![가-힣])다\s*(?:꺼|켜|끄|잠|닫|열|멈|내려|올려)", clause) \
+                and not re.search(r"빼|제외|남기|말고", clause):
+            concept = _find_concept(clause)
+            if concept is None or concept.get("domain") == "light":
+                concept = concept or {"domain": "light", "label": "조명"}
+                area = _find_area(self.gz, clause)
+                ids = self.gz.entities_by_concept(concept, area_id=area)
+                if ids:
+                    action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
+                    self.actions.append({"type": "service", "action": action,
+                                         "target": {"entity_id": ids}})
+                    self.chips.append(_Chip(
+                        "전체", "action", f"actions[{len(self.actions)-1}].target",
+                        [{"id": f"all:{concept['domain']}",
+                          "label": f"모든 {concept.get('label','')}", "sublabel": f"{len(ids)}개",
+                          "score": 0.9}]))
+                    return
+
+        # #15③ B5 배제 스코프(다중): "A랑 B 빼고/제외하고/(만) 남기고/말고 (나머지) 다" → 해당
+        #   도메인 전체에서 배제 방(들)·엔티티(들)를 뺀 목록. "나머지 스위치/콘센트"는 switch 도메인.
+        #   요일 배제("주말 빼고")는 area/엔티티가 아니라 자연히 건너뛴다(weekday 후처리 담당).
+        _ex_areas: list = []
+        _ex_ids: list = []
+        for em in re.finditer(
+                r"((?:[가-힣]+\s*(?:이랑|랑|하고|과|와|,)\s*)*[가-힣]+)"
+                r"\s*(?:만)?\s*(?:빼고|제외하고|남기고|말고)", clause):
+            for w in re.split(r"\s*(?:이랑|랑|하고|과|와|,)\s*", em.group(1)):
+                w = w.strip().rstrip("만")
+                if not w:
+                    continue
+                a = _find_area(self.gz, w)
+                if a:
+                    if a not in _ex_areas:
+                        _ex_areas.append(a)
+                    continue
+                nc = self.gz.resolve_name(strip_particles_simple(w))
+                if nc and nc[0]["id"] not in _ex_ids:
+                    _ex_ids.append(nc[0]["id"])
+        if (_ex_areas or _ex_ids) and (turn_on or turn_off):
+            if re.search(r"스위치|콘센트|전원", clause):
+                concept = {"domain": "switch", "label": "스위치"}
+            else:
+                concept = _find_concept(clause) or {"domain": "light", "label": "조명"}
+            all_ids = self.gz.entities_by_concept(concept)
+            ids = [i for i in all_ids
+                   if (self.gz.entity(i) or {}).get("area_id") not in _ex_areas
+                   and i not in _ex_ids]
+            if ids:
                 action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
                 self.actions.append({"type": "service", "action": action,
                                      "target": {"entity_id": ids}})
                 self.chips.append(_Chip(
-                    em.group(0).strip(), "action",
-                    f"actions[{len(self.actions)-1}].target",
+                    "제외", "action", f"actions[{len(self.actions)-1}].target",
                     [{"id": f"except:{concept['domain']}",
-                      "label": f"{area_word} 제외 {concept.get('label','')}",
-                      "sublabel": f"{len(ids)}개", "score": 0.9}]))
+                      "label": f"제외 {concept.get('label','')}", "sublabel": f"{len(ids)}개",
+                      "score": 0.9}]))
                 return
 
         # A3/A10: 선두 스코프어(모든/집의 모든/전부/다) → 전량 스코프. 기기어가 있으면 그
@@ -1685,6 +1977,15 @@ class _Parser:
 
 
 def parse(sentence: str, gazetteer: Gazetteer, settings: dict,
-          pins: Optional[dict] = None) -> dict:
-    """§6.2 진입점."""
-    return _Parser(sentence, gazetteer, settings, pins or {}).parse()
+          pins: Optional[dict] = None, now_fn=None) -> dict:
+    """§6.2 진입점. 파이프라인: 표면정규화 → 금지문 게이트 → 규칙 파서 → 모델 후처리(§1.1).
+
+    now_fn 은 신규 노드(sun/calendar) 결정성용으로 postpass 에 전달(S1 미사용). 원문 sentence
+    는 alias·칩 스팬·인용 메시지 기준으로 보존하고, 파싱 텍스트만 normalized 를 쓴다.
+    """
+    normalized = surface.normalize_surface(sentence)
+    # 금지문(자동화 요청 아님)은 파서 진입 전 차단 — 정반대 액션 생성 방지(안전 게이트).
+    if surface.is_prohibition(normalized):
+        return surface.prohibition_result(sentence)
+    res = _Parser(sentence, gazetteer, settings, pins or {}, normalized=normalized).parse()
+    return postpass.apply(res, sentence, normalized, gazetteer, settings, now_fn)

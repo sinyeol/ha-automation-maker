@@ -46,6 +46,10 @@ DEVICE_CONCEPTS: dict[str, dict] = {
     "온도": {"domain": "sensor", "device_class": "temperature", "label": "온도"},
     "습도": {"domain": "sensor", "device_class": "humidity", "label": "습도"},
     "미세먼지": {"domain": "sensor", "device_class": "pm25", "label": "미세먼지"},
+    # #18(보류): 무드등/메인등 라벨 개념은 오버레이가 +2.7%p 를 주지만, 이 인벤토리에서
+    #   '무드등을 켜줘'가 light.living_room_mood 로 해석돼 test_defect2(명시 미해석 대상은
+    #   조용히 상속/해석하지 않는다) 불변식을 깬다. APP-PORT-PLAN §5.1 리스크2 규칙(앱 불변식
+    #   우선)에 따라 S1 에서 보류 — 인벤토리 방별 무드등 라우팅 정교화 후 재도입(S6/후속).
 }
 
 # A6: 조명 접미사('등') 처리.
@@ -84,7 +88,7 @@ SEGMENT_WORDS = {"새벽": "dawn", "아침": "morning", "낮": "day",
                  "저녁": "evening", "밤": "night"}
 
 # 요일 구분 / 계절 단어 (SPEC-V2 §3 day_type / season 노드)
-DAY_TYPE_WORDS = {"주말": "weekend", "평일": "weekday",
+DAY_TYPE_WORDS = {"주말": "weekend", "평일": "weekday", "주중": "weekday",
                   "공휴일": "holiday", "휴일": "holiday"}
 SEASON_WORDS = {"봄": "spring", "여름": "summer",
                 "가을": "autumn", "겨울": "winter"}
