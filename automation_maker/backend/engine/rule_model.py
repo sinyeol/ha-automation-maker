@@ -92,6 +92,41 @@ def _num(v) -> float:
         return 0.0
 
 
+def _check_presence(node, path, errors, valid_ids, allowed_quants, for_quants) -> None:
+    """presence_agg 공용 검증(트리거/조건, SPEC-SCHEMA-90 §1.3·§2.5).
+
+    allowed_quants = 이 위치에서 허용하는 quant 집합(트리거 first/last/any/all,
+    조건 none/any/all). for_quants = for(지속시간)를 허용하는 quant 집합(트리거는
+    last/all 만, 조건은 공집합). persons 는 생략 가능하나 있으면 비어있지 않은 person.*
+    목록이고 valid_ids 에 실존해야 한다.
+    """
+    q = node.get("quant")
+    if q not in allowed_quants:
+        errors.append({"path": path + ".quant",
+                       "message": "인원 양화(quant) 값이 올바르지 않습니다."})
+    persons = node.get("persons")
+    if persons is not None:
+        if (not isinstance(persons, list) or not persons
+                or any(not isinstance(p, str) for p in persons)):
+            errors.append({"path": path + ".persons",
+                           "message": "사람(person) 목록을 올바르게 지정해 주세요."})
+        else:
+            for p in persons:
+                if not p.startswith("person."):
+                    errors.append({"path": path + ".persons",
+                                   "message": f"사람(person) 엔티티가 아니에요: {p}"})
+                elif valid_ids and p not in valid_ids:
+                    errors.append({"path": path + ".persons",
+                                   "message": f"존재하지 않는 사람이에요: {p}"})
+    fr = node.get("for")
+    if fr is not None:
+        if q not in for_quants:
+            errors.append({"path": path + ".for",
+                           "message": "이 양화에는 지속시간(for)을 지정할 수 없습니다."})
+        else:
+            _check_duration(fr, path + ".for", errors)
+
+
 def _check_scope(scope, path, errors) -> None:
     if not isinstance(scope, dict):
         errors.append({"path": path, "message": "대상 범위(scope) 형식이 올바르지 않습니다."})
@@ -145,6 +180,9 @@ def _validate_trigger(t, path, errors, valid_ids, mode_names=None) -> None:
         _check_int_offset(t.get("offset"), path + ".offset", errors)
     elif typ == "time_pattern":
         _check_time_pattern(t, path, errors)
+    elif typ == "presence_agg":
+        _check_presence(t, path, errors, valid_ids,
+                        {"first", "last", "any", "all"}, {"last", "all"})
     elif typ == "segment":
         if t.get("to") not in _SEGMENT_KEYS:
             errors.append({"path": path + ".to", "message": "시간대 값이 올바르지 않습니다."})
@@ -218,6 +256,8 @@ def _validate_condition(c, path, errors, valid_ids, n_triggers, mode_names=None)
         except (ValueError, TypeError):
             errors.append({"path": path + ".anchor",
                            "message": "기준일은 YYYY-MM-DD 형식이어야 합니다."})
+    elif typ == "presence_agg":
+        _check_presence(c, path, errors, valid_ids, {"none", "any", "all"}, set())
     elif typ == "time_segment":
         _need_list(c.get("segments"), _SEGMENT_KEYS, path + ".segments", errors, "시간대")
     elif typ == "day_type":

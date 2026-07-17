@@ -17,7 +17,10 @@ S3 범위: #21 weekday / day_of_month / interval_anchor 조건(요일 집합·ne
   주입된 now(기본 실제 datetime)가 속한 주의 월요일로 산출(결정성은 now_fn 주입으로만).
 S4 범위: #22 time_pattern 트리거(N분/시간/초 마다) 활성화 — 엔진(_schedule_pattern)·검증기가
   이 노드를 알므로 auto_disabled 되지 않는다. repeat 케이던스와는 is_repeat 게이트로 구분한다.
-그 밖의 신규 노드(presence_agg)를 방출하는 항목(#23, #32 신규노드 분기)은 S5+ 까지 비활성.
+S5 범위: #23 presence_agg(집 인원 양화) 활성화 — 트리거 first/last/any/all·조건 none/any/all.
+  엔진(presence 에지+for)·evaluator(레벨)·검증기·ha_map 이 이 노드를 안다. presence 가 잡히면
+  시간·달력 축은 조기 단락한다(오버레이 parse_patched 와 동일한 상호배타 문장군).
+그 밖의 신규 노드 분기(#32 else 의 신규노드 조건)는 S7 까지 비활성.
 
 내부 순서(오버레이 _augment_time_calendar 의 기존노드 부분 + calendar/sun + negation/erv):
   _remap_erv_fan → _augment_calendar → 날씨형 numeric → _augment_sun → _augment_numeric_edge →
@@ -959,6 +962,113 @@ def _augment_calendar(normalized: str, sub: dict, now_fn=None) -> None:
                                   "interval": iv, "anchor": _monday_iso(now_fn)})
 
 
+# ===========================================================================
+# #23 presence_agg (APP-PORT-PLAN §1.3·§2.4·§2.5, S5) — 집(zone.home) 인원 양화.
+#   오버레이 _PRES_ARRIVE_RE/_presence_info/_presence_is_condition/_presence_for/
+#   _augment_presence 이식. 방 단위 모션('욕실 아무도 없으면')과 구분하려고 '집' 문맥·
+#   귀가/외출·그룹표현이 있을 때만 발화한다(방+모션은 건드리지 않음 — 회귀 방지).
+# ===========================================================================
+# 귀가(도착) 표지. presence 는 집 카운트 에지이므로 존/개인 도착과 별개(그룹 양화 문맥에서만).
+_PRES_ARRIVE_RE = re.compile(r"들어오|들어와|들어온|들어가|귀가|재실|도착|오면|와\s*있|집에\s*있|왔")
+_PRES_FOR_RE = re.compile(r"(\d+)\s*(분|시간|초)\s*(?:넘게|이상|동안|지나|계속)")
+
+
+def _presence_info(text: str):
+    """프레즌스 개념 판정 → {concept: empty|some|all, first?} 또는 None.
+
+    강한 집-프레즌스 신호(집 문맥·그룹 나감/귀가·'아무도 없다가...들어오' 전이)일 때만.
+    """
+    has_home = "집" in text
+    prior_then_arrive = bool(re.search(r"다가", text)) and bool(_PRES_ARRIVE_RE.search(text))
+    first_marker = bool(re.search(r"처음|먼저|있게\s*되|첫\s*사람", text))
+    # 집이 빔(모두 나감/아무도 없음). '하나도'는 normalize 로 '1도'가 되기도 한다.
+    empty = False
+    if re.search(r"아무도|(?:1도|하나도)?\s*안\s*남|사람이?\s*(?:1도|하나도)?\s*없", text) and has_home:
+        empty = True
+    if re.search(r"(?:다들|다|모두|전원|가족들?|가족이)\s*[가-힣]{0,3}?(?:나가|외출)", text):
+        empty = True
+    if re.search(r"집\s*(?:을|이|안)?\s*비[우어운는면]", text):
+        empty = True
+    all_word = re.search(
+        r"모두|둘\s*다|전원|온\s*가족|제일\s*늦게|가족이?\s*다|다\s*들어[오와온]|다\s*집에\s*있", text)
+    some_word = re.search(r"누구|누가|한\s*명|아무나", text)
+    has_arrive = bool(_PRES_ARRIVE_RE.search(text))
+    home_ctx = has_home or bool(re.search(
+        r"귀가|가족|전원|온\s*식구|제일\s*늦게\s*들어|다\s*들어[오와온]", text)) or prior_then_arrive
+    if (prior_then_arrive or (some_word and first_marker)) and (home_ctx or empty):
+        return {"concept": "some", "first": True}
+    if empty and not prior_then_arrive:
+        return {"concept": "empty"}
+    if all_word and has_arrive and home_ctx:
+        return {"concept": "all"}
+    if some_word and home_ctx:
+        return {"concept": "some", "first": bool(first_marker)}
+    return None
+
+
+def _presence_is_condition(text: str) -> bool:
+    """프레즌스가 (트리거 아니라) 조건 위치인가. 선행 이벤트 절(-는데)·벽시계 트리거·
+    모드 트리거 뒤에 오는 '있으면/없으면/있을 때'는 조건이다."""
+    # 이벤트 서술어 + '-는데'(선행 트리거 절). '좋겠는데' 같은 종결형 '-는데'는 제외.
+    if re.search(r"(?:열렸|열리|감지|됐|되|떨어졌|떨어지|올라갔|올라가|왔|울리)는데", text):
+        return True
+    # 벽시계 'N시'(N시간 제외) + 재실 서술어 → 시각 트리거 + 프레즌스 조건.
+    if re.search(r"\d+\s*시(?!간)", text) and re.search(r"있|없", text):
+        return True
+    if re.search(r"모드가?\s*(?:켜질\s*때|되면|켜지면)", text):
+        return True
+    return False
+
+
+def _presence_for(text: str):
+    """last/all 유지시간 for. 'N분 넘게/N시간 이상/N분 동안' → duration. 없으면 None."""
+    m = _PRES_FOR_RE.search(text)
+    if not m:
+        return None
+    key = {"분": "minutes", "시간": "hours", "초": "seconds"}[m.group(2)]
+    return {key: int(m.group(1))}
+
+
+def _augment_presence(normalized: str, sub: dict, settings) -> bool:
+    """§1.3/§2.5 presence_agg 후처리. 처리했으면 True(시간·달력 augment 는 건너뜀).
+
+    트리거 위치: 오파싱된 트리거(zone/daily 등)·조건을 걷어내고 presence_agg 트리거만 남긴다.
+    조건 위치: 실제 트리거는 두고 presence_agg 조건을 더한다.
+    """
+    info = _presence_info(normalized)
+    if info is None:
+        return False
+    is_cond = _presence_is_condition(normalized)
+    concept = info["concept"]
+    if is_cond:
+        quant = "none" if concept == "empty" else ("all" if concept == "all" else "any")
+    else:
+        if concept == "empty":
+            quant = "last"
+        elif concept == "all":
+            quant = "all"
+        else:
+            quant = "first" if info.get("first") else "any"
+    node = {"type": "presence_agg", "quant": quant}
+    # 특정 인물(나/와이프/우리 둘) 언급 → persons 명시. 생략 = 전체 person.*.
+    if re.search(r"둘\s*다|우리\s*둘|나랑\s*와이프|와이프랑\s*나|부부|두\s*사람", normalized):
+        persons = sorted(set((settings or {}).get("persons", {}).values())) \
+            or ["person.user", "person.wife"]
+        node["persons"] = persons
+    if quant in ("last", "all") and not is_cond:
+        fr = _presence_for(normalized)
+        if fr is not None:
+            node["for"] = fr
+    if is_cond:
+        if not any(c.get("type") == "presence_agg" for c in sub["conditions"]):
+            sub["conditions"].append(node)
+    else:
+        # 트리거 위치: 오파싱 트리거/조건 제거(gold 는 presence 단일 트리거 + 조건 없음).
+        sub["triggers"] = [node]
+        sub["conditions"] = []
+    return True
+
+
 # ---------------------------------------------------------------------------
 # 공개 진입점
 # ---------------------------------------------------------------------------
@@ -967,7 +1077,8 @@ def apply(result: dict, sentence: str, normalized: str, gz, settings,
     """모델 후처리 파이프라인. result 를 수정 후 반환.
 
     방출 신규 노드: sun/sun_window(S2) + weekday/day_of_month/interval_anchor(S3) +
-    time_pattern(S4). presence_agg 는 아직 미방출(S5+). now_fn 은 interval_anchor.anchor
+    time_pattern(S4) + presence_agg(S5, 트리거 first/last/any/all·조건 none/any/all).
+    presence 가 잡히면 시간·달력 축은 조기 단락한다(상호배타). now_fn 은 interval_anchor.anchor
     결정성용(주입 없으면 벽시계 — _monday_iso 참조).
     """
     if not isinstance(result, dict):
@@ -982,6 +1093,13 @@ def apply(result: dict, sentence: str, normalized: str, gz, settings,
     sub.setdefault("actions", [])
 
     is_repeat = _is_repeat_action(normalized)
+
+    # #23 presence_agg (S5): 집 인원 양화가 잡히면 시간·달력·수치 신규노드는 건너뛴다
+    #     (상호배타 문장군 — 오버레이 parse_patched 와 동일한 조기 단락). 액션만 마무리.
+    if _augment_presence(normalized, sub, settings):
+        _augment_actions_only(sentence, normalized, sub, is_repeat)
+        _mark_savable(result, sub)   # presence 트리거를 세웠으면 저장가능 승급
+        return result
 
     _augment_calendar(normalized, sub, now_fn)   # #21 weekday/day_of_month/interval_anchor (S3)
 

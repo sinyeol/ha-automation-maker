@@ -74,14 +74,21 @@ def _subrule_at(model: dict, si: int):
 def _held_spec(node: dict):
     """held 계열 트리거 → (kind, target, to, for) 튜플. 아니면 None.
 
-    kind="single": state_held 또는 for 를 가진 state 트리거(entity_id 기준).
-    kind="group":  group_held(scope 기준).
+    kind="single":   state_held 또는 for 를 가진 state 트리거(entity_id 기준).
+    kind="group":    group_held(scope 기준).
+    kind="presence": for 를 가진 presence_agg 트리거(quant last/all). target 은 노드 자체
+                     (persons 해석은 엔진이 인벤토리와 함께 수행), to 는 유지할 person 상태.
     """
     typ = node.get("type")
     if typ == "group_held":
         return ("group", node.get("scope"), node.get("to"), node.get("for"))
     if typ == "state_held" or (typ == "state" and node.get("for")):
         return ("single", node.get("entity_id"), node.get("to"), node.get("for"))
+    if typ == "presence_agg" and node.get("for") and node.get("quant") in ("last", "all"):
+        # last=무인 유지("not_home"), all=전원 재실 유지("home"). fix2/fix3/pending 복원
+        # 루프가 group_held 와 동일하게 이 spec 을 다루므로 새 복원 코드가 최소화된다.
+        target_state = "not_home" if node.get("quant") == "last" else "home"
+        return ("presence", node, target_state, node.get("for"))
     return None
 
 
@@ -274,6 +281,12 @@ class RuleEngine:
             elif typ == "time_pattern":
                 self._schedule_pattern(rid, flat, t)
                 has_trigger = True
+            elif typ == "presence_agg":
+                # 집(zone.home) 인원 양화 트리거(APP-PORT-PLAN §2.4). persons 각각을
+                # 엔티티 인덱스에 등록해 person 상태 변경이 _eval_rule_triggers 로 라우팅되게 한다.
+                for pid in self._persons_of(t):
+                    targets.add(pid)
+                has_trigger = True
             elif typ == "segment":
                 has_trigger = True
             elif typ == "mode":
@@ -358,12 +371,41 @@ class RuleEngine:
             return None
         return _held_spec(loc[2])
 
+    def _persons_of(self, node: dict) -> list[str]:
+        """presence_agg 노드의 persons 목록. 명시되면 그대로, 생략이면 인벤토리 person.*."""
+        persons = node.get("persons")
+        if isinstance(persons, list) and persons:
+            return [p for p in persons if isinstance(p, str)]
+        inv = self._inventory_fn() or {}
+        ents = inv.get("entities") if isinstance(inv, dict) else inv
+        out: list[str] = []
+        for e in ents or []:
+            if not isinstance(e, dict):
+                continue
+            eid = e.get("entity_id")
+            if eid and (e.get("domain") or eid.split(".", 1)[0]) == "person":
+                out.append(eid)
+        return out
+
     def _held_remaining(self, spec) -> float | None:
         """held 트리거의 for 완료까지 남은 초. 유지 중이 아니면 None(음수면 이미 초과)."""
         kind, target, to, dur = spec
         duration = duration_to_timedelta(dur)
         if kind == "single":
             return self._cache.hold_remaining(target, to, duration)
+        if kind == "presence":
+            # target 은 presence 노드. 모든 pid 가 유지상태(to)여야 하며, 남은 시간은
+            # '가장 늦게 진입한' 사람 기준(=최대값). 하나라도 to 가 아니면 유지 깨짐.
+            persons = self._persons_of(target)
+            if not persons:
+                return None
+            worst = None
+            for pid in persons:
+                r = self._cache.hold_remaining(pid, to, duration)
+                if r is None:
+                    return None
+                worst = r if worst is None else max(worst, r)
+            return worst
         # group: 구성원 전부가 to 여야 하며, 남은 시간은 '가장 늦게 진입한' 구성원 기준(=최대값)
         eids = self._cache.entities_in_scope(target, self._inventory_fn())
         if not eids:
@@ -426,6 +468,9 @@ class RuleEngine:
                     self._handle_held(rule, flat, t)
             elif typ == "group_held":
                 self._handle_group_held(rule, flat, t)
+            elif typ == "presence_agg":
+                if entity_id in self._persons_of(t):
+                    self._handle_presence(rule, flat, si, ti, t, old_state, new_state)
 
     @staticmethod
     def _immediate_edge(t, old_state, new_state) -> bool:
@@ -468,6 +513,58 @@ class RuleEngine:
         else:
             self._cancel_key(key)
 
+    def _presence_level_ok(self, t) -> bool:
+        """presence 결과 레벨이 지금 성립 중인가 — last=무인(count 0), all=전원 재실(count len)."""
+        persons = self._persons_of(t)
+        if not persons:
+            return False
+        cnt = sum(1 for p in persons
+                  if (self._cache.get(p) or {}).get("state") == "home")
+        return (cnt == 0) if t.get("quant") == "last" else (cnt == len(persons))
+
+    def _handle_presence(self, rule, flat, si, ti, t, old_state, new_state) -> None:
+        """person 상태 변경 시 집 인원 에지 판정(APP-PORT-PLAN §2.4).
+
+        _on_event 가 캐시를 먼저 갱신하므로 new_count 는 현재 캐시 기준이고, old_count 는
+        바뀐 pid 의 old/new home 여부로 보정한다. quant 별 에지:
+          first: 0→≥1 · last: ≥1→0 · any: count↑ · all: 마지막 도착으로 count==len.
+        for(last/all): 결과 레벨 유지 시 발화 — group_held 와 동일하게 유지 중엔 재설정하지
+        않는다(_held_spec/_held_remaining 확장으로 재시작·재연결 복원 상속).
+        """
+        persons = self._persons_of(t)
+        if not persons:
+            return
+        quant = t.get("quant")
+        n = len(persons)
+        new_count = sum(1 for p in persons
+                        if (self._cache.get(p) or {}).get("state") == "home")
+        new_home = (new_state.get("state") if isinstance(new_state, dict) else None) == "home"
+        old_home = (old_state.get("state") if isinstance(old_state, dict) else None) == "home"
+        old_count = new_count - (1 if new_home else 0) + (1 if old_home else 0)
+
+        if quant in ("last", "all") and t.get("for"):
+            key = (rule["id"], flat)
+            level_ok = (new_count == 0) if quant == "last" else (new_count == n)
+            if level_ok:
+                if key not in self._for_timers:  # 유지 중엔 재설정하지 않음(group_held 동형)
+                    self._arm_timer(key, duration_to_seconds(t.get("for")))
+            else:
+                self._cancel_key(key)  # 레벨 붕괴(귀가/외출) → 취소
+            return
+
+        if quant == "first":
+            edge = old_count == 0 and new_count >= 1
+        elif quant == "last":
+            edge = old_count >= 1 and new_count == 0
+        elif quant == "any":
+            edge = new_count > old_count
+        elif quant == "all":
+            edge = new_count == n and old_count < new_count
+        else:
+            return
+        if edge:
+            self._try_fire(rule, si, ti)
+
     def _arm_timer(self, key, seconds) -> None:
         self._cancel_key(key)  # cancel-before-replace
         self._for_timers[key] = self._loop.call_later(
@@ -490,6 +587,9 @@ class RuleEngine:
             si, ti, t = loc
             if t.get("type") == "group_held":
                 if scope_all_state(t.get("scope"), t.get("to"), self._ctx()):
+                    self._try_fire(rule, si, ti)
+            elif t.get("type") == "presence_agg":
+                if self._presence_level_ok(t):  # 만료 후 레벨 재확인(무인/전원재실 유지)
                     self._try_fire(rule, si, ti)
             else:
                 entry = self._cache.get(t.get("entity_id"))

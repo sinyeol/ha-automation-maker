@@ -144,6 +144,9 @@ def evaluate_condition(cond: dict, ctx: EvalContext) -> bool:
     if typ == "interval_anchor":
         return _eval_interval_anchor(cond, ctx)
 
+    if typ == "presence_agg":
+        return _eval_presence_agg(cond, ctx)
+
     if typ == "and":
         return all(evaluate_condition(c, ctx) for c in (cond.get("conditions") or []))
     if typ == "or":
@@ -209,6 +212,42 @@ def _eval_interval_anchor(cond, ctx) -> bool:
         return d - timedelta(days=d.weekday())
 
     return ((_monday(nowd) - _monday(anchor)).days // 7) % interval == 0
+
+
+def _inventory_persons(inventory) -> list:
+    """인벤토리에서 person.* 엔티티 id 목록(presence_agg persons 생략 시 사용)."""
+    ents = inventory.get("entities") if isinstance(inventory, dict) else inventory
+    out = []
+    for e in ents or []:
+        if not isinstance(e, dict):
+            continue
+        eid = e.get("entity_id")
+        if eid and (e.get("domain") or eid.split(".", 1)[0]) == "person":
+            out.append(eid)
+    return out
+
+
+def _eval_presence_agg(cond, ctx) -> bool:
+    """집 인원 레벨(APP-PORT-PLAN §2.5): none=무인·any=1명 이상·all=전원 재실. 순수 평가.
+
+    persons 생략 시 인벤토리 person.* 전체. persons 를 못 구하면 False(vacuous truth 방지 —
+    조건이므로 확인 불가 시 통과시키지 않는 것이 안전).
+    """
+    persons = cond.get("persons")
+    if not persons:
+        inv = ctx.inventory_fn() if ctx.inventory_fn else {}
+        persons = _inventory_persons(inv)
+    if not persons or ctx.cache is None:
+        return False
+    cnt = sum(1 for p in persons if (ctx.cache.get(p) or {}).get("state") == "home")
+    q = cond.get("quant")
+    if q == "none":
+        return cnt == 0
+    if q == "any":
+        return cnt > 0
+    if q == "all":
+        return cnt == len(persons)
+    return False
 
 
 def _passes_bounds(val, above, below) -> bool:

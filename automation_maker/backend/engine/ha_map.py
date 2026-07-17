@@ -16,6 +16,46 @@ _UNMAPPABLE_TRIGGERS = {"segment", "mode", "state_held", "group_held"}
 _WEEKDAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
+def _resolve_persons(node: dict, inventory) -> list:
+    """presence_agg 노드의 persons(명시) 또는 인벤토리 person.* 전체."""
+    persons = node.get("persons")
+    if isinstance(persons, list) and persons:
+        return [p for p in persons if isinstance(p, str)]
+    ents = (inventory.get("entities") if isinstance(inventory, dict) else inventory) or []
+    out = []
+    for e in ents:
+        if not isinstance(e, dict):
+            continue
+        eid = e.get("entity_id")
+        if eid and (e.get("domain") or eid.split(".", 1)[0]) == "person":
+            out.append(eid)
+    return out
+
+
+def _map_presence_trigger(t: dict, extra_conditions: list, inventory) -> list:
+    """presence_agg 트리거 → HA 트리거 목록(§2.6·§5).
+
+    first → numeric_state zone.home above 0, last → below 1(+for). any/all → person 별
+    state(to home) 트리거이며, all 은 전원 home 상태 조건을 extra_conditions 로 병기한다.
+    """
+    quant = t.get("quant")
+    if quant in ("first", "last"):
+        node = {"type": "numeric_state", "entity_id": "zone.home"}
+        if quant == "first":
+            node["above"] = 0
+        else:
+            node["below"] = 1
+        if t.get("for"):
+            node["for"] = t["for"]
+        return [node]
+    persons = _resolve_persons(t, inventory)
+    trigs = [{"type": "state", "entity_id": p, "to": "home"} for p in persons]
+    if quant == "all":
+        for p in persons:
+            extra_conditions.append({"type": "state", "entity_id": p, "state": "home"})
+    return trigs
+
+
 def _offset_str(sec) -> str | None:
     """오프셋 초(int) → '±HH:MM:SS'. 0/None/형식오류면 None(필드 생략)."""
     try:
@@ -58,8 +98,21 @@ def _map_trigger(t: dict, warnings: list) -> dict | None:
     return dict(t) if isinstance(t, dict) else None
 
 
-def _map_condition(c: dict, warnings: list) -> dict | None:
+def _map_condition(c: dict, warnings: list, inventory=None) -> dict | None:
     typ = c.get("type") if isinstance(c, dict) else None
+    if typ == "presence_agg":
+        # §2.6·§5: none → zone.home below 1, any → above 0, all → person state and 묶음.
+        quant = c.get("quant")
+        if quant == "none":
+            return {"type": "numeric_state", "entity_id": "zone.home", "below": 1}
+        if quant == "any":
+            return {"type": "numeric_state", "entity_id": "zone.home", "above": 0}
+        if quant == "all":
+            persons = _resolve_persons(c, inventory)
+            return {"type": "and", "conditions":
+                    [{"type": "state", "entity_id": p, "state": "home"} for p in persons]}
+        warnings.append(f"presence 조건 양화(quant) 미지원: {quant}")
+        return None
     if typ == "sun_window":
         out = {"type": "sun", "after": c.get("after"), "before": c.get("before")}
         ao = _offset_str(c.get("after_offset"))
@@ -110,10 +163,20 @@ def subrule_to_automation(sub: dict, inventory=None) -> dict:
     if not isinstance(sub, dict):
         return {"triggers": [], "conditions": [], "condition_mode": "and",
                 "actions": [], "warnings": ["서브룰 형식 오류"]}
-    trigs = [m for m in (_map_trigger(t, warnings) for t in (sub.get("triggers") or []))
-             if m is not None]
-    conds = [m for m in (_map_condition(c, warnings) for c in (sub.get("conditions") or []))
-             if m is not None]
+    # presence_agg any/all 트리거는 1→N(person 별) 확장되며 all 은 조건을 병기하므로
+    # extra_conds 로 모아 조건 목록 뒤에 합친다.
+    trigs: list = []
+    extra_conds: list = []
+    for t in (sub.get("triggers") or []):
+        if isinstance(t, dict) and t.get("type") == "presence_agg":
+            trigs.extend(_map_presence_trigger(t, extra_conds, inventory))
+            continue
+        m = _map_trigger(t, warnings)
+        if m is not None:
+            trigs.append(m)
+    conds = [m for m in (_map_condition(c, warnings, inventory)
+                         for c in (sub.get("conditions") or [])) if m is not None]
+    conds.extend(extra_conds)
     actions = [dict(a) for a in (sub.get("actions") or []) if isinstance(a, dict)]
     return {
         "triggers": trigs,
