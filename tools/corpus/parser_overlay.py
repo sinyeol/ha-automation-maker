@@ -322,7 +322,7 @@ def _build_action_A3910(self, clause: str):
         clause = (clause[:dm.start()] + " " + clause[dm.end():]).strip()
 
     # 명령 판정 (B6: 잠가/잠그/차단/소등 → off. lock 도메인은 _domain_service 에서 별도 처리.)
-    turn_off = bool(re.search(r"꺼|끄|멈춰|정지|닫아|잠가|잠그|잠궈|차단|소등", clause))
+    turn_off = bool(re.search(r"꺼|끄|멈춰|정지|닫아|잠가|잠그|잠궈|잠근|차단|소등", clause))
     # B1: 잠금 풀어/해제 → unlock(=turn_on). '풀리'(모드 트리거)와 구분해 액션 존만.
     turn_on = bool(re.search(r"켜|틀|열어|가동|작동|실행|바꿔|풀어|풀고|해제|점등|밝게", clause)) \
         and not turn_off
@@ -421,7 +421,7 @@ def _build_action_A3910(self, clause: str):
 _ZONE_ENTER_RE = re.compile(
     r"귀가|퇴근|집에?\s*(?:오|와|돌아|들어)|집에?\s*도착|도착하|들어오|왔")
 _ZONE_LEAVE_RE = re.compile(
-    r"외출|나가|집\s*비우|집을?\s*비우|나서|집을?\s*나\b")
+    r"외출|나가|나갈|나갔|집\s*비우|집을?\s*비우|나서|집을?\s*나\b")
 # B6 누수/침수(gas/누수 개념) 이벤트
 _LEAK_RE = re.compile(r"누수|물\s*새|물이\s*새|샘|침수")
 
@@ -865,7 +865,7 @@ def _split_daily_no_boundary_B(self, text: str):
             e = i + len(surf)
             return text[:e].strip(), text[e:].strip()
     m = re.match(r"\s*(?:주말|평일|공휴일|휴일|주중)?\s*(새벽|아침|낮|저녁|밤)"
-                 r"(?:에는|엔|에|이)?\s+", text)
+                 r"(?:에는|엔|에|이|마다)?\s+", text)
     if m:
         e = m.end()
         return text[:e].strip(), text[e:].strip()
@@ -1118,22 +1118,41 @@ def _is_repeat_action(text: str) -> bool:
     return False
 
 
+# 알림 동사(§3.3·§4.5). '물어/여쭤'(질문형 알림) 포함.
+_NOTIFY_VERB_RE = re.compile(
+    r"알려|말해|말하|말씀|보내|방송|안내|얘기|알림|전해|전달|물어|여쭤|공지")
+
+
 def _detect_notify(sent: str):
-    """인용부(따옴표) 메시지 + 알림 동사 → notify data. 채널(폰/스피커) 반영(§3.3·§4.5).
+    """인용 메시지 + 알림 동사 → notify data. 인용부(따옴표) 우선, 없으면 -다고/-라고 경계.
 
     인용 내부 원문은 정규화하지 않은 **원문 sentence** 에서 그대로 뜬다(따옴표만 제거).
+    채널(폰/스피커)은 '말고/대신' 부정을 반영한다(§4.5: "폰 말고 스피커로"→speaker).
     """
+    if not _NOTIFY_VERB_RE.search(sent):
+        return None
     qm = re.search(r"['\"“”‘’『』「」]"
                    r"([^'\"“”‘’『』「」]+)"
                    r"['\"“”‘’『』「」]", sent)
-    if not qm:
+    if qm:
+        message = qm.group(1).strip()
+    else:
+        # 따옴표 없음: 인용 표지 -다고/-라고/-냐고/-자고 앞 서술어를 메시지로(§4.5).
+        #   좌경계는 공백(연속 한글 서술어)까지 — '덥다고'→'덥다', '출근했다고'→'출근했다'.
+        qm2 = re.search(r"([가-힣]+)(다|라|냐|자)고(?![가-힣])", sent)
+        if not qm2:
+            return None
+        message = (qm2.group(1) + qm2.group(2)).strip()
+    if not message:
         return None
-    if not re.search(r"알려|말해|말하|보내|방송|안내|얘기|알림|전해", sent):
-        return None
-    data = {"message": qm.group(1).strip()}
-    if re.search(r"폰|휴대폰|핸드폰|모바일|스마트폰", sent):
+    data = {"message": message}
+    phone = re.search(r"폰|휴대폰|핸드폰|모바일|스마트폰", sent)
+    speaker = re.search(r"스피커|방송", sent)
+    phone_neg = re.search(r"(?:폰|휴대폰|핸드폰|모바일|스마트폰)\s*(?:말고|대신|아니라|아니고)", sent)
+    speaker_neg = re.search(r"(?:스피커|방송)\s*(?:말고|대신|아니라|아니고)", sent)
+    if phone and not phone_neg:
         data["target"] = "mobile"
-    elif re.search(r"스피커|방송", sent):
+    elif speaker and not speaker_neg:
         data["target"] = "speaker"
     return data
 
@@ -1258,8 +1277,326 @@ def _augment_presence(normalized: str, sub: dict, settings: Optional[dict]) -> b
     return True
 
 
-def _augment_actions_only(sentence: str, sub: dict, is_repeat: bool) -> None:
-    """액션측 후처리(§3.3·§3.4) — repeat 우선, 아니면 인용 notify. sub 를 제자리 수정.
+# ===========================================================================
+# Phase 3c — 액션 파라미터(§3.1·§3.2) · 한정지속 복원(§4.7). sub 제자리 후처리.
+# ===========================================================================
+def _target_ids(node: dict) -> list:
+    """service 액션의 target.entity_id 를 리스트로(문자열/리스트/부재 모두 처리)."""
+    tgt = node.get("target")
+    if not isinstance(tgt, dict):
+        return []
+    ids = tgt.get("entity_id")
+    if isinstance(ids, str):
+        return [ids]
+    if isinstance(ids, list):
+        return [x for x in ids if isinstance(x, str)]
+    return []
+
+
+# §3.1 색 이름 → rgb_color 고정 팔레트.
+_RGB_PALETTE = [
+    (re.compile(r"빨강|빨간|붉은|적색|레드"), [255, 0, 0]),
+    (re.compile(r"주황|주홍|오렌지"), [255, 126, 0]),
+    (re.compile(r"노랑|노란|옐로"), [255, 220, 0]),
+    (re.compile(r"초록|녹색|연두|그린"), [0, 255, 0]),
+    (re.compile(r"파랑|파란|블루"), [0, 0, 255]),
+    (re.compile(r"보라|자주색|퍼플|바이올렛"), [160, 32, 240]),
+    (re.compile(r"분홍|핑크"), [255, 105, 180]),
+    (re.compile(r"흰색|하얀색|백색|화이트"), [255, 255, 255]),
+]
+# §3.1 색온도: 전구색/따뜻한 색=2700 · 주백색=4000 · 주광색/하얀 불=6500.
+_KELVIN_PALETTE = [
+    (re.compile(r"전구색|따뜻한\s*색|따뜻한색|따뜻하게|웜\s*화이트|온백색"), 2700),
+    (re.compile(r"주백색|중백색|자연색"), 4000),
+    (re.compile(r"주광색|하얀\s*불|하얀불|시원한\s*색|쿨\s*화이트|형광색"), 6500),
+]
+
+
+def _light_service_data(text: str, action: str) -> dict:
+    """light 서비스 표현 → data(색·색온도·상대밝기·transition). 명시 표현 없으면 {}."""
+    data: dict = {}
+    is_off = action.endswith("turn_off")
+    if not is_off:
+        # 색온도(전구색/주백색/주광색)를 먼저 본다 — '주백색'이 rgb '백색' 부분매칭에
+        #   잡히지 않도록(주백색=4000, 백색만=흰색). 그 다음 색이름 rgb.
+        matched = False
+        for rx, kelvin in _KELVIN_PALETTE:
+            if rx.search(text):
+                data["color_temp_kelvin"] = kelvin
+                matched = True
+                break
+        if not matched:
+            for rx, rgb in _RGB_PALETTE:
+                if rx.search(text):
+                    data["rgb_color"] = list(rgb)
+                    break
+        # 상대 밝기(step): "더 밝게"(+) / "어둡게"(-). 수치% 있으면 그 값, 없으면 ±20.
+        step_sign = None
+        if re.search(r"더\s*밝게|더밝게|밝게\s*좀|더\s*환하게", text):
+            step_sign = 1
+        elif re.search(r"어둡게", text) and not re.search(r"제일\s*어둡|가장\s*어둡|최소", text):
+            step_sign = -1
+        if step_sign is not None:
+            pm = re.search(r"(\d+)\s*(?:퍼센트|프로|%|퍼)", text)
+            data["brightness_step_pct"] = step_sign * (int(pm.group(1)) if pm else 20)
+    # transition(끄기에도 허용): 'N초에 걸쳐' > '천천히'(10) > '서서히/부드럽게'(5).
+    tm = re.search(r"(\d+)\s*초\s*(?:에\s*걸쳐|동안|만큼|간)", text)
+    if tm:
+        data["transition"] = int(tm.group(1))
+    elif re.search(r"천천히", text):
+        data["transition"] = 10
+    elif re.search(r"서서히|부드럽게|살살|스르르|자연스럽게", text):
+        data["transition"] = 5
+    return data
+
+
+def _apply_light_params(text: str, sub: dict) -> None:
+    """light on/off 서비스 액션에 §3.1 data 를 얹는다(명시 파라미터 표현이 있을 때만)."""
+    for a in sub["actions"]:
+        if a.get("type") != "service":
+            continue
+        act = a.get("action")
+        if not (isinstance(act, str) and act.startswith("light.turn_")):
+            continue
+        extra = _light_service_data(text, act)
+        if not extra:
+            continue
+        data = dict(a.get("data") or {})
+        if "brightness_step_pct" in extra:
+            data.pop("brightness_pct", None)   # 상대/절대 동시 금지(§3.1)
+        data.update(extra)
+        a["data"] = data
+
+
+_TOGGLE_RE = re.compile(r"반대\s*(?:로|상태)|토글")
+_TOGGLABLE = {"turn_on", "turn_off", "open_cover", "close_cover", "lock", "unlock"}
+
+
+def _apply_toggle(sub: dict) -> bool:
+    """반대로/토글(§3.2) → <domain>.toggle(단일 도메인) / homeassistant.toggle(혼합)."""
+    svc = [a for a in sub["actions"]
+           if a.get("type") == "service" and isinstance(a.get("action"), str)
+           and a["action"].split(".", 1)[-1] in _TOGGLABLE]
+    ids: list = []
+    for a in svc:
+        for x in _target_ids(a):
+            if x not in ids:
+                ids.append(x)
+    if not ids:
+        return False
+    doms: list = []
+    for x in ids:
+        d = x.split(".")[0]
+        if d not in doms:
+            doms.append(d)
+    act = f"{doms[0]}.toggle" if len(doms) == 1 else "homeassistant.toggle"
+    others = [a for a in sub["actions"] if a not in svc]
+    sub["actions"] = [{"type": "service", "action": act,
+                       "target": {"entity_id": ids}}] + others
+    return True
+
+
+# §4.7 한정 지속·복원: "N분만 켰다가 꺼" → [on, delay N, off](역순 '껐다가 켜' 포함).
+_REVERT_RE = re.compile(
+    r"(\d+)\s*(분|시간|초)\s*(?:만|정도|가량|쯤|동안)?\s*(?:좀\s*|딱\s*|그냥\s*|정도\s*)*"
+    r"(?P<v1>켰다|켜졌|켜놨|켜놓|켜뒀|틀었|틀어|돌리|돌려|열었|열어|껐다|꺼놨|꺼졌|꺼뒀|껐)")
+_REVERT_SERVICES = {
+    "light": ("light.turn_on", "light.turn_off"),
+    "fan": ("fan.turn_on", "fan.turn_off"),
+    "switch": ("switch.turn_on", "switch.turn_off"),
+    "climate": ("climate.turn_on", "climate.turn_off"),
+    "media_player": ("media_player.turn_on", "media_player.turn_off"),
+    "cover": ("cover.open_cover", "cover.close_cover"),
+    "lock": ("lock.unlock", "lock.lock"),
+}
+_REVERT_OFF_FIRST = {"껐다", "꺼놨", "꺼졌", "꺼뒀", "껐"}
+
+
+def _apply_revert(normalized: str, sub: dict) -> bool:
+    """한정 지속·복원 시퀀스를 기존 서비스 액션의 대상/도메인으로 [act1, delay, act2] 재구성."""
+    m = _REVERT_RE.search(normalized)
+    if not m:
+        return False
+    ids = domain = None
+    for a in sub["actions"]:
+        if a.get("type") != "service":
+            continue
+        t = _target_ids(a)
+        if t:
+            ids, domain = t, t[0].split(".")[0]
+            break
+    if not ids or domain not in _REVERT_SERVICES:
+        return False
+    on_svc, off_svc = _REVERT_SERVICES[domain]
+    off_first = m.group("v1") in _REVERT_OFF_FIRST
+    unit = {"분": "minutes", "시간": "hours", "초": "seconds"}[m.group(2)]
+    dur = {unit: int(m.group(1))}
+    first, second = (off_svc, on_svc) if off_first else (on_svc, off_svc)
+    sub["actions"] = [
+        {"type": "service", "action": first, "target": {"entity_id": list(ids)}},
+        {"type": "delay", "duration": dur},
+        {"type": "service", "action": second, "target": {"entity_id": list(ids)}},
+    ]
+    # §4.1: 트리거가 없고 결과상 상태('무드등 켜져 있는데')만 있으면 대상 엔티티로
+    #   진입에지 state 트리거 승격(대상=상태 주어인 한정지속 문형).
+    if not sub["triggers"] and len(ids) == 1:
+        am = re.search(r"(?:켜져|꺼져|열려|닫혀|잠겨|풀려)\s*있", normalized)
+        if am:
+            stv = _aspect_state(_QUOTE_SPAN_RE.sub(" ", normalized), ids[0])
+            sub["triggers"] = [{"type": "state", "entity_id": ids[0], "to": stv}]
+    return True
+
+
+# §4.2 수치 에지: 범위이탈("벗어나면")·이중 에지("아래로 …거나 위로")·between-트리거.
+_NUM_EXIT_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:에서|부터)\s*(-?\d+(?:\.\d+)?)\s*도?\s*"
+    r"(?:사이|범위)\s*(?:를|에서|밖)?\s*(?:벗어|이탈)")
+_NUM_DUAL_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:아래|밑|이하)\s*로?\s*(?:떨어지|내려가|낮아)"
+    r".*?(?:거나|또는).*?"
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:위|이상|초과)\s*로?\s*(?:올라가|넘|높아|초과)")
+_NUM_BETWEEN_TRIG_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:에서|부터)\s*(-?\d+(?:\.\d+)?)\s*도?\s*사이")
+
+
+def _numeric_sensor_id(text: str, gz) -> Optional[str]:
+    """수치 센서 엔티티를 device_class 키워드로 강제 해석(온도/습도/미세먼지/전력).
+
+    '보일러/에어컨' 같은 제어기기 개념이 섞여 P._find_concept 가 climate 를 고르는
+    문장(예 '…사이일 때 안방 보일러 꺼')에서도 센서를 정확히 집기 위해 도메인을 고정한다.
+    """
+    if re.search(r"습도", text):
+        dc = "humidity"
+    elif re.search(r"미세먼지|미세\s*먼지|pm", text, re.I):
+        dc = "pm25"
+    elif re.search(r"전력|와트|소비\s*전력", text):
+        dc = "power"
+    elif re.search(r"온도|\d+\s*도", text):
+        dc = "temperature"
+    else:
+        return None
+    area = P._find_area(gz, text)
+    cands = gz.resolve_concept({"domain": "sensor", "device_class": dc}, area, text)
+    return cands[0]["id"] if cands else None
+
+
+def _drop_sensor_service(sub: dict) -> None:
+    """센서(sensor.*)를 대상으로 하는 오파싱 service 액션 제거(센서는 제어 불가)."""
+    sub["actions"] = [a for a in sub["actions"]
+                      if not (a.get("type") == "service"
+                              and any(x.split(".")[0] == "sensor"
+                                      for x in _target_ids(a)))]
+
+
+def _mark_savable(result: dict, sub: dict) -> None:
+    """오버레이가 트리거를 세워 모델이 완결(트리거+액션)되면 result 를 저장가능(ok)으로.
+    앱 parse 가 트리거 미검출로 ok=False 로 표시한 문장을 후처리가 살렸을 때, 하이브리드
+    L2 매처가 이 exact 결과를 덮어써 회귀내는 것을 막는다(§5 매처는 not-ok 만 흡수)."""
+    if result is None or not sub.get("triggers") or not sub.get("actions"):
+        return
+    result["ok"] = True
+    result["unmatched"] = []
+    if not result.get("confidence") or result["confidence"] < 0.6:
+        result["confidence"] = 0.7
+
+
+def _augment_numeric_edge(normalized: str, sub: dict, gz, result=None) -> None:
+    """§4.2 수치 에지 마무리 — 범위이탈/이중에지(두 트리거)·between-트리거(한 노드)."""
+    if gz is None:
+        return
+    em = _NUM_EXIT_RE.search(normalized)
+    dm = None if em else _NUM_DUAL_RE.search(normalized)
+    if em or dm:
+        if em:
+            a, b = float(em.group(1)), float(em.group(2))
+            lo, hi = min(a, b), max(a, b)
+        else:
+            lo, hi = float(dm.group(1)), float(dm.group(2))
+        eid = _numeric_sensor_id(normalized, gz)
+        if eid is None:
+            return
+        sub["triggers"] = [
+            {"type": "numeric_state", "entity_id": eid, "below": lo},
+            {"type": "numeric_state", "entity_id": eid, "above": hi},
+        ]
+        _drop_sensor_service(sub)
+        _mark_savable(result, sub)
+        return
+    # 트리거가 비고 numeric 조건도 없을 때만: between-트리거 · 단일 에지 fallback.
+    if sub["triggers"] or any(c.get("type") == "numeric_state" for c in sub["conditions"]):
+        return
+    bm = _NUM_BETWEEN_TRIG_RE.search(normalized)
+    if bm:
+        lo, hi = float(bm.group(1)), float(bm.group(2))
+        eid = _numeric_sensor_id(normalized, gz)
+        if eid is None:
+            return
+        sub["triggers"] = [{"type": "numeric_state", "entity_id": eid,
+                            "above": min(lo, hi), "below": max(lo, hi)}]
+        _drop_sensor_service(sub)
+        _mark_savable(result, sub)
+        return
+    # 단일 에지 fallback: 개념 미해석으로 트리거가 빈 'N 밑으로 떨어지면 / N 넘으면'.
+    below_m = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:도|와트|퍼센트|프로|%)?\s*(?:이하|미만|밑|아래)", normalized)
+    above_m = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:도|와트|퍼센트|프로|%)?\s*(?:이상|초과)"
+        r"|(\d+(?:\.\d+)?)\s*(?:도|와트|퍼센트|프로|%)?\s*(?:을|를)?\s*넘", normalized)
+    if bool(below_m) == bool(above_m):
+        return   # 방향 미상/충돌 — 관여 안 함
+    eid = _numeric_sensor_id(normalized, gz)
+    if eid is None:
+        return
+    node = {"type": "numeric_state", "entity_id": eid}
+    if below_m:
+        node["below"] = float(below_m.group(1))
+    else:
+        node["above"] = float(above_m.group(1) or above_m.group(2))
+    sub["triggers"] = [node]
+    _drop_sensor_service(sub)
+    _mark_savable(result, sub)
+
+
+# §4.1 held: "N분/시간 넘게 …켜져/열려 있으면" → state 트리거 for 지속.
+_HELD_FOR_RE = re.compile(r"(\d+)\s*(분|시간|초)\s*(?:넘게|이상|동안|째|내내|계속)")
+
+
+def _augment_held_for(normalized: str, sub: dict) -> None:
+    """지속 조건 'N분/시간 넘게 …있으면' 을 state 트리거의 for 로 반영(§4.1).
+    오파싱된 numeric_state('두 시간'→above 2)는 결과상 state+for 로 교정한다."""
+    m = _HELD_FOR_RE.search(normalized)
+    if not m:
+        return
+    if not re.search(r"켜져|열려|꺼져|닫혀|잠겨|풀려|있으면|있을\s*때|있는데|있는\s*동안",
+                     normalized):
+        return
+    unit = {"분": "minutes", "시간": "hours", "초": "seconds"}[m.group(2)]
+    dur = {unit: int(m.group(1))}
+    for i, t in enumerate(list(sub["triggers"])):
+        if t.get("type") == "state" and "for" not in t:
+            t["for"] = dur
+            return
+        if t.get("type") == "numeric_state":
+            eid = t.get("entity_id")
+            dom = eid.split(".")[0] if eid else ""
+            if dom in ("fan", "light", "switch", "media_player", "climate",
+                       "cover", "lock", "binary_sensor"):
+                # 인용 메시지('…꺼도 될…')의 극성어가 상태 계산을 오염시키지 않게 제거.
+                stv = _aspect_state(_QUOTE_SPAN_RE.sub(" ", normalized), eid)
+                sub["triggers"][i] = {"type": "state", "entity_id": eid,
+                                      "to": stv, "for": dur}
+                sub["conditions"] = [
+                    c for c in sub["conditions"]
+                    if not (c.get("type") == "time"
+                            or (c.get("type") == "state"
+                                and c.get("entity_id") == eid))]
+                return
+
+
+def _augment_actions_only(sentence: str, normalized: str, sub: dict,
+                          is_repeat: bool) -> None:
+    """액션측 후처리(§3.3·§3.4·§3.1·§3.2·§4.7) — sub 를 제자리 수정.
+    우선순위: repeat → 인용 notify → 한정지속 복원 → 토글 → light 파라미터.
     프레즌스 처리 경로와 시간·달력 경로 양쪽에서 공유(중복 제거)."""
     if is_repeat:
         # 트리거가 비었는데(어순 문제) 상태/수치 조건이 있으면 진입에지로 승격.
@@ -1284,14 +1621,20 @@ def _augment_actions_only(sentence: str, sub: dict, is_repeat: bool) -> None:
         sub["conditions"] = [c for c in sub["conditions"]
                              if c.get("type") in ("weekday", "day_of_month",
                                                   "interval_anchor", "sun_window")]
-    else:
-        nd = _detect_notify(sentence)
-        if nd is not None:
-            sub["actions"] = [{"type": "service", "action": "notify.notify", "data": nd}]
+        return
+    nd = _detect_notify(sentence)
+    if nd is not None:
+        sub["actions"] = [{"type": "service", "action": "notify.notify", "data": nd}]
+        return
+    if _apply_revert(normalized, sub):
+        return
+    if _TOGGLE_RE.search(normalized) and _apply_toggle(sub):
+        return
+    _apply_light_params(sentence, sub)
 
 
 def _augment_time_calendar(sentence: str, normalized: str, result: dict,
-                           settings: Optional[dict] = None) -> dict:
+                           settings: Optional[dict] = None, gz=None) -> dict:
     """Phase 3a 후처리 — sun/time_pattern/sun_window/weekday/day_of_month/interval_anchor/
     repeat/notify 노드를 결정적으로 얹는다. result(model) 를 제자리 수정.
     Phase 3b: presence_agg(§1.3/§2.5) 를 먼저 처리하고, 처리되면 시간·달력 축은 건너뛴다."""
@@ -1308,7 +1651,7 @@ def _augment_time_calendar(sentence: str, normalized: str, result: dict,
     # Phase 3b: 프레즌스 양화가 적용되면 시간·달력 신규노드는 건너뛴다(상호배타 문장군).
     presence_done = _augment_presence(normalized, sub, settings)
     if presence_done:
-        _augment_actions_only(sentence, sub, is_repeat)
+        _augment_actions_only(sentence, normalized, sub, is_repeat)
         return result
 
     # --- 조건: 요일(§2.2). 개별 요일/축약/부정은 항상 weekday. 맨 평일/주말(긍정)은
@@ -1421,8 +1764,14 @@ def _augment_time_calendar(sentence: str, normalized: str, result: dict,
         if clk:
             sub["triggers"].append({"type": "daily", "at": clk["hhmm"]})
 
+    # --- 트리거: 수치 에지 마무리(§4.2) — 범위이탈/이중에지/between-트리거. ---
+    _augment_numeric_edge(normalized, sub, gz, result)
+
+    # --- 트리거: 지속(held) for 마무리(§4.1) — 'N분 넘게 …있으면'. ---
+    _augment_held_for(normalized, sub)
+
     # --- 액션: repeat(§3.4) 우선, 아니면 인용 notify(§3.3). ---
-    _augment_actions_only(sentence, sub, is_repeat)
+    _augment_actions_only(sentence, normalized, sub, is_repeat)
     return result
 
 
@@ -1545,4 +1894,4 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
             return _prohibition_result(sentence)
         result = P.parse(normalized, gz, settings, pins or {})
     # Phase 3a: 시간·달력 신규 노드 후처리(오버레이 컨텍스트 밖 — 순수 model 가공, 결정적).
-    return _augment_time_calendar(sentence, normalized, result, settings)
+    return _augment_time_calendar(sentence, normalized, result, settings, gz)
