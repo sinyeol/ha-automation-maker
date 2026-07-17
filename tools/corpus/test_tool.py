@@ -385,6 +385,21 @@ def test_run_pipeline_writes_artifacts():
         assert entry["status"] in ("covered", "partial", "gap", "unknown")
 
 
+# ===========================================================================
+# 7. parser_overlay 금지문 정규식(결함3) — 앱 surface.py 와 정합
+# ===========================================================================
+def test_overlay_prohibition_no_false_positive_safe_comfortable():
+    """결함3(오버레이 정합): '안 -게 해' 대안의 공백 필수(\\s+)로 '안전/편안'의 '안'을
+    부정부사로 오인하지 않는다. 실제 금지문은 여전히 감지되고, gold 는 '안 '(공백)이라 회귀 0."""
+    import parser_overlay as po  # noqa: E402 — tools/corpus 는 sys.path 상단
+    for s in ("외출하면 집 안전하게 해줘", "밤에 무드등 편안하게 해줘"):
+        assert po._is_prohibition(s) is False, s
+    for s in ("욕실 조명 안 켜지게 좀 해줘", "보일러 안 돌아가게 해줘"):
+        assert po._is_prohibition(s) is True, s
+    assert po._is_prohibition("가스밸브 절대 열지 마") is True
+    assert po._is_prohibition("외출하면 불 켜면 안 돼") is True
+
+
 # ---------------------------------------------------------------------------
 # pytest 없이도 실행 가능한 간이 러너
 # ---------------------------------------------------------------------------

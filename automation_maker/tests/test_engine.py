@@ -555,6 +555,63 @@ async def test_resync_no_arm_when_for_already_exceeded(v2_data_dir):
     await engine.stop()
 
 
+# --- 결함2: group_held 발화 래치(연속 유지 구간 재발화 방지) --------------------
+def _group_held_rule(seconds=0.05):
+    """binary_sensor(모션 2개) 그룹 전원 유지 트리거."""
+    return {"sentence": "그룹 유지 발화", "model": {
+        "triggers": [{"type": "group_held", "scope": {"domain": "binary_sensor"},
+                      "to": "on",
+                      "for": {"hours": 0, "minutes": 0, "seconds": seconds}}],
+        "condition_mode": "and", "conditions": [],
+        "actions": [{"type": "service", "action": "light.turn_on",
+                     "target": {"entity_id": ["light.living_room_main"]}}]}}
+
+
+def _multi_snap(states, changed_ago=0.0):
+    now = datetime.now(timezone.utc)
+    lc = (now - timedelta(seconds=changed_ago)).isoformat()
+    return [{"entity_id": eid, "state": st, "attributes": {},
+             "last_changed": lc, "last_updated": lc} for eid, st in states.items()]
+
+
+_GRP_FIRE = ("light", "turn_on", {"entity_id": ["light.living_room_main"]})
+_M1 = "binary_sensor.living_room_motion"
+_M2 = "binary_sensor.master_bedroom_motion"
+
+
+async def test_group_held_reconnect_no_refire_after_fired(v2_data_dir):
+    """결함2(group_held): 그룹 전원 유지 발화 후 재연결(resync)에서 그룹이 계속 유지돼도
+    _arm_missing_held_timers 가 발화 래치를 존중해 재무장·재발화하지 않는다. 유지가 깨진
+    스냅샷에서는 래치를 해제해 다음 재유지 시 정상 재발화한다."""
+    engine, rs, rl, ha = await _build(v2_data_dir)
+    src = FakeSource(_seed((_M1, "off"), (_M2, "off")))
+    await engine.start(src)
+    saved = rs.upsert(_group_held_rule(seconds=0.05))
+    engine.reload_rule(saved["id"])
+    key = (saved["id"], 0)
+
+    # 두 모션 모두 on → 그룹 전원 유지 → arm → 발화, 래치 설정.
+    src.inject(_M1, "on", old_state="off")
+    src.inject(_M2, "on", old_state="off")
+    assert engine.status()["active_timers"] == 1
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_GRP_FIRE]
+    assert key in engine._held_fired
+    assert engine.status()["active_timers"] == 0
+    engine._last_fired.clear()                       # 쿨다운 제거(재발화 여부를 래치만으로 판정)
+
+    # 재연결: 스냅샷도 여전히 전원 on(유지 지속) → 이미 발화했으니 재무장 금지.
+    engine._on_resync(_multi_snap({_M1: "on", _M2: "on"}, changed_ago=0.0))
+    assert key not in engine._for_timers             # 재무장 안 됨(래치 존중)
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_GRP_FIRE]                    # 재발화 없음
+
+    # 재연결에서 한 멤버가 off → 유지 깨짐 → 래치 해제.
+    engine._on_resync(_multi_snap({_M1: "on", _M2: "off"}))
+    assert key not in engine._held_fired
+    await engine.stop()
+
+
 # --- fix 4: 진행 중 실행이 규칙 삭제/수정 시 취소된다 ------------------------
 async def test_delay_action_cancelled_on_rule_removed(v2_data_dir):
     engine, rs, rl, ha = await _build(v2_data_dir)

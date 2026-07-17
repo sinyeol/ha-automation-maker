@@ -70,6 +70,31 @@ def test_domain_mismatch_still_rejected_adversarial():
     assert any("맞지 않아요" in m for m in errs2)
 
 
+@pytest.mark.parametrize("verb", ["stop", "restart", "reload_all", "reload_core_config",
+                                  "check_config", "update_entity", "reload_config_entry"])
+def test_homeassistant_admin_verbs_rejected(verb):
+    """결함1(보안): homeassistant 도메인은 도메인-무관 서비스라 (b) 대상-도메인 일치
+    검사를 면제받는다. KNOWN_SERVICES 의 verb 목록을 강제하지 않으면 admin verb
+    (homeassistant.stop/restart/reload_all 등)가 '도메인 단위' 화이트리스트를 통과해
+    저장·실행된다. turn_on/off/toggle 외 verb 는 거부돼야 한다."""
+    action = f"homeassistant.{verb}"
+    errs = _msgs(_model(action))
+    assert f"지원하지 않는 동작이에요: {action}" in errs, (action, errs)
+    # target 을 붙여도(대상 명시) 여전히 거부 — 도메인-무관 예외에 기대 admin 실행 불가.
+    errs2 = _msgs(_model(action, target=["light.a"]))
+    assert f"지원하지 않는 동작이에요: {action}" in errs2, (action, errs2)
+
+
+def test_homeassistant_agnostic_verbs_still_allowed():
+    """결함1 회귀 방어: 정상 도메인-무관 verb(turn_on/off/toggle)는 혼합 대상에도 통과."""
+    assert _msgs(_model("homeassistant.turn_on", target=["light.a", "fan.b"])) == []
+    assert _msgs(_model("homeassistant.turn_off", target=["light.a"])) == []
+    assert _msgs(_model("homeassistant.toggle", target=["fan.b", "cover.c"])) == []
+    # 도메인 특정 정상 액션도 불변(대상 도메인 일치 시 통과).
+    assert _msgs(_model("light.turn_on", target=["light.a"])) == []
+    assert _msgs(_model("fan.turn_on", target=["fan.b"])) == []
+
+
 # ===========================================================================
 # 검증기 — light.turn_on data 범위(§3.1)
 # ===========================================================================

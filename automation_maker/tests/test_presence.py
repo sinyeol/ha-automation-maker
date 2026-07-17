@@ -483,6 +483,103 @@ async def test_presence_last_for_hold_not_reset_by_noise(v2_data_dir):
 
 
 @pytest.mark.asyncio
+async def test_presence_last_for_no_refire_on_away_transition(v2_data_dir):
+    """결함2: 무인 유지 발화 후 '연속 유지 구간'에서 외출자 상태 전이(not_home→work,
+    홈카운트 0 불변)만으로는 재무장·재발화하지 않는다(발화 래치). 붕괴(귀가) 후 재유지
+    시에만 다시 발화한다. 재현: repro_presence.py 시나리오.
+    """
+    engine, rs, rl, ha = await _build_presence(v2_data_dir)
+    src, saved = await _start_rule(
+        engine, rs, _presence_rule("last", for_dur={"seconds": 0.05}),
+        [("person.user", "home"), ("person.wife", "not_home")])
+    key = (saved["id"], 0)
+
+    # 마지막 사람 나감 → 무인 → 타이머 무장 → 만료 후 1회 발화, 발화 래치 설정.
+    src.inject("person.user", "not_home", old_state="home")
+    assert engine.status()["active_timers"] == 1
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE]
+    assert engine.status()["active_timers"] == 0    # 발화 후 타이머 pop
+    assert key in engine._held_fired                # 이 유지 구간 발화 래치
+
+    # 쿨다운(_COOLDOWN=5s)을 비워, '재무장이 있었다면 재발화했을' 조건을 만든다.
+    # 그래도 래치 때문에 재무장 자체가 안 일어나 재발화 0 이어야 한다(결함2 핵심).
+    engine._last_fired.clear()
+
+    # 외출자 not_home→work (홈카운트 0 불변) → 재무장 금지.
+    src.inject("person.wife", "work", old_state="not_home")
+    assert engine.status()["active_timers"] == 0    # 재무장 안 됨(결함2 수정 전엔 1)
+    src.inject("person.user", "work", old_state="not_home")
+    assert engine.status()["active_timers"] == 0
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE]                       # 여전히 1회(재발화 없음)
+
+    # 붕괴: 한 명 귀가(count 0→1) → 래치 해제.
+    src.inject("person.user", "home", old_state="work")
+    assert key not in engine._held_fired
+    # 재유지: 다시 무인(count 1→0) → 재무장 → 재발화 가능.
+    src.inject("person.user", "not_home", old_state="home")
+    assert engine.status()["active_timers"] == 1
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE, _FIRE]                # 붕괴 후 재유지로 재발화
+    await engine.stop()
+
+
+@pytest.mark.asyncio
+async def test_presence_all_for_latch_set_and_refire_after_collapse(v2_data_dir):
+    """결함2(all 축): 전원 재실 유지 발화 시 래치가 설정되고, 붕괴(한 명 외출) 시 해제돼
+    재유지(전원 재실) 시 다시 발화한다(붕괴 후 정상 재발화 보존)."""
+    engine, rs, rl, ha = await _build_presence(v2_data_dir)
+    src, saved = await _start_rule(
+        engine, rs, _presence_rule("all", for_dur={"seconds": 0.05}),
+        [("person.user", "home"), ("person.wife", "not_home")])
+    key = (saved["id"], 0)
+    src.inject("person.wife", "home", old_state="not_home")  # 전원 재실 → arm → 발화
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE]
+    assert key in engine._held_fired                 # all 축 발화 래치
+    assert engine.status()["active_timers"] == 0
+    engine._last_fired.clear()                       # 쿨다운 제거(재발화 여부를 래치만으로 판정)
+
+    # 붕괴: 한 명 외출(count n→n-1) → 래치 해제, 재무장 없음.
+    src.inject("person.wife", "not_home", old_state="home")
+    assert key not in engine._held_fired
+    assert engine.status()["active_timers"] == 0
+    # 재유지: 다시 전원 재실 → 재무장 → 재발화.
+    src.inject("person.wife", "home", old_state="not_home")
+    assert engine.status()["active_timers"] == 1
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE, _FIRE]
+    await engine.stop()
+
+
+@pytest.mark.asyncio
+async def test_presence_reconnect_no_refire_after_fired(v2_data_dir):
+    """결함2(재연결 축): 무인 유지 발화 후 재연결(resync)에서 무인이 계속 유지돼도
+    _arm_missing_held_timers 가 발화 래치를 존중해 재무장·재발화하지 않는다."""
+    engine, rs, rl, ha = await _build_presence(v2_data_dir)
+    src, saved = await _start_rule(
+        engine, rs, _presence_rule("last", for_dur={"seconds": 0.05}),
+        [("person.user", "home"), ("person.wife", "not_home")])
+    key = (saved["id"], 0)
+    src.inject("person.user", "not_home", old_state="home")  # 무인 → arm → 발화
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE]
+    assert key in engine._held_fired
+    engine._last_fired.clear()                       # 쿨다운 제거
+    # 재연결: 스냅샷도 여전히 무인(유지 지속) → 그래도 이미 발화했으니 재무장 금지.
+    engine._on_resync(_snap({"person.user": "not_home", "person.wife": "not_home"},
+                            changed_ago=0.0))
+    assert key not in engine._for_timers             # 재무장 안 됨(래치 존중)
+    await asyncio.sleep(0.12)
+    assert ha.calls == [_FIRE]                        # 재발화 없음
+    # 재연결 스냅샷에서 유지가 깨지면(귀가) 래치가 해제된다.
+    engine._on_resync(_snap({"person.user": "home", "person.wife": "not_home"}))
+    assert key not in engine._held_fired
+    await engine.stop()
+
+
+@pytest.mark.asyncio
 async def test_presence_for_unindex_cancels_timer(v2_data_dir):
     engine, rs, rl, ha = await _build_presence(v2_data_dir)
     src, saved = await _start_rule(

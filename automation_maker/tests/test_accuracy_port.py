@@ -344,6 +344,22 @@ def test_prohibition_gate_gas_valve(gz):
     assert "가스밸브" in (r.get("unmatched") or [""])[0] or r["model"]["subrules"] == []
 
 
+def test_prohibition_regex_no_false_positive_safe_comfortable():
+    """결함3: 금지문 게이트 '안 -게 해' 대안의 공백을 필수(\\s+)로 바꿔, '안전/편안'의 '안'을
+    부정부사로 오인하지 않는다. 정상 요청이 무음 폐기되지 않고, 실제 금지문은 여전히 감지된다."""
+    from backend.nl.surface import is_prohibition, normalize_surface
+    # 수정 전 오탐(무음 폐기)이던 정상 요청 — raw·normalize 양쪽 모두 금지문 아님.
+    for s in ("외출하면 집 안전하게 해줘", "밤에 무드등 편안하게 해줘"):
+        assert is_prohibition(s) is False, ("raw", s)
+        assert is_prohibition(normalize_surface(s)) is False, ("norm", s)
+    # 실제 '안 -게 해' 금지문은 공백이 있어 여전히 True.
+    for s in ("욕실 조명 안 켜지게 좀 해줘", "보일러 안 돌아가게 해줘"):
+        assert is_prohibition(s) is True, s
+    # 다른 금지 형태(-지 마 / -면 안 돼)도 불변.
+    assert is_prohibition("가스밸브 절대 열지 마") is True
+    assert is_prohibition("외출하면 불 켜면 안 돼") is True
+
+
 def test_postpass_repeat_count(gz):
     """#30 repeat(count): 'N번 깜빡' → repeat kind=count(on,delay,off,delay)."""
     r = _p(gz, "현관문 열리면 거실 조명 3번 깜빡여줘")

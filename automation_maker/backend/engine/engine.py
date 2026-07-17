@@ -102,6 +102,11 @@ class RuleEngine:
         self._inventory_fn = inventory_fn
         self._runlog = runlog
         self._now_fn = now_fn or (lambda: datetime.now())  # 벽시계(스케줄용, gvars와 동일)
+        # 결함4(DST 한계): now_fn 은 naive 로컬 벽시계다. daily/sun/boundary 스케줄은 이
+        # 벽시계와 목표시각의 delta 를 loop.call_later(monotonic)에 넘기므로, DST 전이가
+        # 있는 지역에서는 전이 구간에 발화 시각이 최대 ±1시간 어긋날 수 있다. 기본 배포
+        # 지역인 한국(Asia/Seoul)은 DST 가 없어 무해하다. DST 지역 배포 시에는 now_fn 을
+        # tz-aware(zoneinfo)로 교체하고 delta 계산을 tz-aware 로 맞춰야 한다.
         self._loop = loop
         self._mode_state = mode_state                       # SPEC-V3 §1.2 (없으면 모드 비활성)
         self._sun = sun_provider                            # APP-PORT-PLAN §2.1 (없으면 sun 미스케줄)
@@ -110,6 +115,10 @@ class RuleEngine:
         self._mode_index: dict[str, set[tuple]] = {}    # mode 이름 → {(rid, si, ti)}
         self._rules: dict[str, dict] = {}               # 활성 규칙 rule_id → rule
         self._for_timers: dict[tuple, asyncio.TimerHandle] = {}
+        # 결함2: group_held/presence(last·all) + for 가 '연속 유지 구간'에서 반복 발화하는 것을
+        # 막는 '이미 발화함' 래치. (rid, flat) 을 담는다. _on_hold_expire 발화 시 추가되고,
+        # 레벨 붕괴(_handle_*의 else / 재연결 유지깨짐)에서 해제된다 → 붕괴 후 재유지 시 재발화 허용.
+        self._held_fired: set[tuple] = set()
         self._daily_timers: dict[tuple, asyncio.TimerHandle] = {}
         self._boundary_timer: asyncio.TimerHandle | None = None
         self._error_streak: dict[str, int] = {}
@@ -147,6 +156,7 @@ class RuleEngine:
         for h in list(self._for_timers.values()):
             h.cancel()
         self._for_timers.clear()
+        self._held_fired.clear()  # 결함2: 종료 시 발화 래치 정리
         for h in list(self._daily_timers.values()):
             h.cancel()
         self._daily_timers.clear()
@@ -245,6 +255,7 @@ class RuleEngine:
         for h in list(self._daily_timers.values()):
             h.cancel()
         self._for_timers.clear()
+        self._held_fired.clear()  # 결함2: 전체 재컴파일 시 발화 래치도 리셋(stale 억제 방지)
         self._daily_timers.clear()
         self._index.clear()
         self._mode_index.clear()
@@ -310,6 +321,8 @@ class RuleEngine:
                 s.discard(key)
         for key in [k for k in self._for_timers if k[0] == rid]:
             self._for_timers.pop(key).cancel()
+        for key in [k for k in self._held_fired if k[0] == rid]:
+            self._held_fired.discard(key)  # 결함2 래치도 규칙 제거 시 정리
         for key in [k for k in self._daily_timers if k[0] == rid]:
             self._daily_timers.pop(key).cancel()
         # 진행 중인 액션 실행(delay 등)을 취소한다 — HA automation.turn_off 의미론(fix 4).
@@ -451,7 +464,14 @@ class RuleEngine:
                 if key in self._for_timers or key in self._pending_expired:
                     continue  # 이미 타이머가 있거나, 재시작 pending 소유(아래 flush 담당)
                 remaining = self._held_remaining(spec)
-                if remaining is not None and remaining > 0:
+                if remaining is None:
+                    # 재연결 스냅샷 기준 유지가 깨졌음 → 래치를 실제 상태와 정합화(결함2).
+                    # 단절 중 붕괴(귀가 등)한 경우 else 분기를 못 타므로 여기서 해제해야
+                    # 다음 재유지 때 정상 재발화한다. (single held 는 래치를 안 써 무해.)
+                    self._held_fired.discard(key)
+                    continue
+                # 이미 이 유지 구간에서 발화(래치)했으면 재연결로 재무장·재발화하지 않는다(결함2).
+                if remaining > 0 and key not in self._held_fired:
                     self._arm_timer(key, remaining)
 
     def _eval_rule_triggers(self, rule, entity_id, old_state, new_state) -> None:
@@ -508,10 +528,13 @@ class RuleEngine:
     def _handle_group_held(self, rule, flat, t) -> None:
         key = (rule["id"], flat)
         if scope_all_state(t.get("scope"), t.get("to"), self._ctx()):
-            if key not in self._for_timers:  # 그룹 유지 중엔 재설정하지 않음
+            # 그룹 유지 중(타이머 존재)이거나 이 유지 구간에서 이미 발화(래치)했으면 재무장하지
+            # 않는다 — 발화 후 타이머가 pop 돼도 연속 유지 중 재발화하지 않도록(결함2).
+            if key not in self._for_timers and key not in self._held_fired:
                 self._arm_timer(key, duration_to_seconds(t.get("for")))
         else:
             self._cancel_key(key)
+            self._held_fired.discard(key)  # 레벨 붕괴 → 래치 해제(재유지 시 재발화 허용)
 
     def _presence_level_ok(self, t) -> bool:
         """presence 결과 레벨이 지금 성립 중인가 — last=무인(count 0), all=전원 재실(count len)."""
@@ -546,10 +569,14 @@ class RuleEngine:
             key = (rule["id"], flat)
             level_ok = (new_count == 0) if quant == "last" else (new_count == n)
             if level_ok:
-                if key not in self._for_timers:  # 유지 중엔 재설정하지 않음(group_held 동형)
+                # 유지 중(타이머 존재)이거나 이 유지 구간에서 이미 발화(래치)했으면 재무장하지
+                # 않는다(group_held 동형, 결함2). 이 가드가 없으면 발화 후 타이머가 pop 된 뒤
+                # 외출자 상태 전이(예 not_home→work, 홈카운트 불변)만으로 재무장·재발화한다.
+                if key not in self._for_timers and key not in self._held_fired:
                     self._arm_timer(key, duration_to_seconds(t.get("for")))
             else:
                 self._cancel_key(key)  # 레벨 붕괴(귀가/외출) → 취소
+                self._held_fired.discard(key)  # 래치 해제 → 붕괴 후 재유지 시 재발화 허용
             return
 
         if quant == "first":
@@ -588,9 +615,11 @@ class RuleEngine:
             if t.get("type") == "group_held":
                 if scope_all_state(t.get("scope"), t.get("to"), self._ctx()):
                     self._try_fire(rule, si, ti)
+                    self._held_fired.add((rid, flat))  # 유지 완료 발화 래치(연속 유지 중 재발화 차단, 결함2)
             elif t.get("type") == "presence_agg":
                 if self._presence_level_ok(t):  # 만료 후 레벨 재확인(무인/전원재실 유지)
                     self._try_fire(rule, si, ti)
+                    self._held_fired.add((rid, flat))  # 유지 완료 발화 래치(결함2)
             else:
                 entry = self._cache.get(t.get("entity_id"))
                 if entry is not None and entry.get("state") == t.get("to"):

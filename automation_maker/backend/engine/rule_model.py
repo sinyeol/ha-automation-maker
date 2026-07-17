@@ -425,6 +425,16 @@ def _scan_service_actions(actions, base_path, errors, valid_ids) -> None:
                 domain = action.split(".", 1)[0] if "." in action else ""
                 if domain and domain not in _ALLOWED_ACTION_DOMAINS:
                     errors.append({"path": base_path, "message": f"지원하지 않는 동작이에요: {action}"})
+                # 결함1(보안): 도메인-무관 서비스(homeassistant 등)는 아래 (b) 대상-도메인 일치
+                # 검사를 면제받으므로 verb 가 유일한 안전망이다. KNOWN_SERVICES 의 도메인별 verb
+                # 목록을 실제로 강제해, homeassistant.stop/restart/reload_all 같은 admin verb 가
+                # '도메인 단위' 화이트리스트(_ALLOWED_ACTION_DOMAINS)를 통과하는 구멍을 막는다.
+                elif domain in _DOMAIN_AGNOSTIC_SERVICE_DOMAINS:
+                    allowed_verbs = KNOWN_SERVICES.get(domain)
+                    verb = action.split(".", 1)[1] if "." in action else ""
+                    if allowed_verbs is not None and verb not in allowed_verbs:
+                        errors.append({"path": base_path,
+                                       "message": f"지원하지 않는 동작이에요: {action}"})
                 # S6(§3.1·§3.3): service data 범위·필수 검증(light 파라미터·notify 메시지).
                 _check_service_data(action, node.get("data"), base_path, errors)
                 tgt = node.get("target")
