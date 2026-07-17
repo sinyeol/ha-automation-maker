@@ -13,4 +13,4 @@ COPY frontend ./frontend
 COPY run.sh /
 RUN chmod a+x /run.sh
 CMD ["/run.sh"]
-LABEL io.hass.type="app" io.hass.version="3.1.0" io.hass.arch="aarch64|amd64"
+LABEL io.hass.type="app" io.hass.version="3.2.0" io.hass.arch="aarch64|amd64"

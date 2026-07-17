@@ -27,7 +27,7 @@ from backend.engine.variables import GlobalVars
 from backend.ha_client import HAClient, merge_inventory
 from backend.nl.gazetteer import Gazetteer
 
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 FRONTEND = Path(__file__).parent.parent / "frontend"
 ALLOWED_REMOTES = {"172.30.32.2", "127.0.0.1"}
 
