@@ -29,6 +29,11 @@ if _APP_ROOT not in sys.path:
 from backend.nl import parser as P  # noqa: E402  (앱 파서 모듈 — 읽기 전용, 런타임 패치만)
 from backend.nl.gazetteer import Gazetteer  # noqa: E402
 
+try:  # 패키지/스크립트 양쪽 실행 지원
+    from . import normalize90 as _n90  # noqa: E402  (§3 버킷1 표면형 정규화)
+except ImportError:  # pragma: no cover
+    import normalize90 as _n90  # noqa: E402
+
 
 # ===========================================================================
 # A6 — 조명 접미사: DEVICE_CONCEPTS 오버레이
@@ -767,6 +772,10 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
 
     A1(모드 동의어)은 gz 인스턴스에 의존하므로, 동의어를 쓰려면 gz 를
     ``build_overlay_gazetteer(inventory, settings)`` 로 만들어 넘긴다.
+
+    진입부에서 §3 버킷1 표면형 정규화(normalize90)를 먼저 적용해 비표준 표면(한글 수사·
+    절경계 어미·존칭·완화어·후치 조건)을 정규형으로 바꾼 뒤 앱 parse 에 넘긴다(순수 additive).
     """
     with _apply_overlay():
-        return P.parse(sentence, gz, settings, pins or {})
+        normalized = _n90.normalize_surface(sentence, gz=gz)
+        return P.parse(normalized, gz, settings, pins or {})
