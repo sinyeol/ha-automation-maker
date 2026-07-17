@@ -98,6 +98,17 @@ def load_paraphrases(path, templates, inventory=None, mode_names=None) -> list[d
                 tid = entry.get("id", f"hard{gi}")
             model = _gen._gold_to_model(text, gold)
             errs = validate_rule_model(model, inventory, mode_names)
+            if errs:
+                # 앱 검증 실패 시 목표 스키마(SPEC-SCHEMA-90)로 재판정한다. sun/weekday/
+                # presence_agg 등 아직 미구현이지만 well-formed 한 신규노드 gold 를 held-out
+                # 에 살려두기 위함(Phase 3 구현 전엔 honest fail 로 집계). genuinely 깨진
+                # gold(미실존 엔티티·빈 구조·알 수 없는 타입)만 gold_invalid 로 남는다.
+                try:
+                    from . import schema90 as _s90
+                except ImportError:
+                    import schema90 as _s90
+                errs = [{"message": m} for m in
+                        _s90.target_schema_errors(model, inventory, mode_names)]
             out.append({
                 "id": f"{tid}~p{gi}.{vi}",
                 "sentence": _gen.normalize_ws(text),

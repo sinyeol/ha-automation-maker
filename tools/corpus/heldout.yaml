@@ -1182,3 +1182,7865 @@
   variants:
     - "새벽에 화장실 가면 욕실 불 10%로 켜고 2분간 없으면 꺼줘"
     - "새벽 시간에 욕실 움직이면 조명 최소로 켰다가 2분 동안 인기척 없으면 소등"
+
+# ===========================================================================
+# SPEC-ACCURACY-90 확장 (315) — 신규 의미축·표면변이. cat:* 태그로 카테고리 표시.
+#   newnode 태그 = 아직 미구현 목표노드(sun/weekday/presence_agg 등) → Phase3 전 honest fail.
+# ===========================================================================
+- id: ho90_sun_offset_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+        offset: -2700
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.veranda
+  variants:
+  - 베란다 조명, 해 지기 45분 전에 미리 켜놔.
+- id: ho90_sun_offset_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+        offset: -600
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 일출 10분 전엔 안방 조명 좀 켜줘.
+- id: ho90_sun_offset_02
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+        offset: 1200
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 해지고 20분 지나면 현관 등 켜지게 해줘.
+- id: ho90_sun_offset_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+        offset: -5400
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 일몰 한 시간 반 전에 베란다 전열교환기 꺼줘.
+- id: ho90_sun_offset_04
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+        offset: 7200
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 해뜨고 두 시간 지나면 안방 보일러 꺼줘.
+- id: ho90_sun_offset_05
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 어두워지면 거실 조명 좀 켜줘.
+- id: ho90_sun_offset_06
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.kitchen
+  variants:
+  - 날이 캄캄해지고 나서 주방 조명 켜줘.
+- id: ho90_sun_offset_07
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관 조명은 동틀 무렵에 꺼줘.
+- id: ho90_sun_offset_08
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: cover.close_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 노을 질 때쯤 거실 커튼 닫아줘.
+- id: ho90_sun_offset_09
+  area: single
+  difficulty: hard
+  tags:
+  - cat:sun_offset
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+      conditions: []
+      actions:
+      - type: set_mode
+        mode: 슬립 모드
+        to: 'on'
+  variants:
+  - 여명이 밝아오면 슬립 모드 해제해줘.
+- id: ho90_sun_offset_10
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 땅거미 질 때 안방 조명 자동으로 켜줘.
+- id: ho90_sun_offset_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+        offset: 600
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - media_player.living_room_tv
+  variants:
+  - 거실 TV, 해가 완전히 지고 나서 10분 뒤엔 꺼줘.
+- id: ho90_sun_offset_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:sun_offset
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: unlocked
+      conditions:
+      - type: sun_window
+        after: sunset
+        before: sunrise
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 밤사이에 현관문이 안 잠겨 있으면 자동으로 잠가줘.
+- id: ho90_sun_offset_13
+  area: single
+  difficulty: hard
+  tags:
+  - cat:sun_offset
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: light.living_room_main
+        to: 'on'
+      conditions:
+      - type: sun_window
+        after: sunset
+        before: sunrise
+      actions:
+      - type: service
+        action: cover.close_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 어두워진 뒤에 거실 조명이 켜지면 커튼도 같이 닫아줘.
+- id: ho90_sun_offset_14
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions:
+      - type: sun_window
+        after: sunset
+        before: sunrise
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+  variants:
+  - 밤에 욕실에서 인기척 있으면 조명 켜줘.
+- id: ho90_sun_offset_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:sun_offset
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 50
+      conditions:
+      - type: sun_window
+        after: sunset
+        before: sunrise
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 새벽에 미세먼지 50 넘으면 전열교환기 꺼줘.
+- id: ho90_sun_offset_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          brightness_pct: 30
+  variants:
+  - 해 지면 거실 조명 30퍼센트 밝기로 은은하게 켜줘.
+- id: ho90_sun_offset_17
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+        offset: 1500
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.small_room
+  variants:
+  - 일출 25분 후에 작은방 조명 꺼줘.
+- id: ho90_sun_offset_18
+  area: single
+  difficulty: medium
+  tags:
+  - cat:sun_offset
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+        offset: -300
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 욕실 환풍기 좀 꺼놔줄래, 해지기 5분 전에?
+- id: ho90_sun_offset_19
+  area: single
+  difficulty: hard
+  tags:
+  - cat:sun_offset
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 평일엔 해 뜨면 거실 커튼 열어줘, 주말은 빼고.
+- id: ho90_sun_offset_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:sun_offset
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 해뜨기 직전에 안방 조명 완전히 꺼줘.
+- id: ho90_sun_offset_21
+  area: single
+  difficulty: easy
+  tags:
+  - cat:sun_offset
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+        offset: 2700
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 해 지고 나서 45분 뒤엔 도어락 잠가줘.
+- id: ho90_weekday_calendar_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 06:30
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        negate: false
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 월요일마다 아침 6시 반에 안방 보일러 좀 켜주세요.
+- id: ho90_weekday_calendar_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '20:00'
+      conditions:
+      - type: weekday
+        days:
+        - tue
+        negate: false
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.small_room
+  variants:
+  - 저녁 8시엔 화요일마다 작은방 불 켜줘.
+- id: ho90_weekday_calendar_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '19:00'
+      conditions:
+      - type: weekday
+        days:
+        - tue
+        - thu
+        - sat
+        negate: false
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 화목토 저녁 7시마다 욕실 환풍기 좀 돌려줘.
+- id: ho90_weekday_calendar_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions:
+      - type: weekday
+        days:
+        - tue
+        - thu
+        negate: false
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 메인등 켜줘, 화목 아침 7시마다.
+- id: ho90_weekday_calendar_04
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 주말 빼고 매일 아침 7시에 커튼 좀 열어주세요.
+- id: ho90_weekday_calendar_05
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        negate: true
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+  variants:
+  - 토요일만 빼고 밤 11시엔 거실 조명 다 꺼줘.
+- id: ho90_weekday_calendar_06
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:20
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        negate: false
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.kitchen
+  variants:
+  - 평일엔 아침 7시 20분마다 주방 조명이 알아서 켜지면 좋겠어요.
+- id: ho90_weekday_calendar_07
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:00'
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        negate: false
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 월요일부터 금요일까지는 밤 10시에 거실 조명 꺼줘.
+- id: ho90_weekday_calendar_08
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 09:00
+      conditions:
+      - type: day_of_month
+        days:
+        - 25
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 카드값 나가는 날
+  variants:
+  - 매달 25일 아침 9시엔 "카드값 나가는 날"이라고 좀 알려줘.
+- id: ho90_weekday_calendar_09
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '18:00'
+      conditions:
+      - type: day_of_month
+        days:
+        - 10
+        - 20
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.kitchen
+  variants:
+  - 매달 10일이랑 20일 저녁 6시에 주방 조명 좀 켜주세요.
+- id: ho90_weekday_calendar_10
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '18:00'
+      conditions:
+      - type: day_of_month
+        days: last
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 가스밸브 잠갔는지 확인하세요
+  variants:
+  - 이번 달 마지막 날 저녁 6시엔 "가스밸브 잠갔는지 확인하세요"라고 말해줘.
+- id: ho90_weekday_calendar_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions:
+      - type: day_of_month
+        days: last
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 매달 말일 밤 9시엔 대기전력 콘센트 좀 꺼줘.
+- id: ho90_weekday_calendar_12
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '20:00'
+      conditions:
+      - type: weekday
+        days:
+        - tue
+        negate: false
+      - type: interval_anchor
+        unit: week
+        interval: 2
+        anchor: '2026-07-13'
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 재활용 쓰레기 내놓으세요
+  variants:
+  - 격주 화요일 저녁 8시엔 "재활용 쓰레기 내놓으세요"라고 알려줄래?
+- id: ho90_weekday_calendar_13
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '10:00'
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        negate: false
+      - type: interval_anchor
+        unit: week
+        interval: 2
+        anchor: '2026-07-13'
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 대청소 하는 날입니다
+  variants:
+  - 2주에 한 번 토요일 오전 10시마다 "대청소 하는 날입니다"라고 안내해줘.
+- id: ho90_weekday_calendar_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weekday_calendar
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 06:00
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        - wed
+        - fri
+        negate: false
+      - type: interval_anchor
+        unit: week
+        interval: 2
+        anchor: '2026-07-13'
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 헬스장 갈 시간입니다
+  variants:
+  - 격주로 월수금 아침 6시엔 "헬스장 갈 시간입니다"라고 얘기해줘.
+- id: ho90_weekday_calendar_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weekday_calendar
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        negate: false
+      - type: interval_anchor
+        unit: week
+        interval: 3
+        anchor: '2026-07-13'
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 분리수거 하는 날입니다
+  variants:
+  - 3주에 한 번 월요일 밤 9시엔 "분리수거 하는 날입니다"라고 알림 좀 보내주세요.
+- id: ho90_weekday_calendar_16
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weekday_calendar
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        negate: false
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 평일에 현관문 열리면 거실 조명 켜줘.
+- id: ho90_weekday_calendar_20
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weekday_calendar
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '18:00'
+      conditions:
+      - type: weekday
+        days:
+        - thu
+        negate: false
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 재활용 버리는 날
+          target: mobile
+  variants:
+  - 목요일 저녁 6시엔 "재활용 버리는 날"이라고 폰으로 좀 알려줘.
+- id: ho90_weekday_calendar_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weekday_calendar
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:00'
+      conditions:
+      - type: day_of_month
+        days:
+        - 1
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 내일은 쓰레기 배출일입니다
+          target: speaker
+  variants:
+  - 매달 1일 밤 10시엔 스피커로 "내일은 쓰레기 배출일입니다"라고 방송해줘.
+- id: ho90_weekday_calendar_22
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weekday_calendar
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '19:00'
+      conditions:
+      - type: day_of_month
+        days:
+        - 2
+        - 4
+        - 6
+        - 8
+        - 10
+        - 12
+        - 14
+        - 16
+        - 18
+        - 20
+        - 22
+        - 24
+        - 26
+        - 28
+        - 30
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 재활용 쓰레기 내놓는 날
+  variants:
+  - 짝수날마다 저녁 7시에 "재활용 쓰레기 내놓는 날"이라고 알려주라.
+- id: ho90_interval_repeat_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        minutes: 45
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - media_player.living_room_tv
+  variants:
+  - 45분마다 거실 티비 좀 꺼줘
+- id: ho90_interval_repeat_01
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        hours: 3
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.bathroom_fan
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 욕실 환풍기 세 시간마다 5분씩 돌아가게 해줘
+- id: ho90_interval_repeat_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        minutes: 20
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+      - type: delay
+        duration:
+          minutes: 3
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 전열교환기 20분 걸러 한 번씩 3분간 돌려줘
+- id: ho90_interval_repeat_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        minutes: 10
+      conditions:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 35
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 베란다 미세먼지가 35보다 높아요
+          target: mobile
+  variants:
+  - 10분마다 미세먼지가 35보다 높으면 폰으로 알려줘
+- id: ho90_interval_repeat_04
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        hours: 1
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 거실과 안방 온도를 확인해 주세요
+  variants:
+  - 한 시간에 한 번씩 거실이랑 안방 온도 좀 알려줘
+- id: ho90_interval_repeat_05
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        minutes: 30
+      conditions: []
+      actions:
+      - type: service
+        action: climate.set_temperature
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+        data:
+          temperature: 20
+  variants:
+  - 30분 간격으로 안방 보일러 온도 20도로 다시 맞춰줘
+- id: ho90_interval_repeat_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        minutes: 15
+      conditions:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        state: 'on'
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 현관문이 열려 있어요
+  variants:
+  - 매 15분마다 현관문 열려 있는지 확인해서 열려 있으면 좀 알려줘
+- id: ho90_interval_repeat_07
+  area: single
+  difficulty: hard
+  tags:
+  - cat:interval_repeat
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        hours: 2
+      conditions: []
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 두 시간에 한 번씩 거실 커튼 여는 거 어때
+- id: ho90_interval_repeat_08
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 2
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.master_bedroom
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.master_bedroom
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 안방에 모션 감지되면 조명 두 번 깜빡여줘
+- id: ho90_interval_repeat_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 5
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.bathroom
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.bathroom
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 욕실에 누수 감지되면 조명 다섯 번 깜빡이게 해줘
+- id: ho90_interval_repeat_10
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 4
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.small_room
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.small_room
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 작은방 창문 열리면 조명 네 번 깜빡깜빡 해줘
+- id: ho90_interval_repeat_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: switch.gas_valve
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 3
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.kitchen
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.kitchen
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 가스밸브가 열리면 주방 조명 3번 반복해서 깜빡여줘
+- id: ho90_interval_repeat_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:interval_repeat
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: person.wife
+        to: home
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 6
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_main
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.living_room_main
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 와이프 집에 오면 거실 조명 여섯 번 반짝여줘
+- id: ho90_interval_repeat_13
+  area: single
+  difficulty: hard
+  tags:
+  - cat:interval_repeat
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:00'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 3
+        sequence:
+        - type: service
+          action: cover.open_cover
+          target:
+            entity_id:
+            - cover.living_room_curtain
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: cover.close_cover
+          target:
+            entity_id:
+            - cover.living_room_curtain
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 밤 10시 되면 거실 커튼 1초 간격으로 세 번 열었다 닫았다 해줘
+- id: ho90_interval_repeat_14
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 28
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 2
+        sequence:
+        - type: service
+          action: notify.notify
+          data:
+            message: 거실 온도가 28도를 넘었어요
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 거실 온도가 28도 넘으면 알림을 1초 간격으로 두 차례 보내줘
+- id: ho90_interval_repeat_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:interval_repeat
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'off'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 2
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.small_room
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.small_room
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 작은방 창문 닫히면 조명 두 번만 깜빡
+- id: ho90_interval_repeat_16
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: state
+          entity_id: binary_sensor.entrance_door
+          state: 'off'
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_mood
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.living_room_mood
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 현관문 열려 있으면 닫힐 때까지 계속 무드등 깜빡여줘
+- id: ho90_interval_repeat_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: state
+          entity_id: binary_sensor.small_room_window
+          state: 'off'
+        sequence:
+        - type: service
+          action: notify.notify
+          data:
+            message: 작은방 창문이 열려 있어요
+        - type: delay
+          duration:
+            minutes: 1
+  variants:
+  - 작은방 창문 열려 있으면 닫힐 때까지 1분마다 계속 알려줘
+- id: ho90_interval_repeat_18
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: switch.gas_valve
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: state
+          entity_id: switch.gas_valve
+          state: 'off'
+        sequence:
+        - type: service
+          action: notify.notify
+          data:
+            message: 가스밸브가 열려 있어요
+        - type: delay
+          duration:
+            minutes: 3
+  variants:
+  - 가스밸브 열려 있으면 잠길 때까지 3분마다 계속 알려줘
+- id: ho90_interval_repeat_19
+  area: single
+  difficulty: easy
+  tags:
+  - cat:interval_repeat
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: state
+          entity_id: binary_sensor.bathroom_moisture
+          state: 'off'
+        sequence:
+        - type: service
+          action: notify.notify
+          data:
+            message: 욕실에 누수가 감지됐어요
+        - type: delay
+          duration:
+            seconds: 30
+  variants:
+  - 욕실에 누수 생기면 감지기 꺼질 때까지 30초마다 계속 알려줘
+- id: ho90_interval_repeat_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:interval_repeat
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 35
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: numeric_state
+          entity_id: sensor.veranda_pm25
+          below: 20
+        sequence:
+        - type: service
+          action: notify.notify
+          data:
+            message: 베란다 미세먼지가 아직 높아요
+        - type: delay
+          duration:
+            minutes: 5
+  variants:
+  - 미세먼지가 35 넘으면 20 밑으로 떨어질 때까지 5분마다 계속 알려줘
+- id: ho90_interval_repeat_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:interval_repeat
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: unlocked
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: state
+          entity_id: lock.entrance_door
+          state: locked
+        sequence:
+        - type: service
+          action: notify.notify
+          data:
+            message: 문 좀 잠가주세요
+        - type: delay
+          duration:
+            minutes: 2
+  variants:
+  - 현관문이 안 잠겨 있으면 잠길 때까지 2분마다 '문 좀 잠가주세요'라고 계속 알려줘
+- id: ho90_interval_repeat_22
+  area: single
+  difficulty: hard
+  tags:
+  - cat:interval_repeat
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: until
+        conditions:
+        - type: state
+          entity_id: binary_sensor.small_room_window
+          state: 'off'
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.small_room
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.small_room
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 작은방 창문 열렸는데 안 닫으면 닫힐 때까지 조명 계속 깜빡거려줘
+- id: ho90_negation_exception_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 토요일이랑 일요일만 빼고 아침 7시에 거실 커튼 열어줘
+- id: ho90_negation_exception_01
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:00'
+      conditions:
+      - type: weekday
+        days:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        negate: true
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+  variants:
+  - 평일 빼고 밤 10시에 거실 조명 좀 켜줬으면 좋겠어
+- id: ho90_negation_exception_02
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:30'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.veranda
+  variants:
+  - 밤 11시 반엔 욕실이랑 현관 빼고 조명 싹 다 꺼줘
+- id: ho90_negation_exception_03
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state_held
+        entity_id: binary_sensor.bathroom_motion
+        to: 'off'
+        for:
+          minutes: 10
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 욕실에 모션이 10분 동안 없으면 환풍기 꺼주세요
+- id: ho90_negation_exception_04
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions:
+      - type: state
+        entity_id: light.master_bedroom
+        state: 'off'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 안방에 모션 잡히면 불 안 켜져 있을 때만 켜줘
+- id: ho90_negation_exception_05
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 00:00
+      conditions:
+      - type: state
+        entity_id: lock.entrance_door
+        state: unlocked
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 현관문이 잠겨 있지 않습니다
+          target: mobile
+  variants:
+  - 밤 12시에 현관문이 안 잠겨 있으면 폰으로 좀 알려줄래?
+- id: ho90_negation_exception_06
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions:
+      - type: state
+        entity_id: cover.living_room_curtain
+        state: open
+      actions:
+      - type: service
+        action: cover.close_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 해 지면 닫아줘, 커튼이 안 닫혀 있을 때만
+- id: ho90_negation_exception_07
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions:
+      - type: state
+        entity_id: switch.gas_valve
+        state: 'on'
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 밤 11시에 가스밸브가 안 잠겨 있으면 잠가 주세요
+- id: ho90_negation_exception_08
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions:
+      - type: not
+        conditions:
+        - type: zone
+          entity_id: person.user
+          zone: zone.home
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 거실에 움직임이 감지됐는데 집에 안 계신 것 같아요
+          target: mobile
+  variants:
+  - 거실에 모션 감지되면, 집이 아니면 폰으로 알려줘
+- id: ho90_negation_exception_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions:
+      - type: not
+        conditions:
+        - type: mode
+          mode: 슬립 모드
+          state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 안방에 모션 잡히면, 슬립 모드만 아니면 조명 켜줘
+- id: ho90_negation_exception_10
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions:
+      - type: not
+        conditions:
+        - type: numeric_state
+          entity_id: sensor.living_room_temperature
+          above: 20
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_boiler
+  variants:
+  - 거실 온도가 20도를 안 넘으면 보일러 켜줘, 아침 7시 되면
+- id: ho90_negation_exception_11
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:00'
+      conditions:
+      - type: not
+        conditions:
+        - type: numeric_state
+          entity_id: sensor.veranda_pm25
+          above: 50
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 밤 10시에 미세먼지가 50을 못 넘으면 전열교환기 꺼놔도 돼
+- id: ho90_negation_exception_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: person.wife
+        to: not_home
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 와이프 집에 없으면 현관 조명 꺼줘
+- id: ho90_negation_exception_13
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions:
+      - type: presence_agg
+        quant: none
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+  variants:
+  - 저녁 9시에 집에 아무도 없으면 조명 다 꺼놔
+- id: ho90_negation_exception_14
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 다들 나가서 집에 아무도 없게 되면 가스밸브 잠가줘
+- id: ho90_negation_exception_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+        for:
+          minutes: 30
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 다들 나가고 나서 30분 동안 아무도 없으면 대기전력 콘센트 꺼줘
+- id: ho90_negation_exception_16
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 06:00
+      conditions:
+      - type: weekday
+        days:
+        - tue
+        - thu
+        negate: true
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 화, 목 빼고는 아침마다 6시에 안방 조명 켜줘
+- id: ho90_negation_exception_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+  variants:
+  - 밤 9시엔 거실 불 켜, 근데 주말은 말고
+- id: ho90_negation_exception_18
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+          - switch.unassigned_relay
+  variants:
+  - 가스밸브 말고 나머지 스위치는 밤 11시에 다 꺼 주세요
+- id: ho90_negation_exception_19
+  area: single
+  difficulty: hard
+  tags:
+  - cat:negation_exception
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:30'
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+  variants:
+  - 주말 빼고 밤 11시 반에 안방이랑 작은방 빼고 조명 다 꺼줘
+- id: ho90_negation_exception_20
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        state: 'off'
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 아침 7시에 작은방 창문이 안 열려 있으면 전열교환기 돌려 주세요
+- id: ho90_negation_exception_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 00:00
+      conditions:
+      - type: not
+        conditions:
+        - type: state
+          entity_id: media_player.living_room_tv
+          state: 'off'
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - media_player.living_room_tv
+  variants:
+  - 밤 12시 되면 TV가 안 꺼져 있으면 그냥 꺼줘
+- id: ho90_negation_exception_22
+  area: single
+  difficulty: easy
+  tags:
+  - cat:negation_exception
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions:
+      - type: not
+        conditions:
+        - type: numeric_state
+          entity_id: sensor.master_bedroom_temperature
+          above: 18
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 밤 9시에 안방 온도가 18도를 넘지 않으면 안방 보일러 켜 주세요
+- id: ho90_negation_exception_23
+  area: single
+  difficulty: medium
+  tags:
+  - cat:negation_exception
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state_held
+        entity_id: binary_sensor.living_room_motion
+        to: 'off'
+        for:
+          hours: 1
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+  variants:
+  - 거실에 사람이 한 시간 넘게 감지 못 되면 조명 자동으로 꺼줘
+- id: ho90_aspect_condition_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관문이 열리면 현관 조명 좀 켜 주세요.
+- id: ho90_aspect_condition_01
+  area: single
+  difficulty: medium
+  tags:
+  - cat:aspect_condition
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 밤 11시에 현관문 열려 있으면 현관 조명 켜놔.
+- id: ho90_aspect_condition_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:aspect_condition
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 작은방 창문 열려 있으면 전열교환기 좀 꺼줄래?
+- id: ho90_aspect_condition_03
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 작은방 창문 열리면 전열교환기 꺼줘.
+- id: ho90_aspect_condition_04
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 거실 TV 안 켜져 있으면 대기전력 콘센트 꺼.
+- id: ho90_aspect_condition_05
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 거실 TV가 꺼지면 대기전력 콘센트도 꺼 주세요.
+- id: ho90_aspect_condition_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 80 넘으면 전열교환기 켜줄래?
+- id: ho90_aspect_condition_07
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 80보다 높으면 전열교환기 켜놓으면 좋겠어.
+- id: ho90_aspect_condition_08
+  area: single
+  difficulty: medium
+  tags:
+  - cat:aspect_condition
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 08:00
+      conditions:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        below: 18
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_boiler
+  variants:
+  - 아침 8시에 거실 온도가 18도보다 낮으면 보일러 켜 주세요.
+- id: ho90_aspect_condition_09
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        above: 20
+        below: 24
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방 온도가 20도에서 24도 사이면 보일러 꺼.
+- id: ho90_aspect_condition_10
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        above: 20
+        below: 24
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방에서 움직임 감지되면, 온도가 20도에서 24도 사이일 때만 보일러 꺼줄 수 있어?
+- id: ho90_aspect_condition_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+  variants:
+  - 욕실서 모션 감지되면 욕실 조명 켜줘.
+- id: ho90_aspect_condition_12
+  area: single
+  difficulty: medium
+  tags:
+  - cat:aspect_condition
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: fan.bathroom_fan
+        to: 'on'
+      conditions:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+  variants:
+  - 욕실 환풍기가 켜지면 모션 감지되는 동안엔 욕실 조명도 켜 주세요.
+- id: ho90_aspect_condition_13
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: person.wife
+        to: home
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 와이프 집에 도착하면 거실 메인등 켜줘.
+- id: ho90_aspect_condition_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: switch.gas_valve
+        to: 'on'
+      conditions:
+      - type: state
+        entity_id: person.user
+        state: not_home
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 가스밸브를 확인하세요
+  variants:
+  - 제가 집에 없을 때 가스밸브가 켜지면 "가스밸브를 확인하세요"라고 알려 주세요.
+- id: ho90_aspect_condition_15
+  area: single
+  difficulty: medium
+  tags:
+  - cat:aspect_condition
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: switch.gas_valve
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 가스밸브 켜짐
+  variants:
+  - 가스밸브가 켜져 있으면 '가스밸브 켜짐'이라고 알려줄래?
+- id: ho90_aspect_condition_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: cover.living_room_curtain
+        to: open
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 커튼 열리면 메인등 꺼줘.
+- id: ho90_aspect_condition_17
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_occupancy
+        to: 'on'
+      conditions:
+      - type: state
+        entity_id: light.living_room_main
+        state: 'off'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실에 사람이 있으면 조명이 꺼져 있을 때 켜줘.
+- id: ho90_aspect_condition_18
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        state: 'off'
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 80보다 높으면, 작은방 창문 닫혀 있을 때만 전열교환기 켜줘.
+- id: ho90_aspect_condition_19
+  area: single
+  difficulty: hard
+  tags:
+  - cat:aspect_condition
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: light.living_room_main
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+  variants:
+  - 무드등 켜줘, 거실 메인등 꺼져 있으면.
+- id: ho90_aspect_condition_20
+  area: single
+  difficulty: medium
+  tags:
+  - cat:aspect_condition
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: unlocked
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관문 잠금 풀리면 현관 조명 켜놔.
+- id: ho90_aspect_condition_21
+  area: single
+  difficulty: easy
+  tags:
+  - cat:aspect_condition
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 욕실 누수 확인하세요
+  variants:
+  - 욕실에 누수가 감지되면 "욕실 누수 확인하세요"라고 알려 주세요.
+- id: ho90_presence_quantifier_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:presence_quantifier
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+  variants:
+  - 집에 아무도 없으면 불 싹 다 꺼줘.
+- id: ho90_presence_quantifier_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:presence_quantifier
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 다들 나가고 나면 가스 밸브 좀 잠가줘.
+- id: ho90_presence_quantifier_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 혹시 집에 아무도 없으면 현관 조명은 켜놔줘.
+- id: ho90_presence_quantifier_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+        persons:
+        - person.user
+        - person.wife
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.living_room_boiler
+          - climate.master_bedroom_boiler
+  variants:
+  - 우리 둘 다 집 비우면 보일러 다 꺼줘.
+- id: ho90_presence_quantifier_04
+  area: single
+  difficulty: hard
+  tags:
+  - cat:presence_quantifier
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 집 비면 바로 문 잠가.
+- id: ho90_presence_quantifier_05
+  area: single
+  difficulty: hard
+  tags:
+  - cat:presence_quantifier
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+  variants:
+  - 집에 사람이 하나도 안 남으면 조명 다 꺼.
+- id: ho90_presence_quantifier_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:presence_quantifier
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - media_player.living_room_tv
+  variants:
+  - 가족들 다 나가면 거실 TV도 꺼줘.
+- id: ho90_presence_quantifier_07
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+        for:
+          minutes: 30
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 집에 30분 넘게 계속 아무도 없으면 조명이랑 대기전력 다 꺼버려.
+- id: ho90_presence_quantifier_08
+  area: single
+  difficulty: hard
+  tags:
+  - cat:presence_quantifier
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+        for:
+          hours: 2
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 혹시 두 시간 이상 집이 비어있으면 가스 밸브 잠그고 도어락도 잠가.
+- id: ho90_presence_quantifier_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: first
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 집에 누구 하나라도 있게 되면 거실 조명 좀 켜줬으면 좋겠는데.
+- id: ho90_presence_quantifier_10
+  area: single
+  difficulty: hard
+  tags:
+  - cat:presence_quantifier
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: first
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 아무도 없다가 누구 하나라도 들어오면 거실 불 켜지게 해줘.
+- id: ho90_presence_quantifier_11
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: first
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 다들 나가 있다가 누구든 젤 먼저 오면 현관 불 켜놔.
+- id: ho90_presence_quantifier_12
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: first
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 조명 켜줘, 누구든 집에 처음 들어오면.
+- id: ho90_presence_quantifier_13
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: any
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 누구든 한 명이라도 집에 들어오면 거실 불 켜줘.
+- id: ho90_presence_quantifier_14
+  area: single
+  difficulty: easy
+  tags:
+  - cat:presence_quantifier
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: any
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 누가 오든 집에 들어올 때마다 거실 불 켜줘.
+- id: ho90_presence_quantifier_15
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: all
+        persons:
+        - person.user
+        - person.wife
+      conditions: []
+      actions:
+      - type: set_mode
+        mode: 슬립 모드
+        to: 'on'
+  variants:
+  - 나랑 와이프 둘 다 집에 들어와 있으면 자동으로 슬립 모드 켜줘.
+- id: ho90_presence_quantifier_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:presence_quantifier
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: all
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 가족이 모두 귀가하면 현관 조명을 꺼 주십시오.
+- id: ho90_presence_quantifier_17
+  area: single
+  difficulty: hard
+  tags:
+  - cat:presence_quantifier
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: all
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 제일 늦게 들어오는 사람까지 다 들어오면 에어컨 꺼줘 이제.
+- id: ho90_presence_quantifier_18
+  area: single
+  difficulty: hard
+  tags:
+  - cat:presence_quantifier
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: all
+        for:
+          minutes: 20
+      conditions: []
+      actions:
+      - type: set_mode
+        mode: 슬립 모드
+        to: 'off'
+  variants:
+  - 온 가족이 집에 다 들어온 채로 20분 넘게 지나면 슬립모드 꺼줘.
+- id: ho90_presence_quantifier_19
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions:
+      - type: presence_agg
+        quant: none
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 침입 의심
+  variants:
+  - 현관문이 열렸는데 집에 아무도 없으면 '침입 의심'이라고 알려주세요.
+- id: ho90_presence_quantifier_20
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions:
+      - type: presence_agg
+        quant: none
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 거실에 누가 있어요
+  variants:
+  - 거실에서 움직임 감지됐는데 아무도 집에 없으면 '거실에 누가 있어요'라고 알려줘.
+- id: ho90_presence_quantifier_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions:
+      - type: presence_agg
+        quant: none
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 욕실에서 누수 감지됐는데 아무도 집에 없으면 가스밸브부터 잠가.
+- id: ho90_presence_quantifier_22
+  area: single
+  difficulty: easy
+  tags:
+  - cat:presence_quantifier
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '20:00'
+      conditions:
+      - type: presence_agg
+        quant: any
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 저녁 8시가 되면, 집에 누구라도 있을 때만 거실 조명을 켜 주세요.
+- id: ho90_presence_quantifier_23
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        below: 18
+      conditions:
+      - type: presence_agg
+        quant: any
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방 온도가 18도 아래로 떨어졌는데 집에 누구 한 명이라도 있으면 보일러 켜줘.
+- id: ho90_presence_quantifier_24
+  area: single
+  difficulty: medium
+  tags:
+  - cat:presence_quantifier
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: 슬립 모드
+        to: 'on'
+      conditions:
+      - type: presence_agg
+        quant: all
+      actions:
+      - type: service
+        action: climate.set_temperature
+        target:
+          entity_id:
+          - climate.living_room_boiler
+        data:
+          temperature: 20
+  variants:
+  - 취침모드가 켜질 때 온 가족이 다 집에 있으면 거실 보일러를 20도로 맞춰 주시겠어요?
+- id: ho90_numeric_edge_between_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 베란다 미세먼지 농도가 80을 넘어가면 전열교환기를 켜 주시겠어요?
+- id: ho90_numeric_edge_between_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.kitchen_temperature
+        above: 30
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 주방 온도가 30도를 넘으면 가스밸브는 잠근다.
+- id: ho90_numeric_edge_between_02
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_humidity
+        above: 70
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 안방 습도가 그 70퍼센트 있잖아 그거 넘으면… 아니다 그냥 환기팬 좀 돌려줘.
+- id: ho90_numeric_edge_between_03
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.unassigned_power
+        above: 1000
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.unassigned_relay
+  variants:
+  - 그 미배정 전력 있잖아, 1000와트 넘어서면 릴레이 그냥 꺼버려.
+- id: ho90_numeric_edge_between_04
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        above: 26
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방 온도 26도 넘어가면 보일러는 꺼놓고.
+- id: ho90_numeric_edge_between_05
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 29
+      conditions: []
+      actions:
+      - type: service
+        action: climate.set_fan_mode
+        target:
+          entity_id:
+          - climate.living_room_ac
+        data:
+          fan_mode: 강풍
+  variants:
+  - 거실 온도가 29도에 도달하면 에어컨 세게 틀어줘.
+- id: ho90_numeric_edge_between_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        below: 16
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_boiler
+  variants:
+  - 거실 온도가 16도 밑으로 떨어지면 보일러 켜줘.
+- id: ho90_numeric_edge_between_07
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        below: 18
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 보일러 얼른 돌려, 안방 온도가 18도 아래로 내려가면.
+- id: ho90_numeric_edge_between_08
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_humidity
+        below: 30
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 거실 습도가 30 밑으로 떨어지면, 그… 환기팬 좀 멈춰줄래?
+- id: ho90_numeric_edge_between_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        below: 40
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 40 이하로 내려가면 전열교환기 꺼도 돼.
+- id: ho90_numeric_edge_between_10
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.unassigned_power
+        below: 200
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 전력량이 200와트 밑으로 떨어지면 대기전력 콘센트 차단해 주세요.
+- id: ho90_numeric_edge_between_11
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 23
+        below: 26
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 거실 온도가 23도에서 26도 사이로 들어오면… 음, 그냥 에어컨 켜줘.
+- id: ho90_numeric_edge_between_12
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_humidity
+        above: 40
+        below: 60
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 안방 습도가 40에서 60 사이일 때는 전열교환기 꺼둬.
+- id: ho90_numeric_edge_between_13
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 26
+        below: 29
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 거실에 사람이 감지되면, 온도가 26도에서 29도 사이일 때만 에어컨 켜줘.
+- id: ho90_numeric_edge_between_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        above: 18
+        below: 22
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 18도에서 22도 사이, 딱 그 사이일 때만 안방 보일러 좀 꺼줘 온도가.
+- id: ho90_numeric_edge_between_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.kitchen_temperature
+        above: 24
+        below: 27
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 주방 온도가 24도… 아니 24도에서 27도 사이 구간에 진입하면 가스밸브 잠가놔.
+- id: ho90_numeric_edge_between_16
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        below: 18
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 26
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 실내 온도 이상
+  variants:
+  - 거실 온도가 18도에서 26도 범위를 벗어나면 '실내 온도 이상'이라고 알림 보내줘.
+- id: ho90_numeric_edge_between_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_humidity
+        below: 35
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_humidity
+        above: 65
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 안방 습도 35에서 65 사이를 벗어나면 전열교환기나 켜.
+- id: ho90_numeric_edge_between_18
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        below: 30
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 100
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 베란다 미세먼지가 30 밑으로 내려가면 전열교환기 끄고, 100을 넘으면 켜줘.
+- id: ho90_numeric_edge_between_19
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        below: 15
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 30
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+  variants:
+  - 무드등 켜줘, 거실 온도가 15도 아래로 떨어지거나 30도 위로 올라가면.
+- id: ho90_numeric_edge_between_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.unassigned_power
+        below: 100
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.unassigned_relay
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.unassigned_power
+        above: 900
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_on
+        target:
+          entity_id:
+          - switch.unassigned_relay
+  variants:
+  - 전력이 100와트보다 낮아지거나 900와트를 초과하면 릴레이 상태 좀 바꿔줘봐, 아래는 끄고 위는 켜고.
+- id: ho90_numeric_edge_between_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:numeric_edge_between
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 27
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 거실 온도 27도 이상이면 에어컨 돌려줘.
+- id: ho90_numeric_edge_between_22
+  area: single
+  difficulty: hard
+  tags:
+  - cat:numeric_edge_between
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        below: 17
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방 온도 17도 이하로 떨어지면… 아니 그냥 17도 이하면 보일러 켜줘.
+- id: ho90_numeric_edge_between_23
+  area: single
+  difficulty: easy
+  tags:
+  - cat:numeric_edge_between
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 25
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 거실 온도가 25도보다 높으면 에어컨 켜줘.
+- id: ho90_quoted_message_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 누구 왔나 봐요
+          target: speaker
+  variants:
+  - 현관문 열리면 스피커로 '누구 왔나 봐요'라고 방송해줘
+- id: ho90_quoted_message_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.user
+        zone: zone.home
+        event: leave
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 창문 닫았어?
+          target: mobile
+  variants:
+  - 내가 집을 나서면 핸드폰으로 '창문 닫았어?' 하고 알려줘
+- id: ho90_quoted_message_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+        for:
+          minutes: 10
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 창문 좀 닫아주세요
+          target: speaker
+  variants:
+  - 작은방 창문이 10분 넘게 열려 있으면 온 집에 “창문 좀 닫아주세요”라고 방송 좀 해줘
+- id: ho90_quoted_message_03
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 욕실에 사람 있어요
+          target: mobile
+  variants:
+  - 욕실에서 움직임 감지되면 '욕실에 사람 있어요'라고 스마트폰으로 좀 알려줄래?
+- id: ho90_quoted_message_04
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        above: 28
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 덥다
+          target: speaker
+  variants:
+  - 안방 온도 28도 넘어가면 덥다고 온 집 스피커로 다 알려줘
+- id: ho90_quoted_message_05
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 미세먼지 심해요, 환기하지 마세요
+          target: mobile
+  variants:
+  - 베란다 미세먼지 80 넘으면 폰으로 '미세먼지 심해요, 환기하지 마세요'라고 알려줘
+- id: ho90_quoted_message_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 일어날 시간이에요
+          target: speaker
+  variants:
+  - 매일 아침 7시가 되면 온 집에 '일어날 시간이에요'라고 방송해 주세요
+- id: ho90_quoted_message_07
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 벌써 어두워졌어요, 불 켜세요
+          target: speaker
+  variants:
+  - 해가 지면 스피커로 '벌써 어두워졌어요, 불 켜세요'라고 알려주세요
+- id: ho90_quoted_message_08
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        hours: 2
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 물 마실 시간이에요
+          target: speaker
+  variants:
+  - '''물 마실 시간이에요''라고 두 시간마다 온 집 스피커로 방송 좀 해줘'
+- id: ho90_quoted_message_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 집이 비었어요
+          target: mobile
+  variants:
+  - 식구들이 다 나가고 아무도 없으면 폰으로 '집이 비었어요'라고 알려줘
+- id: ho90_quoted_message_10
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.wife
+        zone: zone.home
+        event: enter
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 오늘 뭐 먹고 싶어?
+          target: speaker
+  variants:
+  - 와이프가 집에 도착하면 '오늘 뭐 먹고 싶어?' 하고 스피커로 물어봐 줘
+- id: ho90_quoted_message_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: unlocked
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 누가 문 열었어요
+          target: mobile
+  variants:
+  - 현관 잠금이 풀리면 “누가 문 열었어요”라고 폰으로 즉시 알려주십시오
+- id: ho90_quoted_message_12
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions:
+      - type: sun_window
+        after: sunset
+        before: sunrise
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 거실에 누가 있어요
+          target: speaker
+  variants:
+  - 밤에 거실에서 사람 감지되면 스피커로 '거실에 누가 있어요'라고 조용히 알려줘
+- id: ho90_quoted_message_13
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: switch.gas_valve
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 가스 밸브 열렸어요, 확인하세요
+          target: speaker
+  variants:
+  - '''가스 밸브 열렸어요, 확인하세요''라고 온 집 전체에 큰소리로 방송해줘, 가스밸브가 열리면 말이야'
+- id: ho90_quoted_message_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 조심하세요
+          target: speaker
+  variants:
+  - 안방에 화장실 갈 때 움직임 감지되면 폰 말고 스피커로 조용히 '조심하세요'라고 알려줘
+- id: ho90_quoted_message_15
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_humidity
+        below: 70
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 건조해요
+  variants:
+  - 거실 습도 70 밑으로 떨어지면 '건조해요'라고 그냥 알려줘
+- id: ho90_quoted_message_16
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.user
+        zone: zone.work
+        event: enter
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 나 출근했다
+          target: mobile
+  variants:
+  - 회사 도착하자마자 와이프한테 폰으로, 어 나 출근했다고 좀 전해줘
+- id: ho90_quoted_message_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: fan.bathroom_fan
+        to: 'on'
+        for:
+          hours: 2
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 환풍기 켜진 지 오래됐어요, 꺼도 될 것 같아요
+          target: speaker
+  variants:
+  - 욕실 환풍기가 두 시간 넘게 켜져 있으면 스피커로 '환풍기 켜진 지 오래됐어요, 꺼도 될 것 같아요'라고 알려줘
+- id: ho90_quoted_message_18
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: cover.living_room_curtain
+        to: open
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 좋은 아침입니다
+          target: speaker
+  variants:
+  - 커튼 열릴 때마다, 어 그니까 열릴 때마다 온 집에 '좋은 아침입니다'라고 방송해줘
+- id: ho90_quoted_message_19
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 출근 준비하세요
+          target: speaker
+  variants:
+  - 평일 아침 7시엔 스피커로 '출근 준비하세요'라고 알려주고 주말엔 하지 마
+- id: ho90_quoted_message_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_humidity
+        below: 40
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 가습기 틀까요
+          target: mobile
+  variants:
+  - 안방 습도가... 아무튼 40 밑으로 내려가면 딴 데 말고 폰에다 조용히 '가습기 틀까요' 알려만 줘
+- id: ho90_quoted_message_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: any
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 어서 오세요
+          target: speaker
+  variants:
+  - 누구든 집에 들어오면 그때그때 스피커로 '어서 오세요'라고 말해줘
+- id: ho90_quoted_message_22
+  area: single
+  difficulty: medium
+  tags:
+  - cat:quoted_message
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.user
+        zone: zone.home
+        event: leave
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 쓰레기 버렸어?
+          target: mobile
+  variants:
+  - 내가 나갈 때 '쓰레기 버렸어?'라고 폰으로 물어봐줘
+- id: ho90_quoted_message_23
+  area: single
+  difficulty: hard
+  tags:
+  - cat:quoted_message
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.user
+        zone: zone.home
+        event: leave
+      conditions:
+      - type: state
+        entity_id: switch.gas_valve
+        state: 'on'
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 가스밸브 안 잠갔어요
+          target: mobile
+  variants:
+  - 냉장고... 아니 참, 가스밸브가 켜져 있는 채로 내가 나가면 스피커 말고 폰으로 바로 '가스밸브 안 잠갔어요'라고 알려줘
+- id: ho90_quoted_message_24
+  area: single
+  difficulty: easy
+  tags:
+  - cat:quoted_message
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 티비 껐어요
+          target: mobile
+  variants:
+  - 거실 TV 꺼지면 모바일로 '티비 껐어요'라고 알려줘
+- id: ho90_action_params_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          rgb_color:
+          - 0
+          - 255
+          - 0
+  variants:
+  - 거실에서 움직임 잡히면 메인등 초록색으로 켜지게 해줘
+- id: ho90_action_params_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+        data:
+          rgb_color:
+          - 255
+          - 126
+          - 0
+  variants:
+  - 현관문 열리면 현관등 주황빛으로 켜줘
+- id: ho90_action_params_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:30'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+        data:
+          rgb_color:
+          - 160
+          - 32
+          - 240
+  variants:
+  - 밤 열시반엔 욕실불 보라색 켜놔
+- id: ho90_action_params_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.wife
+        zone: zone.home
+        event: enter
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+        data:
+          rgb_color:
+          - 255
+          - 105
+          - 180
+  variants:
+  - 와이프 오면 무드등 분홍빛 좀 켜줄래?
+- id: ho90_action_params_04
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: morning
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.kitchen
+        data:
+          rgb_color:
+          - 255
+          - 220
+          - 0
+  variants:
+  - 아침마다 주방 불 노란색으로 켜줘요
+- id: ho90_action_params_05
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: 슬립 모드
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+        data:
+          rgb_color:
+          - 0
+          - 0
+          - 255
+          transition: 5
+  variants:
+  - 슬립 모드 켜지면 안방등 파란빛으로 서서히 켜줘
+- id: ho90_action_params_06
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          rgb_color:
+          - 255
+          - 255
+          - 255
+  variants:
+  - 거실 불 흰색으로 켜줘, 밤 11시 되면
+- id: ho90_action_params_07
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: evening
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.veranda
+        data:
+          color_temp_kelvin: 2700
+  variants:
+  - 저녁 되면 베란다 불 전구색으로 켜줘
+- id: ho90_action_params_08
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.small_room
+        data:
+          color_temp_kelvin: 2700
+  variants:
+  - 밤 9시에는 작은방 조명 따뜻한 색으로 켜줘요
+- id: ho90_action_params_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:30
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.kitchen
+        data:
+          color_temp_kelvin: 4000
+  variants:
+  - 아침 일곱시 반엔 주방불 주백색으로 켜줄래
+- id: ho90_action_params_10
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.user
+        zone: zone.home
+        event: enter
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+        data:
+          color_temp_kelvin: 6500
+  variants:
+  - 집에 들어오면 현관등 주광색으로 켜줘
+- id: ho90_action_params_11
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: dawn
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          color_temp_kelvin: 6500
+  variants:
+  - 새벽엔 거실 조명 하얀 불로 켜놔
+- id: ho90_action_params_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: evening
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          brightness_step_pct: 20
+          transition: 5
+  variants:
+  - 저녁 되면 거실불 서서히 조금 더 밝게 해줘
+- id: ho90_action_params_13
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: night
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+        data:
+          brightness_step_pct: -20
+  variants:
+  - 밤에는 안방불 많이 어둡게 좀 해줘
+- id: ho90_action_params_14
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: morning
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          brightness_step_pct: 30
+  variants:
+  - 아침에 거실 메인등 30퍼센트 더 밝게 해줘
+- id: ho90_action_params_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:00'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.kitchen
+        data:
+          brightness_step_pct: -10
+  variants:
+  - 밤 10시엔 주방불 10퍼센트쯤 어둡게 해줘
+- id: ho90_action_params_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: morning
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.small_room
+        data:
+          transition: 5
+  variants:
+  - 아침엔 작은방 조명 서서히 켜줘
+- id: ho90_action_params_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: night
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.master_bedroom
+        data:
+          transition: 10
+  variants:
+  - 밤 되면 안방불 천천히 꺼줘
+- id: ho90_action_params_18
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+        data:
+          transition: 5
+  variants:
+  - 욕실에서 인기척 느껴지면 불 부드럽게 켜줘
+- id: ho90_action_params_19
+  area: single
+  difficulty: medium
+  tags:
+  - cat:action_params
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '19:00'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.veranda
+        data:
+          transition: 3
+  variants:
+  - 저녁 7시엔 베란다불 3초에 걸쳐서 켜줘
+- id: ho90_action_params_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 00:00
+      conditions: []
+      actions:
+      - type: service
+        action: light.toggle
+        target:
+          entity_id:
+          - light.small_room
+  variants:
+  - 자정 되면 작은방불 반대 상태로 만들어줘
+- id: ho90_action_params_21
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:30'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.toggle
+        target:
+          entity_id:
+          - switch.gas_valve
+          - switch.standby_power
+  variants:
+  - 가스밸브랑 콘센트 반대로 해줘, 밤 11시 반 되면
+- id: ho90_action_params_22
+  area: single
+  difficulty: easy
+  tags:
+  - cat:action_params
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: night
+      conditions: []
+      actions:
+      - type: service
+        action: fan.toggle
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 밤 되면 화장실 환풍기 상태 반대로 해놔
+- id: ho90_action_params_23
+  area: single
+  difficulty: hard
+  tags:
+  - cat:action_params
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: morning
+      conditions: []
+      actions:
+      - type: service
+        action: homeassistant.toggle
+        target:
+          entity_id:
+          - fan.bathroom_fan
+          - light.bathroom
+  variants:
+  - 아침 되면 욕실 환풍기랑 조명 반대로 돌려줘
+- id: ho90_duration_revert_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.small_room
+      - type: delay
+        duration:
+          minutes: 3
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.small_room
+  variants:
+  - 작은방 창문 열리면 작은방 조명 3분만 켰다가 꺼줘
+- id: ho90_duration_revert_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실에 움직임 감지되면 거실 메인등 5분 켜졌다가 자동으로 꺼지게 해줘
+- id: ho90_duration_revert_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.bathroom_fan
+      - type: delay
+        duration:
+          minutes: 7
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 욕실에서 사람 움직이는 거 잡히면, 욕실 환풍기 딱 7분만 돌리고 꺼줘
+- id: ho90_duration_revert_03
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: light.living_room_mood
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_mood
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+  variants:
+  - 거실 무드등 켜져 있는데, 5분만 껐다가 원래대로 켜 주시겠어요?
+- id: ho90_duration_revert_04
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: light.entrance
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+      - type: delay
+        duration:
+          minutes: 3
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관 조명 꺼져 있는데 잠깐 3분만 좀 켰다가 다시 꺼줘
+- id: ho90_duration_revert_05
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:00'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+      - type: delay
+        duration:
+          minutes: 3
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+  variants:
+  - 밤 11시 되면 방범용으로 집 안 조명 전부 3분만 켰다가 꺼줘
+- id: ho90_duration_revert_06
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+          - light.small_room
+      - type: delay
+        duration:
+          minutes: 10
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.master_bedroom
+          - light.small_room
+  variants:
+  - 현관문 열리면 안방이랑 작은방 조명만 10분 켰다가 꺼줘
+- id: ho90_duration_revert_07
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 50
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+      - type: delay
+        duration:
+          minutes: 20
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 베란다 미세먼지 50 넘으면 전열교환기 20분만 돌리고 꺼줘
+- id: ho90_duration_revert_08
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 26
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+      - type: delay
+        duration:
+          minutes: 30
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 거실 온도가 26도 넘어가면 에어컨 30분만 틀었다가 꺼주세요
+- id: ho90_duration_revert_09
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 06:00
+      conditions:
+      - type: day_type
+        types:
+        - weekday
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+      - type: delay
+        duration:
+          minutes: 20
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 평일 아침 6시에 안방 보일러 20분만 틀었다가 꺼줘
+- id: ho90_duration_revert_10
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '20:00'
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+      - type: delay
+        duration:
+          minutes: 10
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 주말 빼고 매일 저녁 8시 되면 거실 조명 10분만 켰다가 꺼줘
+- id: ho90_duration_revert_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: night
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+      - type: delay
+        duration:
+          minutes: 15
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_mood
+  variants:
+  - 밤 되면 거실 무드등 15분만 켰다가 꺼놔
+- id: ho90_duration_revert_12
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: person.user
+        to: home
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+      - type: delay
+        duration:
+          minutes: 3
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 나 집에 오면 현관 조명 3분만 켜졌다가 꺼지게 해줘
+- id: ho90_duration_revert_13
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions:
+      - type: state
+        entity_id: person.user
+        state: not_home
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 나 없을 때 현관문 열리면 현관 조명 5분만 켜놨다가 꺼줘
+- id: ho90_duration_revert_14
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.bathroom_fan
+      - type: delay
+        duration:
+          minutes: 10
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 욕실에 누수 감지되면 환풍기 10분만 돌리고 꺼줘
+- id: ho90_duration_revert_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_on
+        target:
+          entity_id:
+          - media_player.living_room_tv
+      - type: delay
+        duration:
+          hours: 1
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - media_player.living_room_tv
+  variants:
+  - 거실 TV 잠깐 1시간만 켜놨다가 꺼줘, 현관문 열리면
+- id: ho90_duration_revert_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions: []
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+      - type: delay
+        duration:
+          minutes: 10
+      - type: service
+        action: cover.close_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 아침 7시 되면 거실 커튼 10분만 열었다가 원래대로 닫아줘
+- id: ho90_duration_revert_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 08:00
+      conditions: []
+      actions:
+      - type: service
+        action: lock.unlock
+        target:
+          entity_id:
+          - lock.entrance_door
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 아침 8시에 현관문 5분만 열어뒀다가 다시 잠가줘
+- id: ho90_duration_revert_18
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 00:00
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+      - type: delay
+        duration:
+          minutes: 15
+      - type: service
+        action: switch.turn_on
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 밤 12시 되면 대기전력 콘센트 15분만 껐다가 다시 켜줘
+- id: ho90_duration_revert_19
+  area: single
+  difficulty: medium
+  tags:
+  - cat:duration_revert
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 04:00
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.unassigned_relay
+      - type: delay
+        duration:
+          seconds: 30
+      - type: service
+        action: switch.turn_on
+        target:
+          entity_id:
+          - switch.unassigned_relay
+  variants:
+  - 매일 새벽 4시에 릴레이 30초만 껐다가 다시 켜줘
+- id: ho90_duration_revert_20
+  area: single
+  difficulty: easy
+  tags:
+  - cat:duration_revert
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_occupancy
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+      - type: delay
+        duration:
+          minutes: 2
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실에 사람 있는 거 감지되면 거실 조명 2분만 켰다가 꺼줘
+- id: ho90_duration_revert_21
+  area: single
+  difficulty: hard
+  tags:
+  - cat:duration_revert
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+      - type: delay
+        duration:
+          minutes: 4
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 문열리면 현관등 4분 켰다 꺼
+- id: ho90_surface_variation_00
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 01:00
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+  variants:
+  - 새벽 한 시 되거든 거실 조명 좀 꺼 줄래?
+- id: ho90_surface_variation_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관문 열자마자 현관 조명 켜 줘.
+- id: ho90_surface_variation_02
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 안방에 인기척 느껴지는 순간 그냥 불 켜줘.
+- id: ho90_surface_variation_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '23:30'
+      conditions: []
+      actions:
+      - type: set_mode
+        mode: 슬립 모드
+        to: 'on'
+  variants:
+  - 사모님 주무시는 시간인 밤 열한 시 반이 되면 슬립 모드로 바꿔 주세요.
+- id: ho90_surface_variation_04
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 창문 열렸어요
+  variants:
+  - 작은방 창문 열리거든 그냥 '창문 열렸어요' 라고 좀 알려줘.
+- id: ho90_surface_variation_05
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+      - type: repeat
+        kind: count
+        count: 3
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.bathroom
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.bathroom
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 욕실에 누수 감지되자마자 가스밸브 잠그고 조명 세 번 깜빡여 줘.
+- id: ho90_surface_variation_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 28
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 거실 온도가 스물여덟 도를 넘는 순간 에어컨 켜 줘.
+- id: ho90_surface_variation_07
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: person.wife
+        to: not_home
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 와이프가 나가시면 현관문 그냥 좀 잠가 줘.
+- id: ho90_surface_variation_08
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_humidity
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 거실 습도가 여든 프로 넘거든 전열교환기 좀 돌려줘.
+- id: ho90_surface_variation_09
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+  variants:
+  - 와이프가 티비를 켜시자마자 거실 메인등은 끄고 무드등은 켜 줘.
+- id: ho90_surface_variation_10
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 2
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.entrance
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.entrance
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 현관문 열리거든 그냥 현관 조명 두 번만 깜빡여줘.
+- id: ho90_surface_variation_11
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 06:30
+      conditions: []
+      actions:
+      - type: service
+        action: cover.open_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 아침 여섯 시 반 되는 순간 거실 커튼 열어줘.
+- id: ho90_surface_variation_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 사모님 주무시거든, 안방 불 꺼.
+- id: ho90_surface_variation_13
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 150
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 백오십 넘자마자 그냥 환기팬 좀 돌려줘.
+- id: ho90_surface_variation_14
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_temperature
+        below: 18
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방 온도가 열여덟 도 아래로 떨어지는 순간 보일러 켜줘.
+- id: ho90_surface_variation_15
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 00:00
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 대기전력 콘센트 꺼줘, 자정 넘거든.
+- id: ho90_surface_variation_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: person.wife
+        to: home
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 와이프가 집에 도착하시는 순간 현관등 켜줘.
+- id: ho90_surface_variation_17
+  area: single
+  difficulty: easy
+  tags:
+  - cat:surface_variation
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '22:05'
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 밤 열 시 오 분 되면 그냥 현관문 잠가줘.
+- id: ho90_surface_variation_18
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          brightness_pct: 30
+  variants:
+  - 거실에 인기척 잡히자마자 메인등 서른 프로로 켜 줘.
+- id: ho90_surface_variation_19
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 안방에서 사모님 일어나시면 그냥 조명 좀 켜 드려.
+- id: ho90_surface_variation_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: unlocked
+      conditions: []
+      actions:
+      - type: service
+        action: lock.lock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 현관문 안 잠겨 있거든 그냥 좀 잠가줘.
+- id: ho90_surface_variation_21
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.bathroom_fan
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 화장실 모션 감지되자마자 오 분만 환풍기 켜놨다 꺼줘.
+- id: ho90_surface_variation_22
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 20
+        below: 24
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.living_room_boiler
+  variants:
+  - 거실 온도 스무 도에서 스물넷 도 사이면 보일러 좀 꺼놔.
+- id: ho90_surface_variation_23
+  area: single
+  difficulty: hard
+  tags:
+  - cat:surface_variation
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 26
+      conditions:
+      - type: state
+        entity_id: person.wife
+        state: home
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+  variants:
+  - 와이프가 집에 계시거든 거실 온도가 스물여섯 도 넘는 순간 에어컨 켜 줘.
+- id: ho90_surface_variation_24
+  area: single
+  difficulty: medium
+  tags:
+  - cat:surface_variation
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+  variants:
+  - 거실에 인기척 있자마자 불 켜고, 인기척 없어지자마자 그냥 꺼줘.
+- id: ho90_postposed_clause_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관 조명 켜놔, 현관문 열리면.
+- id: ho90_postposed_clause_01
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: night
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+  variants:
+  - 안방 조명 켜줘 밤 되면.
+- id: ho90_postposed_clause_02
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: morning
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_boiler
+  variants:
+  - 거실 보일러를 좀 틀어 주십시오, 아침이 되면.
+- id: ho90_postposed_clause_03
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: last
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 가스밸브 잠가줘, 집에 아무도 없어지면.
+- id: ho90_postposed_clause_04
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.user
+        zone: zone.home
+        event: enter
+      conditions: []
+      actions:
+      - type: service
+        action: lock.unlock
+        target:
+          entity_id:
+          - lock.entrance_door
+  variants:
+  - 현관문 좀 열어줘, 나 집 도착하면.
+- id: ho90_postposed_clause_05
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.wife
+        zone: zone.work
+        event: enter
+      conditions: []
+      actions:
+      - type: service
+        action: media_player.turn_off
+        target:
+          entity_id:
+          - media_player.living_room_tv
+  variants:
+  - TV 꺼놔라. 와이프 회사 가면.
+- id: ho90_postposed_clause_06
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 조명 켜, 사람 감지되면.
+- id: ho90_postposed_clause_07
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state_held
+        entity_id: binary_sensor.living_room_occupancy
+        to: 'off'
+        for:
+          minutes: 30
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 조명 꺼줘, 30분 동안 아무도 없으면.
+- id: ho90_postposed_clause_08
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_humidity
+        above: 70
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 전열교환기 돌려줘, 거실 습도가 70 넘거든.
+- id: ho90_postposed_clause_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: time_pattern
+        hours: 2
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.bathroom_fan
+  variants:
+  - 욕실 환풍기 켜줘, 두 시간마다.
+- id: ho90_postposed_clause_10
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.unassigned_power
+        below: 5
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 대기전력 콘센트 꺼버려, 전력이 5와트 밑으로 떨어지면.
+- id: ho90_postposed_clause_11
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+        data:
+          rgb_color:
+          - 255
+          - 0
+          - 0
+  variants:
+  - 거실 무드등 빨갛게 켜줘, 해 지고 나면.
+- id: ho90_postposed_clause_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 00:00
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          brightness_pct: 30
+  variants:
+  - 거실 조명 30프로로 낮춰줘. 아 맞다, 자정 되면.
+- id: ho90_postposed_clause_13
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 조명 다시 켜줄래, 해 뜨면?
+- id: ho90_postposed_clause_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+        offset: -900
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+        data:
+          transition: 5
+  variants:
+  - 거실 무드등 살살 켜줘, 해 뜨기 십오 분 전부터.
+- id: ho90_postposed_clause_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: repeat
+        kind: count
+        count: 3
+        sequence:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.entrance
+        - type: delay
+          duration:
+            seconds: 1
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.entrance
+        - type: delay
+          duration:
+            seconds: 1
+  variants:
+  - 현관 조명 세 번 깜빡여줘, 현관문 열리면.
+- id: ho90_postposed_clause_16
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+      - type: delay
+        duration:
+          minutes: 5
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.bathroom
+  variants:
+  - 욕실 조명 5분만 켰다 꺼줘, 모션 잡히거든.
+- id: ho90_postposed_clause_17
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 08:00
+      conditions:
+      - type: weekday
+        days:
+        - sat
+        - sun
+        negate: true
+      actions:
+      - type: service
+        action: climate.turn_off
+        target:
+          entity_id:
+          - climate.master_bedroom_boiler
+  variants:
+  - 안방 보일러 꺼줘, 아침 여덟 시 되면, 주말은 빼고.
+- id: ho90_postposed_clause_18
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions:
+      - type: time_segment
+        segments:
+        - night
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 조명 켜줘, 사람 감지되면, 밤에만.
+- id: ho90_postposed_clause_19
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 욕실에 누수가 감지됐어요
+  variants:
+  - 좀 알려줘... 욕실에 물 새면.
+- id: ho90_postposed_clause_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state_held
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+        for:
+          minutes: 10
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 작은방 창문이 오래 열려 있어요
+          target: mobile
+  variants:
+  - 폰으로 알려줘, 작은방 창문이 10분 넘게 열려 있으면.
+- id: ho90_postposed_clause_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 28
+      conditions: []
+      actions:
+      - type: service
+        action: climate.set_fan_mode
+        target:
+          entity_id:
+          - climate.living_room_ac
+        data:
+          fan_mode: 강풍
+  variants:
+  - 거실 에어컨 강풍으로 돌려줘, 온도가 28도 넘으면.
+- id: ho90_postposed_clause_22
+  area: single
+  difficulty: easy
+  tags:
+  - cat:postposed_clause
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: service
+        action: cover.close_cover
+        target:
+          entity_id:
+          - cover.living_room_curtain
+  variants:
+  - 거실 커튼 쳐줘, 해 지면.
+- id: ho90_postposed_clause_23
+  area: single
+  difficulty: medium
+  tags:
+  - cat:postposed_clause
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: 슬립 모드
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 가스밸브 잠가줘, 근데 슬립 모드 켜지면.
+- id: ho90_postposed_clause_24
+  area: single
+  difficulty: hard
+  tags:
+  - cat:postposed_clause
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: presence_agg
+        quant: any
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 조명 켜줘, 누구든 집에 오면.
+- id: ho90_weather_external_02
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weather_external
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 100
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 베란다 미세먼지 100 찍으면 환기팬 꺼버려.
+- id: ho90_weather_external_04
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weather_external
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        below: 30
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 30 밑으로 떨어지면 전열교환기 켜놔줘.
+- id: ho90_weather_external_06
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weather_external
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions:
+      - type: numeric_state
+        entity_id: sensor.living_room_humidity
+        above: 60
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지 80 넘고 거실 습도까지 60 넘으면 전열교환기 꺼줘.
+- id: ho90_weather_external_08
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weather_external
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.set_percentage
+        target:
+          entity_id:
+          - fan.veranda_erv
+        data:
+          percentage: 30
+  variants:
+  - 미세먼지 80 넘으면 전열교환기 세기를 30퍼센트로 낮춰줘.
+- id: ho90_weather_external_10
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weather_external
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 100
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 100 이상으로 올라가면 환기팬 얼른 정지시켜.
+- id: ho90_weather_external_12
+  area: single
+  difficulty: medium
+  tags:
+  - cat:weather_external
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 20
+        below: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 미세먼지가 20에서 80 사이일 때만 전열교환기 자동으로 돌아가게 해줘.
+- id: ho90_weather_external_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weather_external
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 미세먼지 수치가 나쁩니다
+  variants:
+  - 미세먼지 수치 심하다 싶으면 얼른 좀 알려줘.
+- id: ho90_weather_external_16
+  area: single
+  difficulty: easy
+  tags:
+  - cat:weather_external
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 100
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 외출은 자제하세요
+  variants:
+  - 미세먼지가 100을 넘으면 '외출은 자제하세요'라고 알려주세요.
+- id: ho90_weather_external_18
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weather_external
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 초미세먼지가 심합니다
+  variants:
+  - 초미세먼지 좀 심한 것 같으면 알림 하나 보내줘.
+- id: ho90_weather_external_20
+  area: single
+  difficulty: hard
+  tags:
+  - cat:weather_external
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.veranda_erv
+  variants:
+  - 베란다 공기 상태 나빠지면 환기 좀 멈춰줘.
+- id: ho90_else_branch_00
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '15:00'
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: numeric_state
+          entity_id: sensor.living_room_temperature
+          above: 28
+        then:
+        - type: service
+          action: climate.turn_on
+          target:
+            entity_id:
+            - climate.living_room_ac
+        else:
+        - type: service
+          action: climate.turn_off
+          target:
+            entity_id:
+            - climate.living_room_ac
+  variants:
+  - 오후 3시쯤 거실이 28도보다 높으면 에어컨 켜주고, 아니면 꺼줘.
+- id: ho90_else_branch_01
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: numeric_state
+          entity_id: sensor.master_bedroom_temperature
+          below: 20
+        then:
+        - type: service
+          action: climate.turn_on
+          target:
+            entity_id:
+            - climate.master_bedroom_boiler
+        else:
+        - type: service
+          action: climate.turn_off
+          target:
+            entity_id:
+            - climate.master_bedroom_boiler
+  variants:
+  - 아침 7시에 안방 온도 20도 밑이면 보일러 틀고, 아니면 그냥 꺼놔.
+- id: ho90_else_branch_02
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: not
+          conditions:
+          - type: zone
+            entity_id: person.user
+            zone: zone.home
+        then:
+        - type: service
+          action: notify.notify
+          data:
+            message: 누가 들어왔어요
+        else:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.entrance
+  variants:
+  - 현관문 열렸는데 내가 없으면 '누가 들어왔어요'라고 알려주고, 있으면 그냥 현관 불만 켜줘.
+- id: ho90_else_branch_03
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.veranda_pm25
+        above: 80
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: presence_agg
+          quant: all
+          persons:
+          - person.user
+          - person.wife
+        then:
+        - type: service
+          action: fan.turn_on
+          target:
+            entity_id:
+            - fan.veranda_erv
+        else:
+        - type: service
+          action: notify.notify
+          data:
+            message: 미세먼지 주의
+  variants:
+  - 베란다 미세먼지가 80 넘으면 둘 다 집에 있을 때는 전열교환기 돌려주시고, 아니면 '미세먼지 주의'라고만 알려 주세요.
+- id: ho90_else_branch_04
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunset
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: state
+          entity_id: binary_sensor.living_room_occupancy
+          state: 'off'
+        then:
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.living_room_main
+            - light.living_room_mood
+        else:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_mood
+  variants:
+  - 해 지면 거실에 아무도 없으면 조명 다 끄고, 있으면 무드등만 켜줘.
+- id: ho90_else_branch_05
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '21:00'
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: state
+          entity_id: binary_sensor.small_room_window
+          state: 'on'
+        then:
+        - type: service
+          action: notify.notify
+          data:
+            message: 창문 열림
+        else:
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.small_room
+  variants:
+  - 밤 9시 되면 작은방 창문이 열려 있으면 '창문 열림'이라고 알려 주시고, 닫혀 있으면 조명만 꺼 주세요.
+- id: ho90_else_branch_06
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'off'
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: mode
+          mode: 슬립 모드
+          state: 'on'
+        then:
+        - type: service
+          action: light.turn_off
+          target:
+            entity_id:
+            - light.living_room_main
+            - light.living_room_mood
+        else:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_mood
+  variants:
+  - TV 꺼지면 슬립 모드일 때는 거실 조명도 마저 다 꺼주고, 아니면 무드등만 켜줘.
+- id: ho90_else_branch_07
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 07:00
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: day_type
+          types:
+          - weekday
+        then:
+        - type: service
+          action: climate.turn_on
+          target:
+            entity_id:
+            - climate.master_bedroom_boiler
+        else:
+        - type: service
+          action: climate.turn_off
+          target:
+            entity_id:
+            - climate.master_bedroom_boiler
+  variants:
+  - 아침 7시 되면 평일엔 안방 보일러 좀 켜주고, 주말엔 꺼 줬으면 해.
+- id: ho90_else_branch_08
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: '18:00'
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: weekday
+          days:
+          - sun
+          negate: true
+        then:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_main
+            - light.living_room_mood
+        else:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_mood
+  variants:
+  - 일요일만 빼고 저녁 6시엔 거실 조명 다 켜주고, 일요일엔 무드등만 켜줘.
+- id: ho90_else_branch_09
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.master_bedroom_humidity
+        above: 70
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: time_segment
+          segments:
+          - night
+        then:
+        - type: service
+          action: fan.turn_on
+          target:
+            entity_id:
+            - fan.veranda_erv
+        else:
+        - type: service
+          action: fan.turn_off
+          target:
+            entity_id:
+            - fan.veranda_erv
+  variants:
+  - 안방 습도 70 넘으면 밤 시간대엔 전열교환기 켜 주시고, 아니면 꺼 주세요.
+- id: ho90_else_branch_10
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: sun
+        event: sunrise
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: day_type
+          types:
+          - weekday
+        then:
+        - type: service
+          action: cover.open_cover
+          target:
+            entity_id:
+            - cover.living_room_curtain
+        else:
+        - type: service
+          action: cover.close_cover
+          target:
+            entity_id:
+            - cover.living_room_curtain
+  variants:
+  - 해 뜨면 평일엔 커튼 좀 열어주고, 주말엔 그냥 닫아뒀으면 좋겠어.
+- id: ho90_else_branch_11
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.wife
+        zone: zone.work
+        event: enter
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: time_segment
+          segments:
+          - morning
+        then:
+        - type: service
+          action: notify.notify
+          data:
+            message: 출근 완료
+        else:
+        - type: service
+          action: notify.notify
+          data:
+            message: 외근 다녀오세요
+  variants:
+  - 와이프가 회사에 도착하면, 오전이면 '출근 완료'라고 알려주시고 오후면 '외근 다녀오세요'라고 알려 주세요.
+- id: ho90_else_branch_12
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state_held
+        entity_id: media_player.living_room_tv
+        to: 'on'
+        for:
+          hours: 3
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: state
+          entity_id: binary_sensor.living_room_occupancy
+          state: 'on'
+        then:
+        - type: service
+          action: notify.notify
+          data:
+            message: 아직 시청 중
+        else:
+        - type: service
+          action: media_player.turn_off
+          target:
+            entity_id:
+            - media_player.living_room_tv
+  variants:
+  - 거실 TV가 3시간째 켜져 있으면, 사람 있으면 '아직 시청 중'이라고만 알려주고 없으면 꺼버려.
+- id: ho90_else_branch_13
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: daily
+        at: 09:00
+      conditions:
+      - type: day_of_month
+        days:
+        - 1
+        - 15
+      actions:
+      - type: if
+        if:
+        - type: day_type
+          types:
+          - weekday
+        then:
+        - type: service
+          action: climate.turn_on
+          target:
+            entity_id:
+            - climate.master_bedroom_boiler
+        else:
+        - type: service
+          action: climate.turn_off
+          target:
+            entity_id:
+            - climate.master_bedroom_boiler
+  variants:
+  - 매달 1일이랑 15일엔 말이야, 아침 9시에 안방 보일러 평일이면 켜주고 주말이면 꺼줬으면 좋겠어.
+- id: ho90_else_branch_14
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: evening
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: and
+          conditions:
+          - type: weekday
+            days:
+            - fri
+            negate: false
+          - type: interval_anchor
+            unit: week
+            interval: 2
+            anchor: '2026-07-13'
+        then:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_mood
+        else:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_main
+            - light.living_room_mood
+  variants:
+  - 2주에 한 번 오는 금요일 저녁에는 거실 무드등만 켜 두시고, 그 외에는 평소처럼 다 켜 주세요.
+- id: ho90_else_branch_15
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  - newnode
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: if
+        if:
+        - type: sun_window
+          after: sunset
+          before: sunrise
+        then:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_mood
+        else:
+        - type: service
+          action: light.turn_on
+          target:
+            entity_id:
+            - light.living_room_main
+            - light.living_room_mood
+  variants:
+  - 거실에서 움직임 감지되면, 해 진 뒤면 무드등만 켜고 아니면 메인등도 같이 켜줘.
+- id: ho90_else_branch_16
+  area: single
+  difficulty: hard
+  tags:
+  - cat:else_branch
+  - diff:hard
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.entrance_door
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 열리면 현관등 켜고 닫히면 꺼줘, 현관문.
+- id: ho90_else_branch_17
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_occupancy
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_occupancy
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실에 사람 감지되면 조명 켜지고, 없어지면 꺼지게 해줘.
+- id: ho90_else_branch_18
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 창문 열렸어요
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.small_room_window
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: notify.notify
+        data:
+          message: 창문 닫혔어요
+  variants:
+  - 작은방 창문 열리면 '창문 열렸어요'라고 알려 주시고, 닫히면 '창문 닫혔어요'라고 알려 주세요.
+- id: ho90_else_branch_19
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.standby_power
+    - triggers:
+      - type: state
+        entity_id: media_player.living_room_tv
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_on
+        target:
+          entity_id:
+          - switch.standby_power
+  variants:
+  - 티비 켜면 대기전력 콘센트 끄고, 티비 끄면 다시 켜놔.
+- id: ho90_else_branch_20
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: cover.living_room_curtain
+        to: closed
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+    - triggers:
+      - type: state
+        entity_id: cover.living_room_curtain
+        to: open
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_mood
+  variants:
+  - 커튼 닫히면 거실 무드등 켜고, 열리면 그냥 꺼줘.
+- id: ho90_else_branch_21
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: locked
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+          - light.living_room_mood
+          - light.master_bedroom
+          - light.small_room
+          - light.kitchen
+          - light.entrance
+          - light.veranda
+          - light.bathroom
+    - triggers:
+      - type: state
+        entity_id: lock.entrance_door
+        to: unlocked
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+  variants:
+  - 현관문 잠기면 조명 다 꺼 주시고, 열리면 현관 불 켜 주세요.
+- id: ho90_else_branch_22
+  area: single
+  difficulty: easy
+  tags:
+  - cat:else_branch
+  - diff:easy
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'off'
+        for:
+          minutes: 5
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.living_room_main
+  variants:
+  - 거실 모션 감지되면 거실 조명 켜고, 5분 동안 안 감지되면 꺼줘.
+- id: ho90_else_branch_23
+  area: single
+  difficulty: medium
+  tags:
+  - cat:else_branch
+  - diff:medium
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_off
+        target:
+          entity_id:
+          - switch.gas_valve
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_moisture
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: switch.turn_on
+        target:
+          entity_id:
+          - switch.gas_valve
+  variants:
+  - 욕실에 누수 감지되면 가스밸브 좀 잠가주고, 감지 안 되면 다시 열어놨으면 해.
