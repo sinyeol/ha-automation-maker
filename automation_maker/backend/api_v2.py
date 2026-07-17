@@ -737,6 +737,11 @@ async def handle_settings_put(request: web.Request) -> web.Response:
         engine = request.app.get("engine")
         if engine is not None and hasattr(engine, "reschedule_boundary"):
             engine.reschedule_boundary()
+    # location(위도/경도)이 바뀌면 SunProvider 일 단위 캐시를 비운다(APP-PORT-PLAN §2.1).
+    if "location" in body:
+        sun = request.app.get("sun_provider")
+        if sun is not None and hasattr(sun, "invalidate"):
+            sun.invalidate()
     # 모드 정의가 바뀌면 mode_state 를 동기화한다(§1.2 — 새 모드 초기화·삭제 모드 제거).
     if "modes" in body:
         ms = _mode_state(request.app)

@@ -185,3 +185,32 @@ def test_honest_notify_quoted(gz):
            _sub([{"type": "state", "entity_id": "binary_sensor.entrance_door", "to": "on"}],
                 [], [{"type": "service", "action": "notify.notify",
                       "data": {"message": "손님 왔어요"}}]))
+
+
+# ===========================================================================
+# S2 sun 축 exact 스팟체크 (#20 sun 트리거 / sun_window 조건)
+# ===========================================================================
+def test_honest_sun_trigger_offset_positive(gz):
+    """#20 sun: '해 지고 30분 뒤' → sunset offset +1800초."""
+    _exact(gz, "해 지고 30분 뒤에 거실 조명 켜줘",
+           _sub([{"type": "sun", "event": "sunset", "offset": 1800}], [],
+                [{"type": "service", "action": "light.turn_on",
+                  "target": {"entity_id": ["light.living_room_main"]}}]))
+
+
+def test_honest_sun_trigger_offset_negative(gz):
+    """#20 sun: 수사→숫자 + '일몰 한 시간 전' → sunset offset -3600초."""
+    _exact(gz, "일몰 한 시간 전에 거실 커튼 닫아줘",
+           _sub([{"type": "sun", "event": "sunset", "offset": -3600}], [],
+                [{"type": "service", "action": "cover.close_cover",
+                  "target": {"entity_id": ["cover.living_room_curtain"]}}]))
+
+
+def test_honest_sun_window_condition(gz):
+    """#20 sun_window: '한밤중에 …움직이면' → 모션 트리거 + 밤창(sunset~sunrise) 조건."""
+    _exact(gz, "한밤중에 거실에서 움직임 감지되면 조명 켜줘",
+           _sub([{"type": "state", "entity_id": "binary_sensor.living_room_motion",
+                  "to": "on"}],
+                [{"type": "sun_window", "after": "sunset", "before": "sunrise"}],
+                [{"type": "service", "action": "light.turn_on",
+                  "target": {"entity_id": ["light.living_room_main"]}}]))

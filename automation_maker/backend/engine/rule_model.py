@@ -18,7 +18,20 @@ _SEGMENT_KEYS = {"dawn", "morning", "day", "evening", "night"}
 _MODE_STATES = {"on", "off"}
 
 # v2 엔진이 미지원하는 유형(파서가 생성 금지, 검증에서 거부)
-_UNSUPPORTED = {"sun", "template"}
+_UNSUPPORTED = {"template"}
+
+_SUN_EVENTS = {"sunrise", "sunset"}
+_MAX_SUN_OFFSET = 43200  # ±12시간(초)
+
+
+def _check_int_offset(v, path, errors) -> None:
+    """sun offset(초): int(bool 제외), |v| ≤ 43200. None/부재는 통과(생략 가능)."""
+    if v is None:
+        return
+    if isinstance(v, bool) or not isinstance(v, int):
+        errors.append({"path": path, "message": "오프셋은 정수(초)여야 합니다."})
+    elif abs(v) > _MAX_SUN_OFFSET:
+        errors.append({"path": path, "message": "오프셋은 ±12시간(43200초) 이내여야 합니다."})
 
 # 액션에서 실행을 허용하는 서비스 도메인 화이트리스트(보안). API 직접 호출 시 임의 서비스
 # (hassio.addon_stop 등)가 admin 권한으로 실행되는 것을 막는다.
@@ -84,7 +97,7 @@ def _validate_trigger(t, path, errors, valid_ids, mode_names=None) -> None:
     typ = t.get("type")
     if typ in _UNSUPPORTED:
         errors.append({"path": path + ".type",
-                       "message": "이 트리거 유형(sun/template)은 지원하지 않습니다."})
+                       "message": "이 트리거 유형(template)은 지원하지 않습니다."})
         return
     if typ in ("state", "numeric_state"):
         _need_entity(t, path, errors, valid_ids)
@@ -104,6 +117,10 @@ def _validate_trigger(t, path, errors, valid_ids, mode_names=None) -> None:
     elif typ == "daily":
         if not _HHMM_RE.match(str(t.get("at") or "")):
             errors.append({"path": path + ".at", "message": "시각을 HH:MM 형식으로 입력해 주세요."})
+    elif typ == "sun":
+        if t.get("event") not in _SUN_EVENTS:
+            errors.append({"path": path + ".event", "message": "일출 또는 일몰을 선택해 주세요."})
+        _check_int_offset(t.get("offset"), path + ".offset", errors)
     elif typ == "segment":
         if t.get("to") not in _SEGMENT_KEYS:
             errors.append({"path": path + ".to", "message": "시간대 값이 올바르지 않습니다."})
@@ -127,7 +144,7 @@ def _validate_condition(c, path, errors, valid_ids, n_triggers, mode_names=None)
     typ = c.get("type")
     if typ in _UNSUPPORTED:
         errors.append({"path": path + ".type",
-                       "message": "이 조건 유형(sun/template)은 지원하지 않습니다."})
+                       "message": "이 조건 유형(template)은 지원하지 않습니다."})
         return
     if typ == "state":
         _need_entity(c, path, errors, valid_ids)
@@ -140,6 +157,13 @@ def _validate_condition(c, path, errors, valid_ids, n_triggers, mode_names=None)
     elif typ == "time":
         if not c.get("after") and not c.get("before") and not c.get("weekday"):
             errors.append({"path": path, "message": "시각 또는 요일을 지정해 주세요."})
+    elif typ == "sun_window":
+        for key in ("after", "before"):
+            if c.get(key) not in _SUN_EVENTS:
+                errors.append({"path": path + "." + key,
+                               "message": "일출 또는 일몰을 지정해 주세요."})
+        _check_int_offset(c.get("after_offset"), path + ".after_offset", errors)
+        _check_int_offset(c.get("before_offset"), path + ".before_offset", errors)
     elif typ == "time_segment":
         _need_list(c.get("segments"), _SEGMENT_KEYS, path + ".segments", errors, "시간대")
     elif typ == "day_type":

@@ -87,7 +87,7 @@ def _held_spec(node: dict):
 
 class RuleEngine:
     def __init__(self, rule_store, state_cache, global_vars, ha, inventory_fn, runlog,
-                 now_fn=None, loop=None, mode_state=None):
+                 now_fn=None, loop=None, mode_state=None, sun_provider=None):
         self._rule_store = rule_store
         self._cache = state_cache
         self._gvars = global_vars
@@ -97,6 +97,7 @@ class RuleEngine:
         self._now_fn = now_fn or (lambda: datetime.now())  # 벽시계(스케줄용, gvars와 동일)
         self._loop = loop
         self._mode_state = mode_state                       # SPEC-V3 §1.2 (없으면 모드 비활성)
+        self._sun = sun_provider                            # APP-PORT-PLAN §2.1 (없으면 sun 미스케줄)
 
         self._index: dict[str, set[str]] = {}          # entity_id → rule_ids
         self._mode_index: dict[str, set[tuple]] = {}    # mode 이름 → {(rid, si, ti)}
@@ -266,6 +267,9 @@ class RuleEngine:
                 has_trigger = True
             elif typ == "daily":
                 self._schedule_daily(rid, flat, t)
+                has_trigger = True
+            elif typ == "sun":
+                self._schedule_sun(rid, flat, t)
                 has_trigger = True
             elif typ == "segment":
                 has_trigger = True
@@ -570,10 +574,49 @@ class RuleEngine:
             if loc is not None:
                 self._schedule_daily(rid, flat, loc[2])
 
+    def _schedule_sun(self, rid, flat, t) -> None:
+        """sun 트리거의 다음 (event+offset) 시각으로 타이머를 무장한다(APP-PORT-PLAN §2.2).
+
+        _daily_timers 를 재사용하므로 stop/_unindex_rule/_compile_all 의 취소 경로가 그대로
+        적용된다. sun_provider 미주입 시 무스케줄(발화 없음). 재시작/재연결은 _compile_all/
+        resync 가 재계산만 하며 이 콜백을 직접 호출하지 않으므로 자동 발화가 없다(§4.2).
+        """
+        if self._sun is None:
+            return
+        event = t.get("event")
+        try:
+            offset = int(t.get("offset") or 0)
+        except (TypeError, ValueError):
+            offset = 0
+        now = self._now_fn()
+        try:
+            when = self._sun.next_event(event, offset, now)
+            delay = (when - now).total_seconds()
+        except Exception:
+            log.exception("sun 트리거 스케줄 계산 오류")
+            return
+        self._daily_timers[(rid, flat)] = self._loop.call_later(
+            max(1.0, delay), self._on_sun, rid, flat)
+
+    def _on_sun(self, rid, flat) -> None:
+        self._daily_timers.pop((rid, flat), None)
+        rule = self._rules.get(rid)
+        if rule is None:
+            return
+        loc = _locate(rule.get("model") or {}, flat)
+        try:
+            if loc is not None:
+                self._try_fire(rule, loc[0], loc[1])
+        except Exception:
+            log.exception("sun 트리거 처리 오류")
+        finally:
+            if loc is not None:
+                self._schedule_sun(rid, flat, loc[2])  # 익일 재장전(next_event 가 내일 반환)
+
     # ------------------------------------------------------------------ 발화
     def _ctx(self, fired_index=None) -> EvalContext:
         return EvalContext(self._cache, self._gvars, self._now_fn, self._inventory_fn,
-                           fired_index, self._mode_state)
+                           fired_index, self._mode_state, self._sun)
 
     def _try_fire(self, rule, si, ti, depth=0, context="trigger") -> None:
         rid = rule["id"]

@@ -1,7 +1,10 @@
 """조건 평가 + 지속시간/스코프 헬퍼 (§4.3의 evaluator 로직)."""
 from __future__ import annotations
 
+import logging
 from datetime import time as dtime, timedelta
+
+log = logging.getLogger("automation_maker.evaluator")
 
 _WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
@@ -43,13 +46,15 @@ def _parse_clock(s) -> dtime | None:
 class EvalContext:
     """조건 평가에 필요한 런타임 참조 묶음."""
 
-    def __init__(self, cache, gvars, now_fn, inventory_fn, fired_index=None, mode_state=None):
+    def __init__(self, cache, gvars, now_fn, inventory_fn, fired_index=None, mode_state=None,
+                 sun=None):
         self.cache = cache
         self.gvars = gvars
         self.now = now_fn
         self.inventory_fn = inventory_fn
         self.fired_index = fired_index
         self.mode_state = mode_state  # SPEC-V3 §1.3 mode 조건 평가용(없으면 off 취급)
+        self.sun = sun                # APP-PORT-PLAN §2.5 sun_window 평가용(없으면 False)
 
 
 def scope_all_state(scope, state, ctx, duration=None) -> bool:
@@ -127,6 +132,9 @@ def evaluate_condition(cond: dict, ctx: EvalContext) -> bool:
     if typ == "trigger":
         return ctx.fired_index is not None and str(cond.get("id")) == str(ctx.fired_index)
 
+    if typ == "sun_window":
+        return _eval_sun_window(cond, ctx)
+
     if typ == "and":
         return all(evaluate_condition(c, ctx) for c in (cond.get("conditions") or []))
     if typ == "or":
@@ -134,7 +142,31 @@ def evaluate_condition(cond: dict, ctx: EvalContext) -> bool:
     if typ == "not":
         return not any(evaluate_condition(c, ctx) for c in (cond.get("conditions") or []))
 
-    return False  # sun/template 등 미지원(검증에서 이미 거부)
+    return False  # template 등 미지원(검증에서 이미 거부)
+
+
+def _eval_sun_window(cond, ctx) -> bool:
+    """일몰~일출 창(APP-PORT-PLAN §2.5). 자정 걸침(start>end) 순수 평가.
+
+    sun provider 미주입 시 False + 경고(크래시 금지). after/before ∈ {sunrise, sunset}.
+    """
+    if ctx.sun is None:
+        log.warning("sun_window 조건 평가 요청됐으나 sun provider 가 없어 False 처리")
+        return False
+    now = ctx.now()
+    try:
+        ev = ctx.sun.events(now.date())
+    except Exception:
+        log.exception("sun_window: sun 이벤트 계산 오류")
+        return False
+    start = ev.get(cond.get("after", "sunset"))
+    end = ev.get(cond.get("before", "sunrise"))
+    if start is None or end is None:
+        return False
+    start = start + timedelta(seconds=int(cond.get("after_offset") or 0))
+    end = end + timedelta(seconds=int(cond.get("before_offset") or 0))
+    st, en, nt = start.time(), end.time(), now.time()
+    return (st <= nt <= en) if st <= en else (nt >= st or nt <= en)
 
 
 def _passes_bounds(val, above, below) -> bool:

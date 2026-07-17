@@ -22,6 +22,7 @@ from backend.engine.rule_store import RuleStore
 from backend.engine.runlog import RunLog
 from backend.engine.state_cache import StateCache
 from backend.engine.storage import JsonStore, data_dir
+from backend.engine.sun import SunProvider
 from backend.engine.variables import GlobalVars
 from backend.ha_client import HAClient, merge_inventory
 from backend.nl.gazetteer import Gazetteer
@@ -120,6 +121,9 @@ def _default_settings() -> dict:
                                             "target": {"entity_id": ["scene.sleep_mode"]}},
                               "off_action": None}},
         "near_home": {"zone_state": "home", "note": "사람 엔티티가 이 상태면 '집 근처'"},
+        # APP-PORT-PLAN §2.1: sun 트리거·sun_window 조건의 일출/일몰 계산 좌표(기본 서울).
+        # UI 미설정이어도 기본값으로 동작한다. 사용자는 설정에서 위도/경도를 바꿀 수 있다.
+        "location": {"latitude": 37.5665, "longitude": 126.9780},
         "aliases": [],
         "confirm_actions": ["lock", "valve"],
         # SPEC-V3 §4.1: LLM 해석 백엔드 선택(off|api|cli). 키/토큰은 환경에서만 읽는다.
@@ -490,8 +494,13 @@ async def _on_startup(app: web.Application) -> None:
     def inventory_fn():
         return app["_inventory"]
 
+    # APP-PORT-PLAN §2.1: SunProvider 는 settings_store.data(공유 참조)를 읽으므로 설정의
+    # location 변경이 자동 반영된다(위치 변경 시 api_v2 가 invalidate() 로 캐시만 비운다).
+    sun_provider = SunProvider(settings_store.data)
+    app["sun_provider"] = sun_provider
     engine = RuleEngine(rule_store, state_cache, app["global_vars"], ha,
-                        inventory_fn, runlog, mode_state=mode_state)
+                        inventory_fn, runlog, mode_state=mode_state,
+                        sun_provider=sun_provider)
     app["engine"] = engine
 
     event_source = MockEventSource(ha) if app["dev_mode"] else HAEventSource()
