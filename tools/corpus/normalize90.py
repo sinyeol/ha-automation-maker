@@ -247,10 +247,18 @@ _ACTION_HINTS = ("켜", "꺼", "끄", "틀", "열", "닫", "잠", "풀", "돌려
                  "점등", "방송", "재생")
 
 
+# 결과상 상태형(꺼져/열려/닫혀 있-)은 명령(꺼/열어/닫아)과 표면이 겹쳐도 액션이 아니라 상태다.
+# 후치 재배열에서 조건절의 '꺼져 있으면'을 액션으로 오인해 재배열을 막던 것을 방지한다.
+_RESULT_STATE_TOKS = ("꺼져", "켜져", "닫혀", "열려", "잠겨", "풀려", "채워", "걸려", "놓여")
+
+
 def _is_action_tok(tok: str) -> bool:
     core = _strip_josa_tail(tok)
     # '-면' 절 경계(열리면/켜지면 …)는 트리거지 액션이 아니다. 액션 힌트 글자가 겹쳐도 제외.
     if _is_myeon_boundary(core):
+        return False
+    # 결과상 상태형(꺼져/열려 있-)은 조건이지 액션이 아니다('돌려/올려' 등 진짜 명령은 유지).
+    if any(core.startswith(r) for r in _RESULT_STATE_TOKS):
         return False
     return any(h in core for h in _ACTION_HINTS)
 

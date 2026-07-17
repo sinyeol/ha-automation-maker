@@ -36,6 +36,43 @@ except ImportError:  # pragma: no cover
 
 
 # ===========================================================================
+# P2-금지문(prohibition) 오독 방어 — SPEC-ACCURACY-90 §3 버킷6 / SPEC-SCHEMA-90 §4.4
+#   "-지 마/-지 말/못 -게/안 -게 해/-면 안 돼" 같은 금지문은 **자동화 생성 요청이 아니다**.
+#   정반대 액션(가스밸브 열기 등) 생성이 최악의 안전사고이므로, 파서를 태우기 전에
+#   금지문을 감지해 **모델을 만들지 않고**(ok=False, subrules=[]) 미해결로 반환한다.
+#   판정은 인용부(따옴표) 안의 금지 표현은 무시하고(예: 알림 메시지 '…하지 마세요'),
+#   normalize 로 완화어(좀)를 제거한 표면형에서 본다. 결정적.
+# ===========================================================================
+_QUOTE_SPAN_RE = re.compile(r"['\"“”‘’『』「」][^'\"“”‘’『』「」]*['\"“”‘’『』「」]")
+_PROHIBIT_RE = re.compile(
+    r"지도?\s*(?:좀\s*)?마(?![가-힣])"                 # -지 마 / -지도 마 (마세요·마루 등 제외)
+    r"|지도?\s*(?:좀\s*)?마\s*라"                       # -지 마라
+    r"|지도?\s*(?:좀\s*)?말(?=[아라자고지것세]|\s|[,.!?]|$)"  # -지 말아/말고/말라/말지/말자/말 것
+    r"|못\s*[가-힣]+게"                                  # 못 -게 해 (못 켜게)
+    r"|안\s*[가-힣]+게\s*(?:좀\s*)?(?:해|하|만들)"       # 안 -게 해 (안 켜지게 해)
+    r"|(?:으면|면)\s*(?:절대\s*)?안\s*(?:돼|되|된다)")   # -면 (절대) 안 돼
+
+
+def _is_prohibition(normalized: str) -> bool:
+    """normalize 를 거친 표면형이 금지문(요청 아님)인가. 인용부 안 표현은 무시."""
+    if not normalized:
+        return False
+    dequoted = _QUOTE_SPAN_RE.sub(" ", normalized)
+    return bool(_PROHIBIT_RE.search(dequoted))
+
+
+def _prohibition_result(sentence: str) -> dict:
+    """금지문 감지 시 반환하는 미해결 결과(정반대 액션 절대 미생성). 앱 parse 반환형과 호환."""
+    return {"ok": False,
+            "model": {"alias": sentence.strip(), "description": "",
+                      "mode": "single", "subrules": []},
+            "chips": [], "summary": "",
+            "area_id": None, "category": None,
+            "unmatched": [sentence.strip()], "confidence": 0.0,
+            "warnings": ["금지문(자동화 생성 요청 아님)으로 판단해 동작을 만들지 않았습니다."]}
+
+
+# ===========================================================================
 # A6 — 조명 접미사: DEVICE_CONCEPTS 오버레이
 #   무드등→{light,label:무드등}, 메인등→{light,label:메인등}, 접미사 "등"→light.
 #   label 이름매칭 보너스(resolve_concept +0.05 / '메인' +0.03)로 정확 엔티티 선택
@@ -60,6 +97,69 @@ _A1_MODE_SYNONYMS: dict[str, list[str]] = {
 
 # B1 사람 동의어(아내/부인/집사람 → settings.persons 의 '와이프' 매핑).
 _B1_PERSON_MAP: dict[str, str] = {"아내": "와이프", "부인": "와이프", "집사람": "와이프"}
+
+
+# ===========================================================================
+# P2-상(aspect) — SPEC-SCHEMA-90 §4.1: 결과상('-어 있-')/지속상은 **조건**, 전이형은 트리거.
+#   "켜져 있으면/열려 있으면/꺼져 있으면/닫혀 있을 때/-ㄴ 상태" = 상태(조건, 승격 규칙 적용),
+#   "켜지면/열리면/감지되면/풀리면/되면" = 전이(트리거). 어간 부분매칭('켜져'⊃'켜')이 상태형을
+#   트리거로 오독하던 것을, 결과상 어미를 감지해 조건으로 강등하고(트리거 없으면 첫 절만 승격),
+#   도메인별 상태값(cover=open/closed, lock=locked/unlocked, 그 외 on/off)을 정확히 방출한다.
+# ===========================================================================
+# 결과상 '-어/아/여 있-'(열려/켜져/꺼져/닫혀/잠겨/풀려 …있) + '-ㄴ 상태'. 이 절은 상태(조건).
+_RESULTATIVE_RE = re.compile(
+    r"(?:켜져|꺼져|열려|닫혀|잠겨|풀려|채워|비워|걸려|놓여|담겨|덮여|서|앉아|누워|들어와)\s*있"
+    r"|(?:켜진|꺼진|열린|닫힌|잠긴|풀린|열려있는|닫혀있는)\s*상태")
+# 지속상 조건 표지(-ㄹ/-을/-일 때, -는/-은 동안). 액션존에서도 앞부분을 조건으로 뗀다(§4.1).
+_DURATIVE_RE = re.compile(r"(?:을|ㄹ|일|는)\s*때|(?:는|은|인)\s*동안")
+# 잠금 해제 전이('풀리면/풀려') — EVENT_KEYWORDS 에 없어 트리거로 안 잡히던 것을 이벤트로 인정.
+_UNLOCK_RE = re.compile(r"풀리|풀려|풀린")
+
+
+def _is_state_aspect(clause: str) -> bool:
+    """절이 결과상/지속상(상태) 절인가 → 트리거가 아니라 조건(승격 규칙 대상)."""
+    return bool(_RESULTATIVE_RE.search(clause) or _DURATIVE_RE.search(clause))
+
+
+def _is_myeon_boundary_B(word: str) -> bool:
+    """원본 _is_myeon_boundary + 후행 구두점 허용('높으면,' 처럼 쉼표가 붙어도 절 경계).
+
+    VERB_STEMS(오버레이 확장 포함)를 참조하므로 '높/낮' 레벨 형용사도 경계로 인식한다.
+    쉼표만 허용한다(마침표·말줄임표는 문장 흐름을 바꿀 수 있어 제외 — 회귀 방지).
+    """
+    w = word.rstrip(",")
+    if not w.endswith("면"):
+        return False
+    body = w[:-1]
+    if body.endswith("으"):
+        body = body[:-1]
+    for stem in P.VERB_STEMS:
+        if body.endswith(stem):
+            return True
+    if body.endswith("이"):  # copula (…이면 / …사이면 / …이상이면)
+        return True
+    return False
+
+
+def _aspect_state(clause: str, eid: Optional[str]) -> str:
+    """결과상 절 + 해석된 엔티티 도메인 → 정확한 상태 문자열.
+    극성: 풀리(해제)=양성, 꺼/닫/잠/없=음성, 켜/열/있=양성. '안/못' 부정은 극성 반전(XOR).
+    도메인별: cover=open/closed, lock=unlocked/locked, 그 외=on/off.
+    """
+    neg = bool(re.search(r"(?:^|\s)안\s+[가-힣]", clause)) or bool(re.search(r"(?:^|\s)못\s", clause))
+    if _UNLOCK_RE.search(clause):
+        base_pos = True                     # 잠금 '풀림' = 해제 = 양성
+    elif re.search(r"꺼|닫|잠|없", clause):
+        base_pos = False                    # 꺼짐/닫힘/잠김/없음 = 음성
+    else:
+        base_pos = True                     # 켜짐/열림/있음 = 양성(기본)
+    positive = base_pos != neg              # XOR
+    dom = eid.split(".")[0] if eid else None
+    if dom == "cover":
+        return "open" if positive else "closed"
+    if dom == "lock":
+        return "unlocked" if positive else "locked"
+    return "on" if positive else "off"
 
 
 def build_overlay_gazetteer(inventory: dict, settings: dict) -> Gazetteer:
@@ -360,6 +460,10 @@ def _clause_is_event_B(self, clause: str) -> bool:
         return True
     if any(k in clause for k in P.EVENT_KEYWORDS):
         return True
+    # P2: 결과상('켜져 있으면')·잠금해제('풀리면')도 상태 이벤트 후보로 인정('켜져'≠'켜지'라
+    # EVENT_KEYWORDS 로는 안 잡히던 것). aspect 라우팅이 트리거/조건을 최종 결정한다.
+    if _RESULTATIVE_RE.search(clause) or _UNLOCK_RE.search(clause):
+        return True
     if re.search(r"움직임|모션|인기척|동작|움직이", clause):
         return True
     if "사람" in clause and re.search(r"있|없|감지|오", clause):
@@ -414,6 +518,155 @@ def _build_leak_B(self, clause: str, as_trigger: bool):
         self.triggers.append({"type": "state", "entity_id": chip.chosen, "to": "on"})
     else:
         self.conditions.append({"type": "state", "entity_id": chip.chosen, "state": "on"})
+
+
+def _build_state_event_B(self, clause, as_trigger):
+    """P2: 도메인·부정·결과상 극성을 반영한 상태 이벤트(원본 _build_state_event 대체).
+
+    - 상태값을 `_aspect_state` 로 계산: cover=open/closed, lock=unlocked/locked, 그 외 on/off.
+    - '안/못' 부정과 결과상(꺼져/닫혀/잠겨)·잠금해제(풀리)를 정확히 반영('안 켜져 있으면'=off,
+      '커튼 열리면'=open, '잠금 풀리면'=unlocked).
+    """
+    role = "trigger" if as_trigger else "condition"
+    slot = (f"triggers[{len(self.triggers)}].entity_id" if as_trigger
+            else f"conditions[{len(self.conditions)}].entity_id")
+    hit = self._find_entity_in_clause(clause)
+    if hit:
+        surf, ids = hit
+        cands = [self.gz._cand(self.gz.entity(i), 0.9, "이름 일치") for i in ids]
+        chip = self._chip(surf, role, slot, cands, self._span_of(surf))
+    else:
+        concept = P._find_concept(clause)
+        area = P._find_area(self.gz, clause) or self.default_area
+        cands = self.gz.resolve_concept(concept, area, clause) if concept else []
+        chip = self._chip(clause.strip(), role, slot, cands)
+    eid = chip.chosen
+    # P2: 문(도어센서)에 잠금/해제 표현이 붙으면 같은 방의 lock 으로 재매핑('현관문 잠금 풀리면'
+    # → lock.entrance_door). 명시된 switch/밸브는 대상이 아니므로 binary_sensor 일 때만.
+    if eid and eid.split(".")[0] == "binary_sensor" \
+            and (_UNLOCK_RE.search(clause)
+                 or re.search(r"잠그|잠가|잠궈|잠금|잠기|잠겨|도어\s*락", clause)):
+        e = self.gz.entity(eid)
+        area = e.get("area_id") if e else None
+        locks = [x["entity_id"] for x in self.gz.entities
+                 if x["domain"] == "lock" and (area is None or x.get("area_id") == area)]
+        if locks:
+            eid = locks[0]
+    st = _aspect_state(clause, eid)
+    if as_trigger:
+        self.triggers.append({"type": "state", "entity_id": eid, "to": st})
+    else:
+        self.conditions.append({"type": "state", "entity_id": eid, "state": st})
+    # P2: 제어 가능한 상태 대상은 뒤따르는 대상-생략 액션이 물려받게 한다('가스밸브가 안 잠겨
+    # 있으면 잠가'·'불 안 켜져 있을 때만 켜줘' → 같은 대상에 잠금/점등). 명시 대상이 있으면 무효.
+    if eid and eid.split(".")[0] in (
+            "light", "switch", "fan", "media_player", "climate", "cover", "lock"):
+        self.inh_action_entity = eid
+
+
+# P2 지속상 조건이 액션존 앞에 붙는 경우('… 감지되는 동안엔 조명 켜'/'… 닫혀 있을 때만 켜').
+#   면 경계가 없어 액션존에 남은 선행 지속상 절을 조건으로 떼어낸다(§4.1).
+_DURATIVE_SPLIT_RE = re.compile(
+    r"^(?P<cond>.*?(?:(?:을|ㄹ|일|는)\s*때(?:만|는|엔|에)?"
+    r"|(?:는|은|인)\s*동안(?:엔|은|에)?))\s+(?P<act>.+)$")
+
+
+def _split_durative_condition(clause: str):
+    """액션 절이 '지속상 조건 + 액션'이면 (조건부, 액션부)로 분리. 아니면 (None, clause)."""
+    m = _DURATIVE_SPLIT_RE.match(clause)
+    if not m:
+        return None, clause
+    cond = m.group("cond").strip()
+    act = m.group("act").strip()
+    # 가드: 조건부에 상태/수치/모션 신호가 있고, 액션부에 실제 명령 동사가 있을 때만 분리.
+    if not (_RESULTATIVE_RE.search(cond) or _between(cond)
+            or re.search(r"감지|모션|움직|인기척|사람|높|낮|사이", cond)):
+        return None, clause
+    if not any(h in act for h in P.COMMAND_HINTS):
+        return None, clause
+    return cond, act
+
+
+def _route_condition_segment_B(self, seg: str):
+    """지속상 조건부 세그먼트를 수치/모션/상태 조건으로 방출(as_trigger=False).
+
+    세그먼트에 방이 안 적혀 있으면 트리거 엔티티의 방을 임시 기본값으로 써 해석한다
+    ('욕실 환풍기 켜지면 … 모션 감지되는 동안엔' → 욕실 모션). 처리 후 원상 복원.
+    """
+    saved_area = self.default_area
+    if self.default_area is None and self.triggers:
+        teid = self.triggers[0].get("entity_id")
+        if isinstance(teid, str):
+            te = self.gz.entity(teid)
+            if te and te.get("area_id"):
+                self.default_area = te["area_id"]
+    try:
+        if _between(seg) or re.search(r"이상|이하|초과|미만|넘|높아|낮아|높|낮", seg):
+            self._emit_numeric_aspect(seg, as_trigger=False)
+        elif re.search(r"움직임|모션|인기척|동작|감지|사람|움직이", seg):
+            self._build_event_clause(seg, False)
+        else:
+            self._build_state_event(seg, False)
+    finally:
+        self.default_area = saved_area
+
+
+def _process_consequent_B(self, clauses):
+    for clause in clauses:
+        seg, rest = _split_durative_condition(clause)
+        # 지속상 조건은 트리거가 이미 있을 때만 떼어낸다(순수 명령문 보호).
+        if seg is not None and self.triggers:
+            self._route_condition_segment_B(seg)
+            if rest.strip():
+                self._build_action(rest)
+        else:
+            self._build_action(clause)
+
+
+def _process_antecedent_B(self, clauses, frames):
+    """P2 상(aspect) 라우팅 — 원본 _process_antecedent 대체.
+
+    결과상/지속상 절은 전이 절과 분리해 **조건**으로 배치하고, 트리거가 하나도 없을 때만
+    첫 상태 절을 트리거로 승격한다(§4.1). 전이 이벤트/시각/모드/수치 트리거는 원본과 동일.
+    """
+    held = [c for c in clauses if P._SENTINEL_RE.fullmatch(c.strip())]
+    other = [c for c in clauses if not P._SENTINEL_RE.fullmatch(c.strip())]
+
+    for c in held:
+        self._build_held(c, frames)
+
+    modes = [self._detect_mode(c) for c in other]
+    event_clauses = [c for c, mi in zip(other, modes)
+                     if self._clause_is_event(c) and not (mi and mi[0] == "trigger")]
+    # 상태상(결과상/지속상) 절 vs 전이 절. 전이 절만 '주 트리거' 후보다.
+    state_events = [c for c in event_clauses if _is_state_aspect(c)]
+    trans_events = [c for c in event_clauses if c not in state_events]
+
+    has_primary = bool(held) or bool(trans_events) \
+        or any(mi and mi[0] == "trigger" for mi in modes)
+    boundary_clause = other[-1] if other else None
+
+    for c, mi in zip(other, modes):
+        self._emit_calendar_aspect(c)
+        self._emit_time_aspect(c)
+        if mi and mi[0] == "condition":
+            self._emit_mode_condition(mi[1], mi[2], c)
+        promote = (c is boundary_clause) and not has_primary and not self.triggers
+        self._emit_numeric_aspect(c, as_trigger=promote)
+
+    for c, mi in zip(other, modes):
+        if mi and mi[0] == "trigger":
+            self._emit_mode_trigger(mi[1], mi[2], c)
+
+    # 전이 이벤트: held 있으면 전부 조건, 없으면 마지막이 트리거(원본 의미 유지).
+    for i, c in enumerate(trans_events):
+        as_trigger = (not held) and (i == len(trans_events) - 1)
+        self._build_event_clause(c, as_trigger)
+
+    # 상태상 절: 기본 조건. 트리거가 하나도 없으면 첫 상태 절만 진입에지 트리거로 승격(§4.1).
+    for i, c in enumerate(state_events):
+        promote = (not held) and (not self.triggers) and (i == 0)
+        self._build_event_clause(c, promote)
 
 
 # ---------------------------------------------------------------------------
@@ -635,10 +888,24 @@ _B6_CONCEPTS: dict[str, dict] = {
 }
 
 
+# P2 수치 between('A(도)에서 B(도) 사이') → above=min, below=max (SPEC §4.2, 경계 미포함).
+_BETWEEN_RE = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s*도?\s*(?:에서|부터)\s*(-?\d+(?:\.\d+)?)\s*도?\s*(?:사이|까지)")
+
+
+def _between(clause: str):
+    m = _BETWEEN_RE.search(clause)
+    if not m:
+        return None
+    a, b = float(m.group(1)), float(m.group(2))
+    return (min(a, b), max(a, b))
+
+
 def _emit_numeric_aspect_B(self, clause, as_trigger=False):
-    """F1 — 수치 비교 측면. 개념어(온도/습도)가 없어도 'N도' 온도 리터럴이 있으면
-    온도 센서로 추론해 numeric_state 를 방출한다('거실이 28도 넘으면')."""
-    if not re.search(r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮", clause):
+    """F1 + P2 — 수치 비교/레벨/between 측면. 개념어(온도/습도)가 없어도 'N도' 온도 리터럴이
+    있으면 온도 센서로 추론한다. '높으면/낮으면/사이면'(레벨/between)도 방출한다(§4.2)."""
+    if not (re.search(r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮", clause)
+            or _between(clause)):
         return
     if P._find_concept(clause) is None and P.find_temperature(clause) is None:
         return
@@ -646,7 +913,7 @@ def _emit_numeric_aspect_B(self, clause, as_trigger=False):
 
 
 def _build_numeric_B(self, clause, as_trigger=False):
-    """B/E5 — numeric_state. 영하/마이너스 음수 처리 + 트리거 방을 default_area 로 전파."""
+    """B/E5 + P2 — numeric_state. 음수 처리 · between(사이) 결합 · 방 전파."""
     concept = P._find_concept(clause)
     area = P._find_area(self.gz, clause) or self.default_area
     temp = P.find_temperature(clause)
@@ -660,7 +927,10 @@ def _build_numeric_B(self, clause, as_trigger=False):
     if num is not None and re.search(r"영하|마이너스", clause):
         num = -abs(num)
     above = below = None
-    if re.search(r"이상|초과|넘|올라가|높", clause):
+    btw = _between(clause)
+    if btw:
+        above, below = btw            # P2: '20도에서 24도 사이' → above 20 + below 24
+    elif re.search(r"이상|초과|넘|올라가|높", clause):
         above = num
     elif re.search(r"이하|미만|떨어지|낮|내려가|밑", clause):
         below = num
@@ -699,7 +969,8 @@ def _apply_overlay():
 
     saved["VERB_STEMS"] = P.VERB_STEMS
     # A5 + B1/B6 절 경계 어간(움직이면/나서면/비우면/새면).
-    P.VERB_STEMS = list(P.VERB_STEMS) + ["잡히", "움직이", "나서", "비우", "새"]
+    # P2: 수치 레벨 형용사 '높/낮'(높으면/낮으면)을 절 경계로 인정 → 조건/트리거로 방출(§4.2).
+    P.VERB_STEMS = list(P.VERB_STEMS) + ["잡히", "움직이", "나서", "비우", "새", "높", "낮"]
 
     saved["DAY_TYPE_WORDS"] = P.DAY_TYPE_WORDS
     dtw = dict(P.DAY_TYPE_WORDS)
@@ -712,6 +983,9 @@ def _apply_overlay():
 
     saved["_duration_frames"] = P._duration_frames
     P._duration_frames = _duration_frames_A4                # A4
+
+    saved["_is_myeon_boundary"] = P._is_myeon_boundary
+    P._is_myeon_boundary = _is_myeon_boundary_B             # P2 후행 구두점 허용 절 경계
 
     # --- _Parser 메서드 ---
     saved["_detect_mode"] = P._Parser._detect_mode
@@ -733,10 +1007,20 @@ def _apply_overlay():
     P._Parser._emit_numeric_aspect = _emit_numeric_aspect_B  # F1 온도 리터럴 추론
 
     saved["_clause_is_event"] = P._Parser._clause_is_event
-    P._Parser._clause_is_event = _clause_is_event_B         # B1/B6
+    P._Parser._clause_is_event = _clause_is_event_B         # B1/B6 + P2 결과상/잠금해제
 
     saved["_build_event_clause"] = P._Parser._build_event_clause
     P._Parser._build_event_clause = _build_event_clause_B   # B1/B6
+
+    saved["_build_state_event"] = P._Parser._build_state_event
+    P._Parser._build_state_event = _build_state_event_B     # P2 도메인·부정·결과상 상태
+
+    saved["_process_antecedent"] = P._Parser._process_antecedent
+    P._Parser._process_antecedent = _process_antecedent_B   # P2 aspect 트리거/조건 라우팅
+
+    saved["_process_consequent"] = P._Parser._process_consequent
+    P._Parser._process_consequent = _process_consequent_B   # P2 지속상 조건 분리
+    P._Parser._route_condition_segment_B = _route_condition_segment_B
 
     saved["_split_daily_no_boundary"] = P._Parser._split_daily_no_boundary
     P._Parser._split_daily_no_boundary = _split_daily_no_boundary_B  # B4/모드/시간대
@@ -752,6 +1036,7 @@ def _apply_overlay():
         P.DAY_TYPE_WORDS = saved["DAY_TYPE_WORDS"]
         P.COMMAND_HINTS = saved["COMMAND_HINTS"]
         P._duration_frames = saved["_duration_frames"]
+        P._is_myeon_boundary = saved["_is_myeon_boundary"]
         P._Parser._emit_numeric_aspect = saved["_emit_numeric_aspect"]
         P._Parser._detect_mode = saved["_detect_mode"]
         P._Parser._emit_time_aspect = saved["_emit_time_aspect"]
@@ -760,6 +1045,11 @@ def _apply_overlay():
         P._Parser._build_numeric = saved["_build_numeric"]
         P._Parser._clause_is_event = saved["_clause_is_event"]
         P._Parser._build_event_clause = saved["_build_event_clause"]
+        P._Parser._build_state_event = saved["_build_state_event"]
+        P._Parser._process_antecedent = saved["_process_antecedent"]
+        P._Parser._process_consequent = saved["_process_consequent"]
+        if hasattr(P._Parser, "_route_condition_segment_B"):
+            delattr(P._Parser, "_route_condition_segment_B")
         P._Parser._split_daily_no_boundary = saved["_split_daily_no_boundary"]
         for attr in ("_build_zone_B", "_build_leak_B"):
             if hasattr(P._Parser, attr):
@@ -778,4 +1068,7 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
     """
     with _apply_overlay():
         normalized = _n90.normalize_surface(sentence, gz=gz)
+        # P2: 금지문 방어 — 정반대 액션 생성이 최악의 안전사고이므로 파서 진입 전에 차단.
+        if _is_prohibition(normalized):
+            return _prohibition_result(sentence)
         return P.parse(normalized, gz, settings, pins or {})
