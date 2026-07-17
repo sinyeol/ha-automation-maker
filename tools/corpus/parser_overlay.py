@@ -1360,6 +1360,89 @@ def _is_repeat_action(text: str) -> bool:
     return False
 
 
+# --- repeat 풀구조(§3.4) — 'N번 깜빡/반짝/반복/열었다 닫았다' 를 count 루프로. ---
+_REPEAT_NATIVE_CNT = {"한": 1, "두": 2, "세": 3, "네": 4, "다섯": 5, "여섯": 6,
+                      "일곱": 7, "여덟": 8, "아홉": 9, "열": 10}
+_REPEAT_CNT_ARABIC_RE = re.compile(r"(\d+)\s*(?:번|차례|회)")
+_REPEAT_CNT_NATIVE_RE = re.compile(
+    r"(한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\s*(?:번|차례|회)")
+
+
+def _detect_repeat_count(text: str):
+    """'N번/차례/회' → 반복 횟수(정수). 아라비아·토박이수 모두. 없으면 None(§3.4)."""
+    m = _REPEAT_CNT_ARABIC_RE.search(text)
+    if m:
+        return int(m.group(1))
+    m2 = _REPEAT_CNT_NATIVE_RE.search(text)
+    if m2:
+        return _REPEAT_NATIVE_CNT[m2.group(1)]
+    return None
+
+
+def _repeat_on_off_services(action: str):
+    """액션 서비스명 → (on-서비스, off-서비스). cover 는 open/close, 그 외 turn_on/off."""
+    domain = (action or "").split(".")[0] or "homeassistant"
+    if domain == "cover":
+        return "cover.open_cover", "cover.close_cover"
+    return domain + ".turn_on", domain + ".turn_off"
+
+
+def _build_count_repeat(sub: dict, normalized: str):
+    """'N번 깜빡/반짝/열었다 닫았다' → {type:repeat, kind:count, count:N, sequence:[on,
+    delay{s:1}, off, delay{s:1}]}. 파서가 이미 해석한 실질 액션(대상 엔티티+도메인)을
+    on/off 로 전개한다. 횟수·대상 확정 불가 시 None(→ 기존 bare repeat 보존)."""
+    n = _detect_repeat_count(normalized)
+    if n is None:
+        return None
+    base = next((a for a in (sub.get("actions") or [])
+                 if isinstance(a, dict) and a.get("type") == "service"
+                 and isinstance(a.get("target"), dict)
+                 and a["target"].get("entity_id")), None)
+    if base is None:
+        return None
+    on_svc, off_svc = _repeat_on_off_services(base.get("action", ""))
+    target = base["target"]
+    seq = [
+        {"type": "service", "action": on_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+        {"type": "service", "action": off_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+    ]
+    return {"type": "repeat", "kind": "count", "count": n, "sequence": seq}
+
+
+def _build_until_repeat(sub: dict, normalized: str):
+    """'X 열려 있으면 … 닫힐 때까지 계속 깜빡' → {type:repeat, kind:until,
+    conditions:[state X 반전], sequence:[on, delay{s:1}, off, delay{s:1}]}.
+    단일 state 트리거 + 전개 가능한 점멸 액션이 있을 때만(보수적). 아니면 None."""
+    if "때까지" not in normalized:
+        return None
+    trigs = [t for t in (sub.get("triggers") or [])
+             if isinstance(t, dict) and t.get("type") == "state"
+             and t.get("entity_id") and t.get("to") in ("on", "off")]
+    if len(trigs) != 1:
+        return None
+    base = next((a for a in (sub.get("actions") or [])
+                 if isinstance(a, dict) and a.get("type") == "service"
+                 and isinstance(a.get("target"), dict)
+                 and a["target"].get("entity_id")), None)
+    if base is None:
+        return None
+    on_svc, off_svc = _repeat_on_off_services(base.get("action", ""))
+    target = base["target"]
+    inv_state = "off" if trigs[0]["to"] == "on" else "on"
+    until_cond = {"type": "state", "entity_id": trigs[0]["entity_id"],
+                  "state": inv_state}
+    seq = [
+        {"type": "service", "action": on_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+        {"type": "service", "action": off_svc, "target": target},
+        {"type": "delay", "duration": {"seconds": 1}},
+    ]
+    return {"type": "repeat", "kind": "until", "conditions": [until_cond],
+            "sequence": seq}
+
+
 # 알림 동사(§3.3·§4.5). '물어/여쭤'(질문형 알림) 포함.
 _NOTIFY_VERB_RE = re.compile(
     r"알려|말해|말하|말씀|보내|방송|안내|얘기|알림|전해|전달|물어|여쭤|공지")
@@ -1897,7 +1980,10 @@ def _augment_actions_only(sentence: str, normalized: str, sub: dict,
                     sub["triggers"].append(nt)
                     sub["conditions"].remove(c)
                     break
-        sub["actions"] = [{"type": "repeat"}]
+        rep = _build_count_repeat(sub, normalized)
+        if rep is None:
+            rep = _build_until_repeat(sub, normalized)
+        sub["actions"] = [rep] if rep is not None else [{"type": "repeat"}]
         sub["conditions"] = [c for c in sub["conditions"]
                              if c.get("type") in ("weekday", "day_of_month",
                                                   "interval_anchor", "sun_window")]
@@ -2326,6 +2412,58 @@ def _detect_if_condition(normalized: str, subs: list, trigs: list, gz, settings)
     return []
 
 
+# 극성(켜/끄) 판정 — 대비쌍 then/else 재구성용. 명령 동사 어간만(트리거 '켜지면' 등은
+# 절 분리 후 스캔하므로 영향 최소).
+_ON_VERB_RE = re.compile(r"켜|틀|열어|여[는나]|올려|가동|작동|점등|높여|데워|재생|방송|가습")
+_OFF_VERB_RE = re.compile(r"꺼|끄|닫|내려|잠[그가긴]|소등|낮춰|멈춰|정지|중지")
+
+
+def _clause_polarity(text: str):
+    """절 표면형 → 'on'/'off'/None. 켜류 동사만 있으면 on, 끄류만 있으면 off."""
+    on = _ON_VERB_RE.search(text)
+    off = _OFF_VERB_RE.search(text)
+    if on and not off:
+        return "on"
+    if off and not on:
+        return "off"
+    if on and off:  # 둘 다 — 뒤에 온 것(문말 서술)이 그 절의 명령.
+        return "on" if on.start() > off.start() else "off"
+    return None
+
+
+def _polar_service(action: str, pol: str) -> str:
+    """서비스명 + 극성 → 서비스명. cover 는 open/close, 그 외 turn_on/off."""
+    domain = (action or "").split(".")[0] or "homeassistant"
+    if domain == "cover":
+        return "cover.open_cover" if pol == "on" else "cover.close_cover"
+    return domain + (".turn_on" if pol == "on" else ".turn_off")
+
+
+def _weekday_contrast_then_else(normalized: str, acts: list):
+    """'평일엔 X, 주말엔 Y' 의 then(평일)·else(주말) 액션을 표면 동사 극성으로 재구성.
+    파서가 대비를 한 액션으로 병합(then==else 오류)해도 base service 의 대상/도메인을
+    on/off 로 전개해 복원한다. 극성 확정 불가·동일 극성이면 None(→ 기존 로직 유지)."""
+    base = next((a for a in acts if isinstance(a, dict) and a.get("type") == "service"
+                 and isinstance(a.get("target"), dict)
+                 and a["target"].get("entity_id")), None)
+    if base is None:
+        return None
+    p_idx = normalized.find("평일")
+    w_idx = normalized.find("주말")
+    if p_idx < 0 or w_idx < 0 or p_idx >= w_idx:
+        return None
+    then_pol = _clause_polarity(normalized[p_idx + 2:w_idx])  # 평일절
+    else_pol = _clause_polarity(normalized[w_idx + 2:])       # 주말절
+    if then_pol is None or else_pol is None or then_pol == else_pol:
+        return None
+    tgt = base["target"]
+    then_act = {"type": "service", "action": _polar_service(base["action"], then_pol),
+                "target": tgt}
+    else_act = {"type": "service", "action": _polar_service(base["action"], else_pol),
+                "target": tgt}
+    return [then_act], [else_act]
+
+
 def _augment_else_branch(sentence: str, normalized: str, result: dict, gz, settings) -> None:
     """다중 서브룰(명시 대비)을 한 트리거 + if/else 액션으로 조립."""
     if not isinstance(result, dict):
@@ -2360,7 +2498,13 @@ def _augment_else_branch(sentence: str, normalized: str, result: dict, gz, setti
         if not trigs or not acts:
             return
         if_cond = _detect_if_condition(normalized, subs, trigs, gz, settings)
-        if_node = {"type": "if", "if": if_cond, "then": [acts[0]], "else": [acts[-1]]}
+        # 파서가 대비를 한 액션으로 병합했으면(then==else) 표면 극성으로 then/else 복원.
+        te = _weekday_contrast_then_else(normalized, acts)
+        if te is not None:
+            then_acts, else_acts = te
+        else:
+            then_acts, else_acts = [acts[0]], [acts[-1]]
+        if_node = {"type": "if", "if": if_cond, "then": then_acts, "else": else_acts}
         if flat:
             model["conditions"] = []
             model["actions"] = [if_node]
