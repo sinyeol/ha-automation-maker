@@ -2,8 +2,12 @@
 import { el, field, selectField } from '../app.js';
 import { store } from '../store.js';
 import { showToast } from '../components/toast.js';
+import { confirmDialog } from '../components/modal.js';
 import { openEntityPicker } from '../components/entity-picker.js';
-import { getSettings, putSettings, getModes, toggleMode } from '../api2.js';
+import {
+  getSettings, putSettings, getModes, toggleMode,
+  getLearned, deleteLearned,
+} from '../api2.js';
 
 const SEGMENTS = [
   { key: 'dawn', label: '새벽' },
@@ -82,6 +86,13 @@ function build(root, data) {
   if (!LLM_BACKENDS.some(b => b.key === llmBackend)) llmBackend = 'off';
   const llmAvail = data.llm_available;
 
+  // AI 학습(Phase 3C): learn.enabled 는 저장 대상, learn_available 은 준비상태(계산값).
+  const learnRaw = Object.assign({}, data.learn || {});
+  let learnEnabled = !!data.learn_enabled;
+  const learnAvailable = !!data.learn_available;
+  let learnedList = [];         // GET api/v2/learned 결과
+  let learnedLoaded = false;
+
   let modeStates = new Map();   // 라이브 상태(engine): name → "on"|"off"
 
   const content = el('div', { class: 'settings-body' });
@@ -141,6 +152,9 @@ function build(root, data) {
 
     // 5) LLM 백엔드
     content.appendChild(renderLlm());
+
+    // 6) AI 학습
+    content.appendChild(renderLearn());
 
     content.appendChild(el('div', { class: 'settings-save' },
       el('button', { class: 'btn btn-primary wide', onClick: () => save() }, '설정 저장')));
@@ -230,6 +244,71 @@ function build(root, data) {
       'API 키/구독 토큰은 애드온 설정(환경)에서 관리해요. 여기서는 사용 여부만 정해요.', box);
   }
 
+  // --- AI 학습 섹션 (Phase 3C) ---
+  function renderLearn() {
+    const box = el('div', { class: 'learn-settings' });
+
+    // on/off 토글
+    const toggle = el('button', {
+      class: 'switch' + (learnEnabled ? ' on' : ''),
+      'aria-label': learnEnabled ? '켜짐' : '꺼짐',
+      onClick: () => { learnEnabled = !learnEnabled; render(); },
+    }, el('span', { class: 'switch-knob' }));
+    box.appendChild(el('div', { class: 'learn-toggle-row' },
+      el('span', { class: 'learn-opt-main' },
+        el('span', { class: 'learn-opt-label' }, '못 읽은 문장 AI로 배우기'),
+        el('span', { class: 'llm-opt-hint' },
+          '미해석 문장을 AI가 표준 형태로 바꿔 학습해요. 다음부터는 AI 없이 처리돼요.')),
+      toggle));
+
+    // 준비상태 — 위 LLM 백엔드가 준비돼야 학습이 동작한다.
+    const ready = learnAvailable;
+    box.appendChild(el('div', { class: 'learn-ready-row' },
+      el('span', { class: 'llm-status' + (ready ? ' ok' : ' off') },
+        ready ? '준비됨' : 'AI 백엔드 필요'),
+      el('span', { class: 'form-hint' }, ready
+        ? '위 “LLM 해석 백엔드”로 문장을 정규화해요.'
+        : '위 “LLM 해석 백엔드”에서 API 키 또는 구독 CLI를 먼저 켜 주세요.')));
+
+    // 학습된 패턴 목록
+    box.appendChild(el('h4', { class: 'learn-sub-title' }, '학습된 패턴'));
+    if (!learnedLoaded) {
+      box.appendChild(el('p', { class: 'form-hint' }, '불러오는 중…'));
+    } else if (!learnedList.length) {
+      box.appendChild(el('p', { class: 'form-hint' }, '아직 학습한 패턴이 없어요.'));
+    } else {
+      const listBox = el('div', { class: 'learn-list' });
+      for (const item of learnedList) listBox.appendChild(learnedRow(item));
+      box.appendChild(listBox);
+    }
+
+    return section('AI 학습',
+      'AI로 배운 문장은 여기에 쌓여요. 같은/비슷한 문장은 AI 없이 바로 해석돼요. (기본 꺼짐)', box);
+  }
+
+  function learnedRow(item) {
+    const raw = item.raw || item.normalized || '';
+    const hits = Number(item.hits || 0);
+    const info = el('div', { class: 'learn-item-info' },
+      el('span', { class: 'learn-item-raw' }, raw));
+    if (item.normalized && item.normalized !== raw) {
+      info.appendChild(el('span', { class: 'learn-item-norm' }, '→ ' + item.normalized));
+    }
+    info.appendChild(el('span', { class: 'form-hint' }, `사용 ${hits}회`));
+
+    const del = removeBtn(async () => {
+      const ok = await confirmDialog('이 학습 패턴을 삭제할까요?', { okText: '삭제', danger: true });
+      if (!ok) return;
+      try {
+        await deleteLearned(item.id);
+        learnedList = learnedList.filter(x => x.id !== item.id);
+        showToast('삭제했어요.', 'info');
+        render();
+      } catch (_) { /* 토스트 처리됨 */ }
+    });
+    return el('div', { class: 'learn-item' }, info, del);
+  }
+
   async function save() {
     const personsObj = {};
     for (const p of personList) if (p.surface && p.entity_id) personsObj[p.surface] = p.entity_id;
@@ -250,11 +329,12 @@ function build(root, data) {
       .map(a => ({ surface: a.surface, entity_id: a.entity_id }));
 
     const llmObj = Object.assign({}, data.llm || {}, { backend: llmBackend });
+    const learnObj = Object.assign({}, learnRaw, { enabled: learnEnabled });
 
     try {
       await putSettings({
         segments: seg, persons: personsObj, modes: modesObj,
-        aliases: aliasesArr, llm: llmObj,
+        aliases: aliasesArr, llm: llmObj, learn: learnObj,
       });
       showToast('설정을 저장했어요.', 'info');
     } catch (_) { /* 토스트 처리됨 */ }
@@ -267,6 +347,13 @@ function build(root, data) {
     applyModeStates(res && res.modes);
     if (modeStates.size) render();
   }).catch(() => {});
+
+  // 학습된 패턴 목록을 비동기로 불러온다(백엔드 미구현/오류 시 빈 목록으로 표시).
+  getLearned().then(res => {
+    learnedList = (res && res.learned) || [];
+    learnedLoaded = true;
+    render();
+  }).catch(() => { learnedLoaded = true; render(); });
 }
 
 // --- 로컬 헬퍼 ---

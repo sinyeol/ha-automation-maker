@@ -26,7 +26,7 @@ from backend.engine.variables import GlobalVars
 from backend.ha_client import HAClient, merge_inventory
 from backend.nl.gazetteer import Gazetteer
 
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 FRONTEND = Path(__file__).parent.parent / "frontend"
 ALLOWED_REMOTES = {"172.30.32.2", "127.0.0.1"}
 
@@ -124,6 +124,9 @@ def _default_settings() -> dict:
         "confirm_actions": ["lock", "valve"],
         # SPEC-V3 §4.1: LLM 해석 백엔드 선택(off|api|cli). 키/토큰은 환경에서만 읽는다.
         "llm": {"backend": "off"},
+        # Phase 3C: CLI 학습 기능 on/off(사용자 선택 옵션, 기본 off). 실제 정규화는
+        # 기존 llm.backend(cli/api)를 재사용한다(별도 백엔드 옵션 없음).
+        "learn": {"enabled": False},
     }
 
 
@@ -131,6 +134,57 @@ def _merge_settings_defaults(settings: dict) -> None:
     """로드된 설정에 빠진 최상위 기본 키를 채운다(인플레이스)."""
     for key, val in _default_settings().items():
         settings.setdefault(key, val)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3B — L2 템플릿 매처 배선 헬퍼
+# ---------------------------------------------------------------------------
+def _load_pattern_library() -> list:
+    """빌드시 생성되는 패턴 라이브러리(nl/pattern_library.yaml, read-only). 애드온 이미지에 동봉.
+
+    로더(backend.nl.pattern_match.load_pattern_library) 부재·손상 시 빈 목록(매처 비활성).
+    """
+    try:
+        from backend.nl.pattern_match import load_pattern_library
+    except Exception:
+        return []
+    try:
+        lib = load_pattern_library()
+    except Exception:
+        log.exception("패턴 라이브러리 로드 실패 — 매처 비활성")
+        return []
+    return lib if isinstance(lib, list) else []
+
+
+def _build_template_matcher(pattern_library: list, gazetteer, inventory: dict):
+    """L2 매처(backend.nl.pattern_match.TemplateMatcher). 모듈/라이브러리 부재 시 None.
+
+    미배포·초기화 실패를 조용히 흡수한다(매처 비활성 = 규칙만 사용, 회귀 0).
+    """
+    if not pattern_library:
+        return None
+    try:
+        from backend.nl.pattern_match import TemplateMatcher
+    except Exception:
+        return None
+    try:
+        return TemplateMatcher(pattern_library, gazetteer, inventory)
+    except Exception:
+        log.exception("템플릿 매처 초기화 실패 — 매처 비활성")
+        return None
+
+
+def _build_learned_store(ddir):
+    """로컬 학습 저장소(backend.nl.learn.LearnedStore, JsonStore 확장/YAML). 부재 시 None."""
+    try:
+        from backend.nl.learn import LearnedStore
+    except Exception:
+        return None
+    try:
+        return LearnedStore(ddir / "learned_patterns.yaml")
+    except Exception:
+        log.exception("학습 저장소 초기화 실패 — 학습 비활성")
+        return None
 
 
 async def _build_inventory(ha) -> dict:
@@ -390,6 +444,27 @@ async def _on_startup(app: web.Application) -> None:
     # 전역 변수는 settings dict 참조를 공유(인플레이스 병합으로 갱신)
     app["global_vars"] = GlobalVars(settings_store.data)
 
+    # Phase 3B: L2 템플릿 매처(규칙이 not ok 일 때만 흡수). 라이브러리/모듈 부재 시 None.
+    app["pattern_library"] = _load_pattern_library()
+    app["template_matcher"] = _build_template_matcher(
+        app["pattern_library"], gazetteer_fn(), inventory)
+
+    # Phase 3C: 로컬 학습 저장소(/data/learned_patterns.yaml). 학습된 (원문→정규형→model)을
+    # CLI 없이 로컬 재사용한다(§3). LearnedStore 는 JsonStore 확장이라 그대로 flush 대상.
+    learned_store = _build_learned_store(ddir)
+    app["learned_store"] = learned_store
+    # 재기동 시 엔티티 재검증(§3)은 인벤토리가 실제로 로드됐을 때만 수행한다. HA 부팅 순서상
+    # core API 가 아직 안 떠서 _build_inventory 가 실패하면 inventory 는 빈 값이 되는데, 그
+    # 상태로 revalidate 를 돌리면 모든 학습 항목이 '엔티티 소멸'로 오판돼 디스크에서 영구
+    # 삭제된다(일시적 장애 → 데이터 소실). 빈 인벤토리면 건너뛴다(revalidate 내부에도 가드 존재).
+    if learned_store is not None and inventory.get("entities"):
+        try:
+            removed = learned_store.revalidate(inventory)
+            if removed:
+                log.info("학습 항목 %d개 제거(엔티티 소멸)", len(removed))
+        except Exception:
+            log.exception("학습 항목 재검증 실패")
+
     rules_json = JsonStore(ddir / "rules.json", [])
     rule_store = RuleStore(rules_json)
     app["rule_store"] = rule_store
@@ -407,6 +482,8 @@ async def _on_startup(app: web.Application) -> None:
 
     # modes_json 도 종료 flush 대상에 포함(engine.stop → mode_state.save 예약분 확정).
     app["_json_stores"] = [settings_store, rules_json, runlog_json, modes_json]
+    if learned_store is not None:
+        app["_json_stores"].append(learned_store)
 
     state_cache = StateCache()
 

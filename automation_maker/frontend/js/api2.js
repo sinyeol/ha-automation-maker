@@ -38,3 +38,10 @@ export const toggleMode = (name, on) =>
 export const tokenizeSentence = (sentence) => post(P + 'tokenize', { sentence });
 export const buildFromTokens = (sentence, assignments) =>
   post(P + 'build', { sentence, assignments });
+
+// Phase 3C — AI 학습(미해석 문장 → 정규화 → 학습)
+export const learnSentence = (sentence) => post(P + 'learn', { sentence });
+export const confirmLearn = (sentence, normalized, model) =>
+  post(P + 'learn/confirm', { sentence, normalized, model });
+export const getLearned = () => get(P + 'learned');
+export const deleteLearned = (id) => del(P + 'learned/' + encodeURIComponent(id));

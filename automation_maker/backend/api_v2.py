@@ -24,6 +24,7 @@ import re
 from aiohttp import web
 
 from backend.engine.rule_model import validate_rule_model
+from backend.nl import learn
 from backend.nl.llm_assist import llm_parse
 from backend.nl.manual import build_model_from_tokens, suggest_roles, tokenize
 from backend.nl.parser import parse as nl_parse
@@ -36,6 +37,7 @@ _LLM_TRIGGER_CONF = 0.6         # 이 미만이면 LLM 보조 시도
 _MAX_SENTENCE = 500             # parse/rules 문장 최대 길이(자)
 _MAX_RULES = 200               # 저장 가능한 규칙(루틴) 최대 개수
 _MAX_ASSIGNMENTS = 500          # build 토큰 매핑 최대 개수(문장 500자 → 토큰 상한 방어)
+_MAX_LEARNED = 500              # 학습 항목(learned_patterns) 최대 개수(무한 성장 방어)
 
 _LLM_BACKENDS = ("off", "api", "cli")
 
@@ -117,6 +119,24 @@ def _llm_ready() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Phase 3C — 학습 설정 헬퍼 (저장소/정규화는 backend.nl.learn 이 담당)
+# ---------------------------------------------------------------------------
+def _learn_settings(settings: dict) -> dict:
+    learn = settings.get("learn") if isinstance(settings, dict) else None
+    return learn if isinstance(learn, dict) else {}
+
+
+def _learn_enabled(settings: dict) -> bool:
+    """학습 기능 on/off(사용자 선택 옵션, 기본 off, §3)."""
+    return bool(_learn_settings(settings).get("enabled"))
+
+
+def _learn_available(settings: dict) -> bool:
+    """학습이 실제로 동작 가능한지: 기존 llm 백엔드가 준비돼야 정규화할 수 있다(§3)."""
+    return _llm_available(settings)
+
+
 def _runlog(app: web.Application):
     rl = app.get("runlog")
     if rl is not None:
@@ -186,6 +206,8 @@ async def handle_status(request: web.Request) -> web.Response:
     settings = request.app["settings_store"].data or {}
     st["llm_backend"] = _llm_backend(settings)
     st["llm_available"] = _llm_available(settings)
+    st["learn_enabled"] = _learn_enabled(settings)
+    st["learn_available"] = _learn_available(settings)
     return _json(st)
 
 
@@ -209,16 +231,89 @@ async def handle_parse(request: web.Request) -> web.Response:
     settings = request.app["settings_store"].data or {}
     result = nl_parse(sentence, gz, settings, pins)
 
-    # 백엔드 선택(§4.5): settings.llm.backend → env LLM_BACKEND → off.
+    # L2(Phase 3B): 규칙(L1)이 not ok 일 때만 로컬 학습→템플릿 매처로 흡수한다.
+    # not ok 게이트가 오탐을 억제한다(실측: 매처는 규칙이 실패할 때만 채택). ok 인
+    # 결과는 절대 덮어쓰지 않으므로 기존 파서 동작에 회귀가 없다.
+    used_matcher = None
+    if not result.get("ok"):
+        if _adopt_learned(request.app, sentence, result, gz):
+            used_matcher = "learned"
+        elif _adopt_matcher(request.app, sentence, result, gz):
+            used_matcher = "pattern"
+
+    # L3: 로컬(L1+L2)이 부족하고 매처가 흡수하지 못했을 때만 LLM 보조(§4.5).
     backend = _llm_backend(settings)
     used_llm = False
-    needs_help = result.get("confidence", 0.0) < _LLM_TRIGGER_CONF or _has_unresolved(result)
-    if needs_help and backend != "off":
-        used_llm = await _try_llm_merge(sentence, result, gz, settings, backend)
+    if used_matcher is None:
+        needs_help = (result.get("confidence", 0.0) < _LLM_TRIGGER_CONF
+                      or _has_unresolved(result))
+        if needs_help and backend != "off":
+            used_llm = await _try_llm_merge(sentence, result, gz, settings, backend)
 
     result["used_llm"] = used_llm
     result["llm_backend"] = backend if used_llm else None
+    result["used_matcher"] = used_matcher
+    result["source"] = used_matcher or ("rule" if result.get("ok") else None)
     return _json(result)
+
+
+# ---------------------------------------------------------------------------
+# L2 채택 헬퍼 (로컬 학습 / 템플릿 매처) — 규칙이 not ok 일 때만 호출된다.
+# ---------------------------------------------------------------------------
+def _apply_matched_model(result: dict, model: dict, summary: str, confidence: float,
+                         **extra) -> None:
+    """매처/학습 model 을 파싱 결과에 반영(공통). 미해결 칩 제거 → 저장 가능 상태."""
+    result["model"] = model
+    result["chips"] = []
+    result["unmatched"] = []
+    result["ok"] = True
+    result["confidence"] = round(min(max(confidence, 0.0), 1.0), 3)
+    result["summary"] = summary or ""  # 실패 파싱의 낡은 요약을 덮어쓴다
+    result.update(extra)
+
+
+def _adopt_learned(app: web.Application, sentence: str, result: dict, gz) -> bool:
+    """로컬 학습 항목을 채택한다(learn.LearnedStore.match → model 사본).
+
+    학습 이후 기기가 사라졌을 수 있으므로, 사용 시점에 엔티티 실존을 다시 검증한다
+    (§3: 재기동 재검증에 더해 방어적 이중 검증). match 는 원문/정규형 완전일치 또는
+    문자 3-gram 근접 재매칭으로 model 을 돌려주고 hits 를 올린다.
+    """
+    store = app.get("learned_store")
+    if store is None:
+        return False
+    try:
+        model = store.match(sentence)
+    except Exception:
+        log.exception("학습 저장소 매칭 중 오류")
+        return False
+    if not isinstance(model, dict) or not model:
+        return False
+    if validate_rule_model(model, _inventory(app), _mode_names(app)):
+        return False
+    _apply_matched_model(result, model, "", 1.0)
+    return True
+
+
+def _adopt_matcher(app: web.Application, sentence: str, result: dict, gz) -> bool:
+    """L2 템플릿 매처 결과를 채택한다. 매처 부재/오류/검증 실패는 조용히 False."""
+    matcher = app.get("template_matcher")
+    if matcher is None:
+        return False
+    try:
+        m = matcher.match(sentence)
+    except Exception:
+        log.exception("템플릿 매처 실행 중 오류")
+        return False
+    if not m or not isinstance(m.get("model"), dict):
+        return False
+    model = m["model"]
+    if validate_rule_model(model, _inventory(app), _mode_names(app)):
+        return False
+    _apply_matched_model(result, model, "",
+                         float(m.get("score") or _LLM_MERGE_SCORE),
+                         matched_id=m.get("matched_id"))
+    return True
 
 
 def _has_unresolved(result: dict) -> bool:
@@ -606,6 +701,8 @@ def _augment_settings(settings: dict, out: dict) -> dict:
     out["llm_available"] = _llm_available(settings)
     out["llm_backend"] = _llm_backend(settings)
     out["llm_ready"] = _llm_ready()
+    out["learn_enabled"] = _learn_enabled(settings)
+    out["learn_available"] = _learn_available(settings)
     return out
 
 
@@ -628,8 +725,9 @@ async def handle_settings_put(request: web.Request) -> web.Response:
     old_segments = current.get("segments")
     # global_vars 가 이 dict 를 참조하므로 인플레이스 병합해야 vars 가 갱신된다(§7).
     for key, val in body.items():
-        if key in ("llm_available", "llm_backend", "llm_ready"):
-            continue  # 계산 필드는 저장하지 않는다
+        if key in ("llm_available", "llm_backend", "llm_ready",
+                   "learn_available", "learn_enabled"):
+            continue  # 계산 필드는 저장하지 않는다(learn 원본 dict 는 저장)
         current[key] = val
     store.save_soon()
     request.app["gazetteer_fn"]()  # gazetteer 재빌드(새 persons/modes/aliases 반영)
@@ -677,6 +775,137 @@ async def handle_dev_state(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# Phase 3C — 학습 분석 (정규화·재파싱·검증은 backend.nl.learn 이 담당)
+# ---------------------------------------------------------------------------
+def _ws(s) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip()) if isinstance(s, str) else ""
+
+
+async def _learn_analyze(app: web.Application, sentence: str,
+                         settings: dict) -> dict | None:
+    """learn.analyze(§3) 를 호출해 UI 응답 형태로 변환한다.
+
+    learn.analyze 는 구독 claude CLI 로 문장을 표준 문형으로 재작성 → 규칙(L1)+매처(L2)로
+    재파싱 → 엔티티 실존·환각 검증까지 수행하고 {normalized, model, template_id, ok,
+    warnings, entities} 를 돌려준다(정규화 자체 실패 시 None). 여기서는 미리보기 요약을
+    로컬 재파싱(무비용)으로 덧붙인다.
+    반환: {normalized, model, template_id, entities, preview, summary, warnings, ok} | None.
+    """
+    gz = app["gazetteer_fn"]()
+    inventory = _inventory(app)
+    res = await learn.analyze(sentence, gz, settings, inventory,
+                              oauth_token=_oauth_token())
+    if res is None:
+        return None
+    model = res.get("model") or {}
+    normalized = res.get("normalized") or sentence
+    summary = ""
+    try:
+        summary = (nl_parse(normalized, gz, settings) or {}).get("summary") or ""
+    except Exception:
+        log.exception("학습 미리보기 요약 계산 실패(무시)")
+    return {
+        "normalized": normalized,
+        "model": model,
+        "template_id": res.get("template_id"),
+        "entities": res.get("entities") or [],
+        "preview": summary,
+        "summary": summary,
+        "warnings": list(res.get("warnings") or []),
+        "ok": bool(res.get("ok")),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 3C — 학습 엔드포인트
+# ---------------------------------------------------------------------------
+async def handle_learn(request: web.Request) -> web.Response:
+    """POST api/v2/learn {sentence} → {normalized, model, preview, warnings, ok}.
+
+    학습 비활성/백엔드 미준비 시 409(한국어). 정규화 자체 실패 시 502.
+    """
+    body = await request.json()
+    if not isinstance(body, dict):
+        _raise_bad_request()
+    sentence = body.get("sentence")
+    if not isinstance(sentence, str) or not sentence.strip():
+        return _error("bad_request", "분석할 문장을 입력해 주세요.", 400)
+    if len(sentence) > _MAX_SENTENCE:
+        return _error("bad_request", f"문장이 너무 길어요(최대 {_MAX_SENTENCE}자).", 400)
+    settings = request.app["settings_store"].data or {}
+    if not _learn_enabled(settings):
+        return _error("learn_disabled", "학습 기능이 꺼져 있어요. 설정에서 켜 주세요.", 409)
+    backend = _llm_backend(settings)
+    if backend == "off" or not _llm_available(settings):
+        return _error("learn_unavailable",
+                      "AI 백엔드가 준비되지 않았어요. 설정에서 API 키 또는 구독 CLI를 확인해 주세요.",
+                      409)
+    result = await _learn_analyze(request.app, sentence.strip(), settings)
+    if result is None:
+        return _error("learn_failed",
+                      "문장을 표준 형태로 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.", 502)
+    return _json(result)
+
+
+async def handle_learn_confirm(request: web.Request) -> web.Response:
+    """POST api/v2/learn/confirm {sentence, normalized, model} → {ok, learned_id}.
+
+    검증(validate_rule_model + 엔티티 실존) 통과 시에만 learned_patterns 에 저장한다.
+    """
+    body = await request.json()
+    if not isinstance(body, dict):
+        _raise_bad_request()
+    sentence = body.get("sentence")
+    normalized = body.get("normalized")
+    model = body.get("model")
+    if not isinstance(sentence, str) or not sentence.strip():
+        return _error("bad_request", "학습할 원문 문장이 필요해요.", 400)
+    if not isinstance(model, dict):
+        return _error("bad_request", "학습할 규칙(model)이 필요해요.", 400)
+    if not isinstance(normalized, str) or not normalized.strip():
+        normalized = sentence
+    # 길이 상한(analyze 의 _MAX_SENTENCE 와 대칭). 프런트를 우회한 과대 페이로드가
+    # learned_patterns.yaml 을 부풀리는 것을 막는다.
+    if len(sentence) > _MAX_SENTENCE or len(normalized) > _MAX_SENTENCE:
+        return _error("bad_request", f"문장이 너무 길어요(최대 {_MAX_SENTENCE}자).", 400)
+    settings = request.app["settings_store"].data or {}
+    if not _learn_enabled(settings):
+        return _error("learn_disabled", "학습 기능이 꺼져 있어요. 설정에서 켜 주세요.", 409)
+    store = request.app.get("learned_store")
+    if store is None:
+        return _error("learn_unavailable", "학습 저장소를 사용할 수 없어요.", 409)
+    # 저장 게이트: validate_rule_model 이 서비스 도메인 화이트리스트 · service↔대상 엔티티
+    # 도메인 호환성 · null/빈 대상 · 엔티티 실존 · 모드 존재까지 서버측에서 강제한다(§4.2).
+    # 정규형↔원문 환각(_hallucination_ok)은 analyze 단계에서 이미 검사한다.
+    errors = validate_rule_model(model, _inventory(request.app),
+                                 _mode_names(request.app))
+    if errors:
+        return _error("invalid_rule", "학습할 규칙이 올바르지 않습니다.", 400, errors=errors)
+    entries = store.all()
+    already = any(_ws(e.get("raw")) == _ws(sentence) for e in entries)
+    if len(entries) >= _MAX_LEARNED and not already:
+        return _error("too_many_learned",
+                      f"학습 항목이 너무 많아요(최대 {_MAX_LEARNED}개). 설정에서 정리해 주세요.", 400)
+    # LearnedStore.add(raw, normalized, model, entities): 같은 원문은 교체(무한 성장 방어).
+    entities = learn.model_entities(model)
+    entry = store.add(sentence.strip(), normalized, model, entities)
+    return _json({"ok": True, "learned_id": entry["id"]})
+
+
+async def handle_learned_list(request: web.Request) -> web.Response:
+    """GET api/v2/learned → {"learned":[...]}."""
+    store = request.app.get("learned_store")
+    return _json({"learned": store.all() if store is not None else []})
+
+
+async def handle_learned_delete(request: web.Request) -> web.Response:
+    """DELETE api/v2/learned/{id} → {"ok":bool}."""
+    store = request.app.get("learned_store")
+    ok = store.delete(request.match_info["id"]) if store is not None else False
+    return _json({"ok": ok})
+
+
+# ---------------------------------------------------------------------------
 # 라우트 등록
 # ---------------------------------------------------------------------------
 def register_v2_routes(app: web.Application) -> None:
@@ -697,4 +926,9 @@ def register_v2_routes(app: web.Application) -> None:
     r.add_get("/api/v2/runlog", handle_runlog)
     r.add_get("/api/v2/settings", handle_settings_get)
     r.add_put("/api/v2/settings", handle_settings_put)
+    # Phase 3C: CLI 학습
+    r.add_post("/api/v2/learn", handle_learn)
+    r.add_post("/api/v2/learn/confirm", handle_learn_confirm)
+    r.add_get("/api/v2/learned", handle_learned_list)
+    r.add_delete("/api/v2/learned/{id}", handle_learned_delete)
     r.add_post("/api/v2/dev/state", handle_dev_state)

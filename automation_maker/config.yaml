@@ -1,5 +1,5 @@
 name: "HA Automation Maker"
-version: "3.0.0"
+version: "3.1.0"
 slug: automation_maker
 description: "방별·센서별 엔티티 탐색으로 자동화를 쉽게 만드는 UI (Korean-first automation builder)"
 url: "https://github.com/sinyeol/ha-automation-maker"

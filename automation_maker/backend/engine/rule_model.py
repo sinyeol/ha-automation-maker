@@ -26,6 +26,11 @@ _UNSUPPORTED = {"sun", "template"}
 _ALLOWED_ACTION_DOMAINS = set(KNOWN_SERVICES) | {
     "scene", "script", "input_boolean", "notify"}
 
+# turn_on/turn_off/toggle 처럼 대상 엔티티 도메인을 가리지 않는 서비스 도메인. 그 외 화이트리스트
+# 도메인은 모두 "service 도메인 == 대상 엔티티 도메인" 규약을 따르므로(light.turn_on→light.*,
+# fan.turn_on→fan.*), 아래 목록에 없는 도메인은 대상 엔티티 도메인 일치를 강제한다.
+_DOMAIN_AGNOSTIC_SERVICE_DOMAINS = {"homeassistant", "notify"}
+
 
 def _p(prefix: str, key: str) -> str:
     return f"{prefix}.{key}" if prefix else key
@@ -201,9 +206,14 @@ def _scan_service_actions(actions, base_path, errors, valid_ids) -> None:
     """중첩 액션(choose/if/repeat/parallel 등)까지 훑어 service 액션을 검사한다.
 
     - 미허용 도메인의 service 액션을 거부(보안 화이트리스트).
+    - target.entity_id 가 명시됐는데 비어 있거나 None/빈문자를 포함하면 거부(매처·LLM 이
+      미해석 slot 을 [None]/[] 로 흘려보내는 것 방어).
+    - service 도메인과 대상 엔티티 도메인의 호환성 검사(fan.turn_on 을 light 엔티티에 거는
+      매처 오매핑을 차단 — 이 함수가 매처/LLM/학습 모든 저장 경로의 유일한 안전망).
     - target.entity_id(리스트/스칼라 모두)가 인벤토리에 실존하는지 검증(SPEC-V3 §4.2).
       로컬/LLM/수동 모든 저장 경로가 존재하지 않는 대상을 저장하지 못하게 막는다.
-      valid_ids 가 비어 있으면(인벤토리 미제공) 실존 검사는 건너뛴다 — _need_entity 규약과 동일.
+      valid_ids 가 비어 있으면(인벤토리 미제공) 실존 검사만 건너뛴다 — 널/도메인 검사는
+      엔티티 id 접두사만으로 판정하므로 인벤토리 없이도 수행한다.
     """
     stack = list(actions)
     while stack:
@@ -214,11 +224,26 @@ def _scan_service_actions(actions, base_path, errors, valid_ids) -> None:
                 domain = action.split(".", 1)[0] if "." in action else ""
                 if domain and domain not in _ALLOWED_ACTION_DOMAINS:
                     errors.append({"path": base_path, "message": f"지원하지 않는 동작이에요: {action}"})
+                tgt = node.get("target")
+                has_target = isinstance(tgt, dict) and "entity_id" in tgt
+                ids = tgt.get("entity_id") if isinstance(tgt, dict) else None
+                as_list = ids if isinstance(ids, list) else ([ids] if ids is not None else [])
+                # (a) 명시된 대상이 비었거나 None/빈문자를 포함 → 거부(미해석 slot 방어)
+                if has_target and (not as_list or any(not i for i in as_list)):
+                    errors.append({"path": base_path + ".target.entity_id",
+                                   "message": "대상 엔티티가 비어 있어요."})
+                present = [i for i in as_list if i]
+                # (b) service 도메인 ↔ 대상 엔티티 도메인 호환성(도메인 무관 서비스는 예외)
+                if domain and domain not in _DOMAIN_AGNOSTIC_SERVICE_DOMAINS:
+                    mism = [i for i in present
+                            if "." in i and i.split(".", 1)[0] != domain]
+                    if mism:
+                        errors.append({"path": base_path + ".target.entity_id",
+                                       "message": f"동작과 대상 기기 종류가 맞지 않아요: {action} ↔ "
+                                                  + ", ".join(mism)})
+                # (c) 실존 검사(인벤토리 있을 때만)
                 if valid_ids:
-                    tgt = node.get("target")
-                    ids = tgt.get("entity_id") if isinstance(tgt, dict) else None
-                    as_list = ids if isinstance(ids, list) else ([ids] if ids else [])
-                    missing = [i for i in as_list if i and i not in valid_ids]
+                    missing = [i for i in present if i not in valid_ids]
                     if missing:
                         errors.append({"path": base_path + ".target.entity_id",
                                        "message": "존재하지 않는 엔티티입니다: " + ", ".join(missing)})

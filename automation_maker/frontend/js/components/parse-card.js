@@ -1,8 +1,9 @@
 // 해석 확인 카드: 원문을 span 단위 칩으로 렌더 + 후보/피커로 슬롯 확정 → 재해석.
 import { el } from '../app.js';
-import { parseSentence } from '../api2.js';
+import { parseSentence, getSettings, learnSentence, confirmLearn } from '../api2.js';
 import { openEntityPicker } from './entity-picker.js';
 import { createManualMap } from './manual-map.js';
+import { showToast } from './toast.js';
 
 // used_llm 캡션의 백엔드 표기(§8).
 const LLM_BACKEND_LABEL = { api: 'API', cli: '구독 CLI' };
@@ -51,7 +52,74 @@ export function createParseCard({ sentence, pins, result, onSave }) {
   let manualOpen = false;   // "직접 지정" 에디터 표시 여부
   let manualNode = null;    // 재해석 사이에도 편집 상태를 유지하기 위해 1회 생성 후 보관
 
+  // Phase 3C — AI 학습 상태. learnState 는 설정 조회(1회) 결과.
+  let learnState = null;    // null=미조회, {enabled, available}
+  let learnPhase = 'idle';  // 'idle' | 'loading' | 'preview' | 'saving'
+  let learnResult = null;   // learnSentence 응답 {normalized, model, preview, summary, warnings, ok}
+  let learnError = '';      // 실패/미준비 안내 문구
+
   const root = el('div', { class: 'parse-card' });
+
+  // 학습 진입 대상인가: 해석이 완결되지 못한 카드(미해결·not ok·저confidence).
+  function needsLearn() {
+    const chips = cur.chips || [];
+    if (chips.some(c => c.status === 'unresolved')) return true;
+    if (cur.ok === false) return true;
+    return typeof cur.confidence === 'number' && cur.confidence < 0.6;
+  }
+
+  function resetLearn() {
+    learnPhase = 'idle';
+    learnResult = null;
+    learnError = '';
+  }
+
+  // 설정의 학습 기능 on/off·준비상태를 1회 조회(미해석 카드일 때만). 조회 후 재렌더.
+  function ensureLearnState() {
+    if (learnState !== null) return;
+    learnState = {};   // 진행 중 표시(중복 요청 방지)
+    getSettings().then(data => {
+      learnState = {
+        enabled: !!(data && data.learn_enabled),
+        available: !!(data && data.learn_available),
+      };
+      render();
+    }).catch(() => { learnState = { enabled: false, available: false }; });
+  }
+
+  async function startLearn() {
+    if (learnPhase === 'loading' || learnPhase === 'saving') return;
+    learnPhase = 'loading';
+    learnError = '';
+    render();
+    try {
+      learnResult = await learnSentence(sentence);
+      learnPhase = 'preview';
+    } catch (err) {
+      learnPhase = 'idle';
+      learnResult = null;
+      learnError = (err && err.data && err.data.error && err.data.error.message)
+        || 'AI 분석에 실패했어요. 잠시 후 다시 시도해 주세요.';
+    }
+    render();
+  }
+
+  async function confirmLearnFlow() {
+    if (!learnResult || learnPhase === 'saving') return;
+    learnPhase = 'saving';
+    render();
+    try {
+      await confirmLearn(sentence, learnResult.normalized, learnResult.model);
+      showToast('배웠어요. 다시 해석할게요.', 'info');
+      resetLearn();
+      reparse();
+    } catch (err) {
+      learnPhase = 'preview';
+      learnError = (err && err.data && err.data.error && err.data.error.message)
+        || '학습 저장에 실패했어요.';
+      render();
+    }
+  }
 
   function closeDropdown() {
     if (dropdown) { dropdown.remove(); dropdown = null; }
@@ -61,6 +129,7 @@ export function createParseCard({ sentence, pins, result, onSave }) {
   async function reparse() {
     if (busy) return;
     busy = true;
+    resetLearn();
     closeDropdown();
     root.classList.add('is-busy');
     try {
@@ -213,6 +282,11 @@ export function createParseCard({ sentence, pins, result, onSave }) {
         ? `AI 도움으로 해석했어요. (${backend})`
         : 'AI 도움으로 해석했어요.';
       root.appendChild(el('div', { class: 'parse-caption' }, text));
+    } else if (cur.used_matcher) {
+      const text = cur.used_matcher === 'learned'
+        ? '학습한 패턴으로 해석했어요.'
+        : '패턴 매칭으로 해석했어요.';
+      root.appendChild(el('div', { class: 'parse-caption' }, text));
     }
 
     const hasUnresolved = (cur.chips || []).some(c => c.status === 'unresolved');
@@ -250,6 +324,66 @@ export function createParseCard({ sentence, pins, result, onSave }) {
       }
       root.appendChild(manualNode);
     }
+
+    renderLearn();
+  }
+
+  // --- Phase 3C: "AI로 분석해서 배우기" 패널 ---
+  // 미해석 카드 + 학습 기능 on 일 때만 노출. CLI/API 로 표준 문형 정규화 → 미리보기 → 학습.
+  function renderLearn() {
+    if (!needsLearn()) return;
+    ensureLearnState();
+    // 조회 전(빈 객체)·기능 꺼짐이면 아무것도 렌더하지 않는다.
+    if (!learnState || !learnState.enabled) return;
+
+    const panel = el('div', { class: 'learn-panel' });
+
+    if ((learnPhase === 'preview' || learnPhase === 'saving') && learnResult) {
+      panel.appendChild(el('div', { class: 'form-hint' }, 'AI가 이렇게 이해했어요'));
+      panel.appendChild(el('div', { class: 'learn-normalized' }, learnResult.normalized || sentence));
+      const summary = learnResult.summary || learnResult.preview;
+      if (summary) panel.appendChild(el('div', { class: 'learn-preview' }, summary));
+
+      for (const w of learnResult.warnings || []) {
+        panel.appendChild(el('p', { class: 'form-hint learn-warn' }, w));
+      }
+      if (learnError) panel.appendChild(el('p', { class: 'form-hint learn-warn' }, learnError));
+
+      const actions = el('div', { class: 'learn-actions' });
+      const canSave = learnResult.ok === true
+        && learnResult.model && typeof learnResult.model === 'object';
+      const saving = learnPhase === 'saving';
+      actions.appendChild(el('button', {
+        class: 'btn', disabled: saving || null, onClick: () => { resetLearn(); render(); },
+      }, '취소'));
+      if (canSave) {
+        actions.appendChild(el('button', {
+          class: 'btn btn-primary', disabled: saving || null, onClick: () => confirmLearnFlow(),
+        }, saving ? '저장 중…' : '이렇게 배우기'));
+      } else {
+        panel.appendChild(el('p', { class: 'form-hint learn-warn' },
+          '이 문장은 아직 안전하게 배울 수 없어요. 직접 지정으로 만들어 주세요.'));
+      }
+      panel.appendChild(actions);
+      root.appendChild(panel);
+      return;
+    }
+
+    // idle / loading
+    const loading = learnPhase === 'loading';
+    panel.appendChild(el('button', {
+      class: 'btn learn-cta', disabled: loading || null, onClick: () => startLearn(),
+    }, loading ? 'AI가 분석 중…' : '🤖 AI로 분석해서 배우기'));
+
+    if (learnState.available === false) {
+      panel.appendChild(el('p', { class: 'form-hint learn-warn' },
+        'AI 백엔드가 준비되지 않았어요. 설정에서 API 키 또는 구독 CLI를 켜 주세요.'));
+    } else {
+      panel.appendChild(el('p', { class: 'form-hint' },
+        '못 읽은 문장을 AI가 표준 형태로 바꿔 배워요. 다음부터는 AI 없이 처리돼요.'));
+    }
+    if (learnError) panel.appendChild(el('p', { class: 'form-hint learn-warn' }, learnError));
+    root.appendChild(panel);
   }
 
   render();
