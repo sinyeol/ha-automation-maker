@@ -285,6 +285,32 @@ def _is_action_tok(tok: str) -> bool:
     return any(h in core for h in _ACTION_HINTS)
 
 
+def _reorder_postposed_multi(text: str) -> str:
+    """다중 후치절 재배열: 'ACTION, 조건1, 조건2(, …)' → '조건1 조건2 … ACTION'.
+
+    쉼표로 3조각 이상이고, 첫 조각만 명령(액션 동사 포함)이며 나머지가 전부 조건형
+    (액션 동사 없음 + 마지막 조각이 조건 종결 -면/빼고/말고/-만/-엔/-마다/-때)일 때만 발동.
+    "거실 조명 켜줘, 사람 감지되면, 밤에만" · "보일러 꺼줘, 8시 되면, 주말은 빼고" 류.
+    """
+    raw = text.strip()
+    if not raw:
+        return text
+    body = re.sub(r"[.?!…]+$", "", raw).strip()
+    # 쉼표 또는 '마침표+공백'(문장 분리)으로 조각낸다("TV 꺼놔라. 와이프 회사 가면").
+    parts = [p.strip() for p in re.split(r"\s*,\s*|\.\s+", body) if p.strip()]
+    if len(parts) < 2:
+        return text
+    first, rest = parts[0], parts[1:]
+    if not any(_is_action_tok(t) for t in first.split()):
+        return text
+    for r in rest:
+        if any(_is_action_tok(t) for t in r.split()):
+            return text
+    if not re.search(r"(?:면|빼고|말고|제외|만|엔|마다|때)$", parts[-1]):
+        return text
+    return " ".join(rest) + " " + first
+
+
 def _reorder_postposed(text: str) -> str:
     """후치 조건절을 앞으로 재배열. 마지막 실질 토큰이 '-면' 경계일 때만 발동."""
     raw = text.strip()
@@ -350,6 +376,7 @@ def normalize_surface(sentence: str, gz=None) -> str:
     t = _strip_honorific(t)       # 3) 존칭 제거 + 보충법 (어미 정규화 전에 -시- 삭제)
     t = _normalize_endings(t)     # 2) 절경계 어미 → -면
     t = _strip_fillers(t)         # 4) 완화·보조 요소 제거
+    t = _reorder_postposed_multi(t)  # 5a) 다중 후치절(ACTION, 조건1, 조건2)
     t = _reorder_postposed(t)     # 5) 후치 조건 재배열
     t = re.sub(r"\s+", " ", t).strip()
     return t

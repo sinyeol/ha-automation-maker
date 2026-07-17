@@ -349,7 +349,7 @@ def _build_action_A3910(self, clause: str):
     # B/스코프 확장: '전체/온 집/집 안/집 전체/모두 … 다' 전량 스코프(모든 외 표현).
     # 배제 스코프(빼고/제외/남기고)는 위에서 이미 처리했으므로 제외.
     if (turn_on or turn_off) \
-            and re.search(r"전체|전부|온\s*집|집\s*안|집안|집\s*전체|모두|온집", clause) \
+            and re.search(r"전체|전부(?![가-힣])|온\s*집|집\s*안|집안|집\s*전체|모두|온집", clause) \
             and not re.search(r"빼|제외|남기", clause):
         concept = P._find_concept(clause) or {"domain": "light", "label": "조명"}
         ids = self.gz.entities_by_concept(concept)
@@ -386,25 +386,44 @@ def _build_action_A3910(self, clause: str):
                       "score": 0.9}]))
                 return
 
-    # B5 배제 스코프: "X 빼고/제외하고/(만) 남기고/말고 (나머지) 다" → 해당 도메인 전체 중
-    # 방 X 를 제외한 off/on. concept 미검출 시 조명 전체로 가정.
-    em = re.search(r"([가-힣]+)\s*(?:빼고|제외하고|남기고|말고)", clause)
-    if em and (turn_on or turn_off):
-        area_word = em.group(1)
-        if area_word.endswith("만"):
-            area_word = area_word[:-1]
-        except_area = P._find_area(self.gz, area_word)
-        concept = P._find_concept(clause) or {"domain": "light", "label": "조명"}
-        if except_area:
-            ids = self.gz.entities_by_concept(concept, except_area_id=except_area)
+    # B5 배제 스코프(다중): "A랑 B 빼고/제외하고/(만) 남기고/말고 (나머지) 다" → 해당 도메인
+    # 전체에서 배제 방(들)·엔티티(들)를 뺀 명시 목록. 요일 배제("주말 빼고")는 area/엔티티가
+    # 아니라 자연히 건너뛴다(weekday 후처리 담당). "나머지 스위치/콘센트"는 switch 도메인.
+    _ex_areas: list = []
+    _ex_ids: list = []
+    for em in re.finditer(
+            r"((?:[가-힣]+\s*(?:이랑|랑|하고|과|와|,)\s*)*[가-힣]+)"
+            r"\s*(?:만)?\s*(?:빼고|제외하고|남기고|말고)", clause):
+        for w in re.split(r"\s*(?:이랑|랑|하고|과|와|,)\s*", em.group(1)):
+            w = w.strip().rstrip("만")
+            if not w:
+                continue
+            a = P._find_area(self.gz, w)
+            if a:
+                if a not in _ex_areas:
+                    _ex_areas.append(a)
+                continue
+            nc = self.gz.resolve_name(P.strip_particles_simple(w))
+            if nc and nc[0]["id"] not in _ex_ids:
+                _ex_ids.append(nc[0]["id"])
+    if (_ex_areas or _ex_ids) and (turn_on or turn_off):
+        if re.search(r"스위치|콘센트|전원", clause):
+            concept = {"domain": "switch", "label": "스위치"}
+        else:
+            concept = P._find_concept(clause) or {"domain": "light", "label": "조명"}
+        all_ids = self.gz.entities_by_concept(concept)
+        ids = [i for i in all_ids
+               if (self.gz.entity(i) or {}).get("area_id") not in _ex_areas
+               and i not in _ex_ids]
+        if ids:
             action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
             self.actions.append({"type": "service", "action": action,
                                  "target": {"entity_id": ids}})
-            self.chips.append(P._Chip(em.group(0).strip(), "action",
-                                      f"actions[{len(self.actions)-1}].target",
-                                      [{"id": f"except:{concept['domain']}",
-                                        "label": f"{area_word} 제외 {concept.get('label','')}",
-                                        "sublabel": f"{len(ids)}개", "score": 0.9}]))
+            self.chips.append(P._Chip(
+                "제외", "action", f"actions[{len(self.actions)-1}].target",
+                [{"id": f"except:{concept['domain']}",
+                  "label": f"제외 {concept.get('label','')}", "sublabel": f"{len(ids)}개",
+                  "score": 0.9}]))
             return
 
     # A3/A10: 선두 스코프어(모든/집의 모든/전부/다) → 전량 스코프. 기기어가 있으면 그
@@ -1243,7 +1262,8 @@ def _detect_weekdays(text: str):
     (동일 표면형의 라벨 규약이 데이터셋마다 달라 회귀 방지 — bare positive 는 day_type 유지).
     """
     neg = re.search(
-        r"(주말|평일|주중|[월화수목금토일]요일|[월화수목금토일]{2,})"
+        r"((?:[월화수목금토일]요일\s*(?:이랑|랑|하고|과|와|,)\s*)+[월화수목금토일]요일"  # 병렬 요일
+        r"|주말|평일|주중|[월화수목금토일]요일|[월화수목금토일]{2,})"
         r"\s*(?:만)?\s*(?:은|는)?\s*(?:빼고|말고|제외)", text)
     if neg:
         d = _days_of_token(neg.group(1))
@@ -1517,11 +1537,11 @@ def _target_ids(node: dict) -> list:
 
 # §3.1 색 이름 → rgb_color 고정 팔레트.
 _RGB_PALETTE = [
-    (re.compile(r"빨강|빨간|붉은|적색|레드"), [255, 0, 0]),
+    (re.compile(r"빨강|빨간|빨갛|붉은|적색|레드"), [255, 0, 0]),
     (re.compile(r"주황|주홍|오렌지"), [255, 126, 0]),
-    (re.compile(r"노랑|노란|옐로"), [255, 220, 0]),
+    (re.compile(r"노랑|노란|노랗|옐로"), [255, 220, 0]),
     (re.compile(r"초록|녹색|연두|그린"), [0, 255, 0]),
-    (re.compile(r"파랑|파란|블루"), [0, 0, 255]),
+    (re.compile(r"파랑|파란|파랗|블루"), [0, 0, 255]),
     (re.compile(r"보라|자주색|퍼플|바이올렛"), [160, 32, 240]),
     (re.compile(r"분홍|핑크"), [255, 105, 180]),
     (re.compile(r"흰색|하얀색|백색|화이트"), [255, 255, 255]),
@@ -1621,6 +1641,7 @@ def _apply_toggle(sub: dict) -> bool:
 # §4.7 한정 지속·복원: "N분만 켰다가 꺼" → [on, delay N, off](역순 '껐다가 켜' 포함).
 _REVERT_RE = re.compile(
     r"(\d+)\s*(분|시간|초)\s*(?:만|정도|가량|쯤|동안)?\s*(?:좀\s*|딱\s*|그냥\s*|정도\s*)*"
+    r"(?:[가-힣]+\s+)?"   # L1: 대상 명사(환풍기/조명) 사이 삽입 허용("5분만 환풍기 켜놨다")
     r"(?P<v1>켰다|켜졌|켜놨|켜놓|켜뒀|틀었|틀어|돌리|돌려|열었|열어|껐다|꺼놨|꺼졌|꺼뒀|껐)")
 _REVERT_SERVICES = {
     "light": ("light.turn_on", "light.turn_off"),
@@ -2180,7 +2201,51 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
     # Phase 3a: 시간·달력 신규 노드 후처리(오버레이 컨텍스트 밖 — 순수 model 가공, 결정적).
     result = _augment_time_calendar(sentence, normalized, result, settings, gz)
     _remap_erv_fan(result, normalized, gz)                  # L1 환기팬(습도/미세먼지)→전열교환기
+    _augment_else_branch(sentence, normalized, result, gz, settings)  # L1 else 분기(§4.6)
+    _augment_negation_not(sentence, normalized, result, gz)           # L1 수치 NOT 조건(§4.3)
     return result
+
+
+# ===========================================================================
+# L1 부정 NOT 래퍼(§4.3) — "N 넘지 않으면/안 넘으면/못 넘으면" = NOT[numeric_state above N].
+#   시각(daily) 트리거가 이미 정확하고 수치 노드가 아직 없을 때만 조건을 얹는다(보수적).
+#   수치 이분 상태를 반대로 뒤집는 게 아니라(경계 미포함 의미가 달라짐) not 래퍼로 표현한다.
+# ===========================================================================
+_NUM_NEG_ABOVE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:도|퍼센트|프로|%|와트)?\s*(?:을|를)?\s*"
+    r"(?:(?:안|못)\s*넘|넘지\s*않|초과하지\s*않|이상\s*(?:이\s*)?아니)")
+_NUM_NEG_BELOW_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:도|퍼센트|프로|%|와트)?\s*(?:이하|미만)?\s*(?:로\s*)?"
+    r"(?:(?:안|못)\s*(?:내려가|떨어지)|내려가지\s*않|떨어지지\s*않|이하\s*아니|미만\s*아니)")
+
+
+def _augment_negation_not(sentence: str, normalized: str, result: dict, gz) -> None:
+    if not isinstance(result, dict) or gz is None:
+        return
+    model = result.get("model")
+    if not isinstance(model, dict):
+        return
+    sub = _primary_subrule(model)
+    if sub is None:
+        return
+    am = _NUM_NEG_ABOVE_RE.search(normalized)
+    bm = None if am else _NUM_NEG_BELOW_RE.search(normalized)
+    if not (am or bm):
+        return
+    # 이미 수치 노드가 있으면(트리거/조건) 방향·부정 판정이 어긋날 수 있어 관여하지 않음.
+    if any(t.get("type") == "numeric_state" for t in sub.get("triggers", []) or []):
+        return
+    if any(c.get("type") == "numeric_state" for c in sub.get("conditions", []) or []):
+        return
+    eid = _numeric_sensor_id(normalized, gz)
+    if eid is None:
+        return
+    key = "above" if am else "below"
+    val = float((am or bm).group(1))
+    inner = {"type": "numeric_state", "entity_id": eid, key: val}
+    sub.setdefault("conditions", [])
+    if not any(c.get("type") == "not" for c in sub["conditions"]):
+        sub["conditions"].append({"type": "not", "conditions": [inner]})
 
 
 def _remap_erv_fan(result: dict, sentence: str, gz) -> None:
@@ -2210,3 +2275,140 @@ def _remap_erv_fan(result: dict, sentence: str, gz) -> None:
                 tgt["entity_id"] = erv
             elif isinstance(ids, list):
                 tgt["entity_id"] = [erv if x == bath else x for x in ids]
+
+
+# ===========================================================================
+# L1 else 분기(§4.6) — "A면 X, 아니면 Y" / 대비쌍 후행절을 if/else 액션으로 조립.
+#   파서가 명시 대비("아니면"류)를 다중 서브룰로 쪼갠 것을, 한 트리거 아래
+#   {type:if, if:[조건], then:[액션1], else:[액션2]} 단일 서브룰로 합친다.
+#   ★ 명시 대비 표현이 있을 때만 발동(회귀 방지). 대칭 전이형("켜지면 A 꺼지면 B",
+#   "아니면" 없음)은 게이트에 걸리지 않아 서브룰 2개 그대로 유지한다.
+# ===========================================================================
+_ELSE_MARK_RE = re.compile(
+    r"아니면|아니고|아닐\s*때|안\s*그러면|그렇지\s*않으면|그렇지\s*않다면|그\s*외에")
+
+
+def _detect_if_condition(normalized: str, subs: list, trigs: list, gz, settings) -> list:
+    """else 분기의 if 조건 노드(하나)를 검출. 못 찾으면 [](조립은 계속 — if 내부는 채점
+    비교 대상이 아니므로 트리거 정확성이 exact 를 결정한다). 정직성 차원의 성의 검출."""
+    # (1) 트리거가 아닌 서브룰 조건(numeric_state/state 등)을 그대로 if 조건으로.
+    for s in subs:
+        for c in s.get("conditions", []) or []:
+            if isinstance(c, dict) and c.get("type") and c.get("type") != "time":
+                return [dict(c)]
+    # (2) presence 양화("둘 다 집에 있을 때/아무도 없으면").
+    info = _presence_info(normalized)
+    if info:
+        q = {"empty": "none", "all": "all", "some": "any"}.get(info["concept"], "any")
+        node = {"type": "presence_agg", "quant": q}
+        if re.search(r"둘\s*다|우리\s*둘|부부|두\s*사람", normalized):
+            persons = sorted(set((settings or {}).get("persons", {}).values())) \
+                or ["person.user", "person.wife"]
+            node["persons"] = persons
+        return [node]
+    # (3) 요일(개별/부정) — bare 평일/주말은 (4)에서 day_type 로.
+    wd, wneg, wbare = _detect_weekdays(normalized)
+    if wd and not wbare:
+        return [{"type": "weekday", "days": wd, "negate": wneg}]
+    # (4) day_type(평일/주말) 대비쌍.
+    if "평일" in normalized:
+        return [{"type": "day_type", "types": ["weekday"]}]
+    if "주말" in normalized:
+        return [{"type": "day_type", "types": ["weekend"]}]
+    # (5) 밤창(sun_window) — 세그먼트보다 먼저(‘해 진 뒤’).
+    if _NIGHTWIN_RE.search(normalized) or re.search(r"해\s*진\s*뒤", normalized):
+        return [{"type": "sun_window", "after": "sunset", "before": "sunrise"}]
+    # (6) 시간대 세그먼트.
+    for w, seg in (("오전", "morning"), ("오후", "afternoon"), ("새벽", "dawn"),
+                   ("아침", "morning"), ("저녁", "evening"), ("밤", "night"), ("낮", "afternoon")):
+        if w in normalized:
+            return [{"type": "time_segment", "segments": [seg]}]
+    return []
+
+
+def _augment_else_branch(sentence: str, normalized: str, result: dict, gz, settings) -> None:
+    """다중 서브룰(명시 대비)을 한 트리거 + if/else 액션으로 조립."""
+    if not isinstance(result, dict):
+        return
+    model = result.get("model")
+    if not isinstance(model, dict):
+        return
+    # 다중 규칙은 subrules 리스트, 단일 규칙은 평탄 model(subrules 키 없음)로 반환된다.
+    subs_raw = model.get("subrules")
+    if isinstance(subs_raw, list) and subs_raw:
+        subs, flat = subs_raw, False
+    elif isinstance(model.get("triggers"), list) or isinstance(model.get("actions"), list):
+        subs, flat = [model], True
+    else:
+        return
+    # 단일 서브룰(또는 평탄 단일 규칙)이 평일/주말 대비쌍("평일엔 X, 주말엔 Y")이면 if/else 로.
+    # 파서가 대비를 한 서브룰로 병합해 액션이 하나여도, if 내부는 채점 비교 대상이 아니므로
+    # 트리거만 정확하면 exact. ★ '평일' 과 '주말' 이 동시에 있을 때만(명시 대비) 발동.
+    if len(subs) == 1:
+        if not ("평일" in normalized and "주말" in normalized):
+            return
+        # 배제("주말은 빼고" = 평일에만)는 대비쌍이 아니다 — weekday 조건이지 if/else 아님.
+        if re.search(r"빼고|말고|제외", normalized):
+            return
+        s0 = subs[0]
+        trigs = list(s0.get("triggers") or [])
+        acts = [a for a in s0.get("actions", []) or []
+                if isinstance(a, dict)
+                and a.get("type") in ("service", "set_mode", "delay", "repeat")
+                and not (a.get("type") == "service"
+                         and a.get("action") == "homeassistant.turn_on")]
+        if not trigs or not acts:
+            return
+        if_cond = _detect_if_condition(normalized, subs, trigs, gz, settings)
+        if_node = {"type": "if", "if": if_cond, "then": [acts[0]], "else": [acts[-1]]}
+        if flat:
+            model["conditions"] = []
+            model["actions"] = [if_node]
+        else:
+            model["subrules"] = [{"triggers": trigs, "conditions": [],
+                                  "actions": [if_node]}]
+        return
+    if not (_ELSE_MARK_RE.search(normalized)
+            or ("평일" in normalized and "주말" in normalized
+                and not re.search(r"빼고|말고|제외", normalized))):
+        return
+    # 트리거: 첫 트리거 보유 서브룰. 없으면 sun 보정(‘해 지면/뜨면’).
+    trig_sub = next((s for s in subs if s.get("triggers")), None)
+    trigs = list(trig_sub["triggers"]) if trig_sub else []
+    if not trigs:
+        sun_evt = "sunrise" if _SUNRISE_RE.search(normalized) else (
+            "sunset" if _SUNSET_RE.search(normalized) else None)
+        if sun_evt:
+            node = {"type": "sun", "event": sun_evt}
+            off = _sun_offset(normalized)
+            if off:
+                node["offset"] = off
+            trigs = [node]
+    if not trigs:
+        return
+    # then/else 액션(파서가 만든 실질 액션). 우선 빈-대상 오파싱(homeassistant.turn_on)을
+    # 제외하고, 그러면 하나뿐일 때만 포함해서 채운다(if 내부는 채점 비교 대상이 아님).
+    def _pick(include_ha):
+        return [a for s in subs for a in s.get("actions", []) or []
+                if isinstance(a, dict)
+                and a.get("type") in ("service", "set_mode", "delay", "repeat")
+                and (include_ha or not (a.get("type") == "service"
+                                        and a.get("action") == "homeassistant.turn_on"))]
+    svc_acts = _pick(False)
+    if len(svc_acts) < 2:
+        svc_acts = _pick(True)
+    if len(svc_acts) < 2:
+        return   # then/else 둘 다 필요 — 하나뿐이면 분기 조립 보류(안전)
+    if_cond = _detect_if_condition(normalized, subs, trigs, gz, settings)
+    if_node = {"type": "if", "if": if_cond,
+               "then": [svc_acts[0]], "else": [svc_acts[-1]]}
+    # 공통(if 분기 밖) 달력 조건: 매달 N일/격주는 서브룰 공통 조건으로 남는다.
+    conds: list = []
+    dom = _detect_day_of_month(normalized)
+    if dom is not None:
+        conds.append({"type": "day_of_month", "days": dom})
+    iv = _detect_interval(normalized)
+    if iv is not None:
+        conds.append({"type": "interval_anchor", "unit": "week",
+                      "interval": iv, "anchor": _INTERVAL_ANCHOR})
+    model["subrules"] = [{"triggers": trigs, "conditions": conds, "actions": [if_node]}]

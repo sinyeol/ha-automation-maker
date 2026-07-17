@@ -13,16 +13,20 @@ from __future__ import annotations
 
 _TRIGGER_FIELDS = ("type", "entity_id", "to", "for", "mode", "segments",
                    "above", "below", "event", "offset",
-                   "minutes", "hours", "seconds", "quant", "persons")
+                   "minutes", "hours", "seconds", "quant", "persons",
+                   "at", "zone")
 _COND_FIELDS = ("type", "entity_id", "state", "segments", "mode", "types",
                 "seasons", "after", "before", "above", "below",
                 "after_offset", "before_offset", "days", "negate",
-                "unit", "interval", "anchor", "quant", "persons")
-_ACTION_FIELDS = ("type", "action", "mode", "to")
+                "unit", "interval", "anchor", "quant", "persons", "conditions")
+_ACTION_FIELDS = ("type", "action", "mode", "to", "duration",
+                  "if", "then", "else", "conditions", "count", "kind", "sequence")
 
-# SPEC-SCHEMA-90 신규노드의 의미필드까지 비교해야 정직하다: sun offset·time_pattern
-# minutes/hours·weekday days/negate·day_of_month days·interval_anchor interval/anchor·
-# presence_agg quant/persons 를 무시하면 "틀린 요일/오프셋"도 exact 로 오집계된다.
+# SPEC-SCHEMA-90 신규노드·중첩노드의 의미필드까지 비교해야 정직하다:
+#   sun offset · time_pattern minutes/hours · weekday days/negate · day_of_month days ·
+#   interval_anchor interval/anchor · presence_agg quant/persons · daily at(시각) ·
+#   zone zone · delay duration · if(if/then/else) · not(conditions) · repeat(count/sequence).
+# 하나라도 무시하면 "틀린 요일/시각/오프셋/분기"도 exact 로 오집계된다.
 
 
 # ---------------------------------------------------------------------------
@@ -53,11 +57,27 @@ def _canon_value(key, v):
         except (TypeError, ValueError):
             return v
     if key in ("offset", "minutes", "hours", "seconds", "interval",
-               "after_offset", "before_offset"):
+               "after_offset", "before_offset", "count"):
         try:
             return int(v) if v is not None else None
         except (TypeError, ValueError):
             return v
+    if key == "at":  # daily 시각 "H:MM"/"HH:MM" → (h, m) 정규화
+        if isinstance(v, str) and ":" in v:
+            try:
+                h, m = v.split(":")[:2]
+                return (int(h), int(m))
+            except (TypeError, ValueError):
+                return v
+        return v
+    if key in ("if", "conditions"):  # 중첩 조건(if/not/repeat) 재귀 비교
+        if isinstance(v, list):
+            return tuple(sorted((_canon_node(c, _COND_FIELDS) for c in v), key=repr))
+        return v
+    if key in ("then", "else", "sequence"):  # 중첩 액션(if/repeat) 재귀 비교
+        if isinstance(v, list):
+            return tuple(sorted((_canon_node(a, _ACTION_FIELDS) for a in v), key=repr))
+        return v
     if key == "target":
         # action target.entity_id 정렬
         ids = v.get("entity_id") if isinstance(v, dict) else None
