@@ -80,7 +80,11 @@ def _prohibition_result(sentence: str) -> dict:
 # ===========================================================================
 _A6_CONCEPTS: dict[str, dict] = {
     "무드등": {"domain": "light", "label": "무드등"},
+    "무드 조명": {"domain": "light", "label": "무드등"},
+    "무드조명": {"domain": "light", "label": "무드등"},
     "메인등": {"domain": "light", "label": "메인등"},
+    "메인 조명": {"domain": "light", "label": "메인등"},
+    "메인조명": {"domain": "light", "label": "메인등"},
     "등": {"domain": "light", "label": "조명"},
 }
 
@@ -202,6 +206,15 @@ def _duration_frames_A4(text: str):
         r"(?P<locpre>[가-힣]+(?:에서|에는|에)\s+)?"
         r"(?P<n>\d+)\s*(?P<u>초|분|시간)\s*(?:동안|간)\s*(?P<loc>[가-힣]+(?:에서|에는|에)\s+)?"
         r"(?P<subj>[가-힣A-Za-z]+)\s*(?:이|가)?\s*(?P<neg>없|있)으?면")
+    # L1: 주어 생략·주어선행·부정 모션 지속 held. p1(주어후행 없/있)이 못 잡는 부재형
+    #   ('5분간 안 움직이면'·'모션이 10분 동안 없으면'·'1시간 넘게 감지 못 되면') → 모션 off 지속.
+    #   방(loc) 있으면 그 방, 없으면 _build_held 가 앞 규칙 센서를 재참조한다.
+    p3 = re.compile(
+        r"(?P<locpre>[가-힣]+(?:에서|에는|에)\s+)?"
+        r"(?:[가-힣]+\s*(?:이|가)\s+)?"                     # 선행 주어(모션이/사람이) 소비
+        r"(?P<n>\d+)\s*(?P<u>초|분|시간)\s*(?:동안|간|넘게)\s*(?:아무도\s*)?"
+        r"(?:안\s*움직이|움직임\s*이?\s*없|인기척\s*이?\s*없|사람\s*이?\s*없"
+        r"|감지\s*(?:안|못)\s*되|반응\s*이?\s*없|없)\s*(?:으)?면")
 
     unit = {"초": 1, "분": 60, "시간": 3600}
 
@@ -211,8 +224,14 @@ def _duration_frames_A4(text: str):
         loc = (gd.get("loc") or gd.get("locpre") or "").strip()
         return repl(gd["subj"].strip(), loc, gd["neg"] == "없", secs)
 
+    def _sub3(m):
+        gd = m.groupdict()
+        secs = int(gd["n"]) * unit[gd["u"]]
+        return repl("움직임", (gd.get("locpre") or "").strip(), True, secs)
+
     text = p2.sub(_sub, text)
     text = p1.sub(_sub, text)
+    text = p3.sub(_sub3, text)
     return text, frames
 
 
@@ -345,6 +364,28 @@ def _build_action_A3910(self, clause: str):
                   "score": 0.9}]))
             return
 
+    # L1 후치 전량 스코프: '[기기] (싹) 다 꺼/켜' → 해당 도메인 전량. 방이 명시되면 그 방으로
+    #   한정('거실 조명 다 꺼'→거실 라이트), 아니면 전역('조명 다 꺼'·'불 싹 다 꺼'→집 전체).
+    #   도메인 혼재(보일러/AC) 오검출 방지로 라이트(또는 개념 미검출)에만 안전 적용.
+    if (turn_on or turn_off) \
+            and re.search(r"싹|(?<![가-힣])다\s*(?:꺼|켜|끄|잠|닫|열|멈|내려|올려)", clause) \
+            and not re.search(r"빼|제외|남기|말고", clause):
+        concept = P._find_concept(clause)
+        if concept is None or concept.get("domain") == "light":
+            concept = concept or {"domain": "light", "label": "조명"}
+            area = P._find_area(self.gz, clause)
+            ids = self.gz.entities_by_concept(concept, area_id=area)
+            if ids:
+                action = f"{concept['domain']}.turn_{'off' if turn_off else 'on'}"
+                self.actions.append({"type": "service", "action": action,
+                                     "target": {"entity_id": ids}})
+                self.chips.append(P._Chip(
+                    "전체", "action", f"actions[{len(self.actions)-1}].target",
+                    [{"id": f"all:{concept['domain']}",
+                      "label": f"모든 {concept.get('label','')}", "sublabel": f"{len(ids)}개",
+                      "score": 0.9}]))
+                return
+
     # B5 배제 스코프: "X 빼고/제외하고/(만) 남기고/말고 (나머지) 다" → 해당 도메인 전체 중
     # 방 X 를 제외한 off/on. concept 미검출 시 조명 전체로 가정.
     em = re.search(r"([가-힣]+)\s*(?:빼고|제외하고|남기고|말고)", clause)
@@ -453,7 +494,34 @@ def _value_dict(clause: str):
 # ---------------------------------------------------------------------------
 # B1 zone / B6 누수 — 이벤트 라우팅 오버레이
 # ---------------------------------------------------------------------------
+# L1: 특정 방으로 입실/통과(들어가/지나가/방+이동'가') = 그 방 모션 이벤트.
+#   집 도착/외출(zone)·다른 이벤트어(모션/개폐/온습도/누수)와 겹치지 않을 때만.
+_ROOM_ENTER_RE = re.compile(r"들어가|지나가|지나쳐")
+
+
+def _room_enter_motion_area(gz, clause: str):
+    """방 입실/통과 트리거 절이면 그 방 area, 아니면 None(그 방 모션 센서로 라우팅용)."""
+    area = P._find_area(gz, clause)
+    if area is None:
+        return None  # 방이 명시돼야 그 방 모션으로 본다(집=zone 은 방 표면형 없음).
+    # 명시적 입실/통과 동사(들어가/지나가)는 EVENT_KEYWORDS('나가' 부분매칭) 무시하고 방 모션.
+    if _ROOM_ENTER_RE.search(clause):
+        return area
+    # bare 이동 '가'(방+가면/가서): 집 도착·다른 이벤트/기기어가 전혀 없을 때만.
+    if _ZONE_ENTER_RE.search(clause) or _ZONE_LEAVE_RE.search(clause) \
+            or _LEAK_RE.search(clause):
+        return None
+    if re.search(r"움직임|모션|인기척|동작|움직이|누수|밸브|온도|습도|미세먼지"
+                 r"|열리|열려|닫히|닫혀|감지|도착|왔|눌리|울리", clause):
+        return None
+    if re.search(r"(?<![가-힣])가(?:면|서|고)(?![가-힣])", clause):
+        return area
+    return None
+
+
 def _clause_is_event_B(self, clause: str) -> bool:
+    if _room_enter_motion_area(self.gz, clause) is not None:
+        return True
     if _ZONE_ENTER_RE.search(clause) or _ZONE_LEAVE_RE.search(clause):
         return True
     if _LEAK_RE.search(clause):
@@ -472,6 +540,10 @@ def _clause_is_event_B(self, clause: str) -> bool:
 
 
 def _build_event_clause_B(self, clause: str, as_trigger: bool):
+    # L1: 방 입실/통과(들어가/지나가/방+가) → 그 방 모션(집 도착 zone 보다 먼저 판정).
+    if _room_enter_motion_area(self.gz, clause) is not None:
+        self._build_motion(clause, as_trigger)
+        return
     # B1: 외출(leave) 우선 → 귀가(enter) → 누수 → 원본(도착/모션/상태).
     if _ZONE_LEAVE_RE.search(clause):
         self._build_zone_B(clause, "leave", as_trigger)
@@ -538,9 +610,19 @@ def _build_state_event_B(self, clause, as_trigger):
     else:
         concept = P._find_concept(clause)
         area = P._find_area(self.gz, clause) or self.default_area
+        # L1: 명명 엔티티도 기기개념도 없는 개폐 이벤트의 bare '문/창(문)' → door/window 센서
+        #   ('문 열리면'→현관문, '작은방 창 열리면'→작은방 창문). 개폐 어휘가 있을 때만.
+        if concept is None and re.search(r"열리|열려|열린|열|닫히|닫혀|닫힌|닫", clause):
+            if re.search(r"창문|창(?!고)", clause):
+                concept = {"domain": "binary_sensor", "device_class": "window", "label": "창문"}
+            elif "문" in clause:
+                concept = {"domain": "binary_sensor", "device_class": "door", "label": "문"}
         cands = self.gz.resolve_concept(concept, area, clause) if concept else []
         chip = self._chip(clause.strip(), role, slot, cands)
     eid = chip.chosen
+    # §2.1 L1: 개폐 대상 없는 뒤 서브룰 전이('닫히면'/'열리면'/'없어지면')는 앞 서브룰 센서 재참조.
+    if eid is None and getattr(self, "inh_trigger_entity", None):
+        eid = self.inh_trigger_entity
     # P2: 문(도어센서)에 잠금/해제 표현이 붙으면 같은 방의 lock 으로 재매핑('현관문 잠금 풀리면'
     # → lock.entrance_door). 명시된 switch/밸브는 대상이 아니므로 binary_sensor 일 때만.
     if eid and eid.split(".")[0] == "binary_sensor" \
@@ -553,6 +635,14 @@ def _build_state_event_B(self, clause, as_trigger):
         if locks:
             eid = locks[0]
     st = _aspect_state(clause, eid)
+    # L1 방 전파: 상태/이벤트 트리거·조건의 방을 기본 방으로 전파(뒤 액션의 대상-생략 기기어가
+    #   같은 방을 상속하게 — 미설정일 때만). 해석된 엔티티의 area 를 우선 사용한다('거실 인기척
+    #   있으면 무드 조명 켜' → 거실 무드등).
+    if self.default_area is None and eid:
+        e2 = self.gz.entity(eid)
+        prop_area = (e2.get("area_id") if e2 else None) or P._find_area(self.gz, clause)
+        if prop_area:
+            self.default_area = prop_area
     if as_trigger:
         self.triggers.append({"type": "state", "entity_id": eid, "to": st})
     else:
@@ -562,6 +652,75 @@ def _build_state_event_B(self, clause, as_trigger):
     if eid and eid.split(".")[0] in (
             "light", "switch", "fan", "media_player", "climate", "cover", "lock"):
         self.inh_action_entity = eid
+
+
+# L1: 동사 관형형 '-는'(움직이는/감지되는/열리는 …)은 주제 조사 '는'이 아니다.
+#   '욕실에서 사람 움직이는 거 잡히면'에서 '움직이는'을 주제로 오인해 트리거 절을 삼키던 것 방지.
+_VERB_ADNOMINAL_RE = re.compile(
+    r"(?:움직이|감지되|잡히|열리|닫히|켜지|꺼지|들어오|들어가|나가|지나가|풀리|잠기|울리"
+    r"|생기|떨어지|올라가|내려가|오|되|나|가|넘|높아지|낮아지|없어지)는$")
+
+
+def _extract_topic_B(self, antecedent: str) -> str:
+    """원본 _extract_topic + 동사 관형형 '-는' 배제(트리거 절 오삼킴 방지)."""
+    tokens = antecedent.split()
+    for i in range(min(3, len(tokens))):
+        tok = tokens[i]
+        if tok.endswith("은") or tok.endswith("는"):
+            if _VERB_ADNOMINAL_RE.search(tok):
+                continue  # 동사 관형형(주제 아님) → 다음 후보 확인
+            topic_txt = " ".join(tokens[: i + 1])
+            base = topic_txt[:-1].strip()
+            area = P._find_area(self.gz, base)
+            concept = P._find_concept(base)
+            name_cands = self.gz.resolve_name(P.strip_particles_simple(base))
+            if area:
+                self.default_area = area
+                self.rule_area = area
+            if concept:
+                self.default_target = {"concept": concept, "text": base, "area": area}
+            elif name_cands:
+                self.default_target = {"entity": name_cands[0]["id"], "text": base,
+                                       "area": area}
+            if area or concept or name_cands:
+                return " ".join(tokens[i + 1:])
+            return antecedent
+    return antecedent
+
+
+def _find_action_boundary_B(self, region):
+    """원본 _find_action_boundary + 후행 구두점 허용('끄고,'처럼 쉼표가 붙어도 액션 경계).
+    다중 서브룰에서 '…끄고, 100을 넘으면 켜줘'의 조건 토큰(100을)이 앞 액션존에 흡수되는 것 방지."""
+    if not region:
+        return -1
+    for j in range(len(region) - 1, -1, -1):
+        tok = region[j].rstrip(",.…")
+        if not ((tok.endswith("고") or tok.endswith("며"))
+                and any(h in tok for h in P.COMMAND_HINTS)):
+            continue
+        if j > 0 and self._is_subject_token(region[j - 1]):
+            continue
+        return j
+    return len(region) - 1
+
+
+def _build_motion_B(self, clause, as_trigger):
+    """원본 _build_motion + L1 방 전파. 모션 트리거/조건의 방을 기본 방으로 전파해
+    뒤따르는 대상-생략 기기어('거실 인기척 있으면 무드 조명 켜')가 같은 방을 상속하게 한다."""
+    neg = "없" in clause
+    to = "off" if neg else "on"
+    area = P._find_area(self.gz, clause) or self.default_area
+    if area and self.default_area is None:
+        self.default_area = area
+    cands = self.gz.resolve_concept(P.MOTION_CONCEPT, area, clause)
+    if as_trigger:
+        slot = f"triggers[{len(self.triggers)}].entity_id"
+        chip = self._chip("움직임", "trigger", slot, cands, self._span_of("움직임"))
+        self.triggers.append({"type": "state", "entity_id": chip.chosen, "to": to})
+    else:
+        slot = f"conditions[{len(self.conditions)}].entity_id"
+        chip = self._chip("움직임", "condition", slot, cands, self._span_of("움직임"))
+        self.conditions.append({"type": "state", "entity_id": chip.chosen, "state": to})
 
 
 # P2 지속상 조건이 액션존 앞에 붙는 경우('… 감지되는 동안엔 조명 켜'/'… 닫혀 있을 때만 켜').
@@ -642,6 +801,14 @@ def _process_antecedent_B(self, clauses, frames):
     state_events = [c for c in event_clauses if _is_state_aspect(c)]
     trans_events = [c for c in event_clauses if c not in state_events]
 
+    # L1: 실제 이벤트(모션/상태/held/수치) 트리거가 있으면 문두 상태 모드('잘 때'·'슬립모드
+    #   켜져 있고')는 트리거가 아니라 조건이다 → mode 'trigger'를 'condition'으로 강등.
+    #   전이형 모드('취침모드 되면')만 단독일 때 트리거로 남는다.
+    numeric_present = any(_clause_has_numeric(c) for c in other)
+    if bool(held) or bool(event_clauses) or numeric_present:
+        modes = [("condition", mi[1], mi[2]) if (mi and mi[0] == "trigger") else mi
+                 for mi in modes]
+
     has_primary = bool(held) or bool(trans_events) \
         or any(mi and mi[0] == "trigger" for mi in modes)
     boundary_clause = other[-1] if other else None
@@ -667,6 +834,18 @@ def _process_antecedent_B(self, clauses, frames):
     for i, c in enumerate(state_events):
         promote = (not held) and (not self.triggers) and (i == 0)
         self._build_event_clause(c, promote)
+
+    # L1 방 전파(catch-all): 대상-생략 액션이 방을 상속하도록, 트리거/조건에서 해석된 첫
+    #   엔티티(방 있는 것)의 방을 기본 방으로 — 미설정일 때만. state_held/numeric/state 등
+    #   개별 빌더가 놓친 경로를 일괄 보정한다(person.* 등 방 없는 엔티티는 건너뜀).
+    if self.default_area is None:
+        for n in list(self.triggers) + list(self.conditions):
+            eid = n.get("entity_id")
+            if isinstance(eid, str) and "." in eid:
+                e = self.gz.entity(eid)
+                if e and e.get("area_id"):
+                    self.default_area = e["area_id"]
+                    break
 
 
 # ---------------------------------------------------------------------------
@@ -901,19 +1080,56 @@ def _between(clause: str):
     return (min(a, b), max(a, b))
 
 
+def _is_weather_clause(clause: str) -> bool:
+    return bool(_WEATHER_HUMID_RE.search(clause) or _WEATHER_HOT_RE.search(clause)
+                or _WEATHER_COLD_RE.search(clause))
+
+
+# L1: 수치 비교 표층 — 도달/찍/닿(임계 도달=above)도 포함.
+_NUM_CMP_RE = r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮|도달|닿|찍"
+
+
+def _clause_has_numeric(clause: str) -> bool:
+    """이 절이 numeric_state 트리거/조건을 만들 후보인가(_emit_numeric_aspect_B 게이트와 동일)."""
+    weather = _is_weather_clause(clause)
+    if not (weather or re.search(_NUM_CMP_RE, clause) or _between(clause)):
+        return False
+    if not weather and P._find_concept(clause) is None and P.find_temperature(clause) is None:
+        return False
+    return True
+
+
 def _emit_numeric_aspect_B(self, clause, as_trigger=False):
-    """F1 + P2 — 수치 비교/레벨/between 측면. 개념어(온도/습도)가 없어도 'N도' 온도 리터럴이
-    있으면 온도 센서로 추론한다. '높으면/낮으면/사이면'(레벨/between)도 방출한다(§4.2)."""
-    if not (re.search(r"이상|이하|초과|미만|넘|올라가|내려가|떨어지|밑|높아|낮아|높|낮", clause)
-            or _between(clause)):
+    """F1 + P2 + L1 — 수치 비교/레벨/between/날씨형 전이. 개념어(온도/습도)가 없어도 'N도'
+    온도 리터럴이나 날씨형 전이(습해지/더워지/추워지)가 있으면 센서로 추론한다(§4.2)."""
+    weather = _is_weather_clause(clause)
+    if not (weather or re.search(_NUM_CMP_RE, clause) or _between(clause)):
         return
-    if P._find_concept(clause) is None and P.find_temperature(clause) is None:
+    # 개념/온도 리터럴이 없어도, 앞 서브룰 센서를 물려받을 수 있으면 진행('100을 넘으면 켜줘').
+    if not weather and P._find_concept(clause) is None and P.find_temperature(clause) is None \
+            and not getattr(self, "inh_trigger_entity", None):
         return
     self._build_numeric(clause, as_trigger=as_trigger)
 
 
 def _build_numeric_B(self, clause, as_trigger=False):
-    """B/E5 + P2 — numeric_state. 음수 처리 · between(사이) 결합 · 방 전파."""
+    """B/E5 + P2 + L1 — numeric_state. 음수·between·날씨형 전이(습해지/더워지/추워지)·방 전파."""
+    # L1: 날씨형 전이는 습도/온도 센서 + 관례 임계로(방 전파 포함). 명시값이 있으면 그 값.
+    if _is_weather_clause(clause):
+        wnode = _weather_numeric(clause, self.gz, self.default_area)
+        if wnode is not None:
+            e = self.gz.entity(wnode["entity_id"])
+            if e and e.get("area_id") and self.default_area is None:
+                self.default_area = e["area_id"]      # 방 전파(대상-생략 액션 상속)
+            bucket = self.triggers if as_trigger else self.conditions
+            slot = f"{'triggers' if as_trigger else 'conditions'}[{len(bucket)}].entity_id"
+            lbl = "습도" if wnode["entity_id"].endswith("humidity") else "온도"
+            chip = self._chip(lbl, "trigger" if as_trigger else "condition", slot,
+                              [self.gz._cand(e, 0.9, lbl)] if e else [])
+            node = dict(wnode)
+            node["entity_id"] = chip.chosen or wnode["entity_id"]
+            bucket.append(node)
+            return
     concept = P._find_concept(clause)
     area = P._find_area(self.gz, clause) or self.default_area
     temp = P.find_temperature(clause)
@@ -946,7 +1162,11 @@ def _build_numeric_B(self, clause, as_trigger=False):
     slot = f"{'triggers' if as_trigger else 'conditions'}[{len(bucket)}].entity_id"
     chip = self._chip(concept.get("label", "센서") if concept else clause,
                       "trigger" if as_trigger else "condition", slot, cands)
-    node = {"type": "numeric_state", "entity_id": chip.chosen}
+    eid = chip.chosen
+    # §2.1 L1: 개념 없이 수치만 있는 뒤 서브룰('100을 넘으면 켜줘')은 앞 서브룰의 센서를 재참조.
+    if eid is None and getattr(self, "inh_trigger_entity", None):
+        eid = self.inh_trigger_entity
+    node = {"type": "numeric_state", "entity_id": eid}
     if above is not None:
         node["above"] = above
     if below is not None:
@@ -964,7 +1184,9 @@ def _build_numeric_B(self, clause, as_trigger=False):
 # ===========================================================================
 # 일몰/일출 표면형(§1.1). '해...지'(완전히 지 포함)·어두워지·노을·땅거미=sunset,
 #   일출·동트/동틀·여명·해 뜨/해뜨=sunrise. '해제/해줘'는 '해'+비'지' 라 미매치(안전).
-_SUNSET_RE = re.compile(r"일몰|어두워지|어두워진|캄캄|노을|땅거미|해\s*가?\s*(?:완전히\s*)?지")
+# '해 지'(일몰)는 해가 문두/공백 뒤 독립어일 때만 — '습해지/눅눅해지/피곤해지' 등 '-해지-'
+#   합성어의 '해지' 오탐 방지(negative lookbehind). 어두워지/캄캄/노을/땅거미는 그대로.
+_SUNSET_RE = re.compile(r"일몰|어두워지|어두워진|캄캄|노을|땅거미|(?<![가-힣])해\s*가?\s*(?:완전히\s*)?지")
 _SUNRISE_RE = re.compile(r"일출|동\s*트|동\s*틀|여명|날\s*이?\s*밝|해\s*가?\s*뜨|해\s*뜰|해뜨")
 # 밤창(해 진 뒤~해 뜰 때) 명시 표현. 맨 '밤/새벽'(단독 세그먼트)은 제외 — 기존 gold 가
 #   time_segment 를 쓰는 문장('새벽에 …움직이면')과 충돌하므로 특정 표현만 sun_window 로.
@@ -1557,6 +1779,43 @@ def _augment_numeric_edge(normalized: str, sub: dict, gz, result=None) -> None:
     _mark_savable(result, sub)
 
 
+# L1 날씨형 전이 → numeric_state(습도/온도). '습해지/눅눅해지/습하'=습도 above,
+#   '더워지'=온도 above, '추워지'=온도 below. 임계값: N% / N도 뒤에 이상/이하/보다가 붙은
+#   명시값 우선(액션존의 설정온도 'N도로'는 배제), 없으면 관례 기본(습도 above 70·추위 below 20).
+_WEATHER_HUMID_RE = re.compile(r"습해지|눅눅|축축|꿉꿉|습하|후덥")
+_WEATHER_HOT_RE = re.compile(r"더워지|더워|더우|무더|후텁")
+_WEATHER_COLD_RE = re.compile(r"추워지|추워|추우|쌀쌀|서늘|썰렁")
+_WEATHER_THRESH_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|퍼센트|프로|도)?\s*(?:이상|이하|초과|미만|보다)")
+
+
+def _weather_numeric(normalized: str, gz, default_area):
+    """날씨형 전이 절 → numeric_state 노드(습도/온도) 또는 None. 결정적."""
+    if gz is None:
+        return None
+    humid = _WEATHER_HUMID_RE.search(normalized)
+    hot = _WEATHER_HOT_RE.search(normalized)
+    cold = _WEATHER_COLD_RE.search(normalized)
+    if not (humid or hot or cold):
+        return None
+    dc = "humidity" if humid else "temperature"
+    area = P._find_area(gz, normalized) or default_area
+    cands = gz.resolve_concept({"domain": "sensor", "device_class": dc}, area, normalized)
+    if not cands:
+        return None
+    node = {"type": "numeric_state", "entity_id": cands[0]["id"]}
+    m = _WEATHER_THRESH_RE.search(normalized)
+    explicit = float(m.group(1)) if m else None
+    if humid:
+        node["above"] = explicit if explicit is not None else 70.0
+    elif hot:
+        if explicit is None:
+            return None            # 더위 기본 임계 미관측 — 명시 없으면 관여 안 함
+        node["above"] = explicit
+    else:  # cold
+        node["below"] = explicit if explicit is not None else 20.0
+    return node
+
+
 # §4.1 held: "N분/시간 넘게 …켜져/열려 있으면" → state 트리거 for 지속.
 _HELD_FOR_RE = re.compile(r"(\d+)\s*(분|시간|초)\s*(?:넘게|이상|동안|째|내내|계속)")
 
@@ -1679,6 +1938,18 @@ def _augment_time_calendar(sentence: str, normalized: str, result: dict,
         sub["conditions"].append({"type": "interval_anchor", "unit": "week",
                                   "interval": iv, "anchor": _INTERVAL_ANCHOR})
 
+    # --- 트리거: 날씨형 전이(습해지/더워지/추워지) → numeric_state(습도/온도). sun 오검출보다
+    #     먼저 판정해 '습해지'의 '해지' 오탐을 대체하고, 트리거 미검출 문장을 살린다. ---
+    if not any(t.get("type") == "numeric_state" for t in sub["triggers"]) \
+            and not any(c.get("type") == "numeric_state" for c in sub["conditions"]):
+        wnode = _weather_numeric(normalized, gz, None)
+        if wnode is not None:
+            sub["triggers"] = [t for t in sub["triggers"]
+                               if t.get("type") not in ("sun", "segment", "daily")]
+            sub["triggers"].insert(0, wnode)
+            _drop_sensor_service(sub)
+            _mark_savable(result, sub)
+
     # --- 트리거: sun / sun_window(§1.1·§2.1) ---
     trigs = sub["triggers"]
     conds = sub["conditions"]
@@ -1791,7 +2062,8 @@ def _apply_overlay():
     saved["VERB_STEMS"] = P.VERB_STEMS
     # A5 + B1/B6 절 경계 어간(움직이면/나서면/비우면/새면).
     # P2: 수치 레벨 형용사 '높/낮'(높으면/낮으면)을 절 경계로 인정 → 조건/트리거로 방출(§4.2).
-    P.VERB_STEMS = list(P.VERB_STEMS) + ["잡히", "움직이", "나서", "비우", "새", "높", "낮"]
+    P.VERB_STEMS = list(P.VERB_STEMS) + ["잡히", "움직이", "나서", "비우", "새", "높", "낮",
+                                         "들어가", "지나가", "찍"]  # L1 입실·통과·임계도달
 
     saved["DAY_TYPE_WORDS"] = P.DAY_TYPE_WORDS
     dtw = dict(P.DAY_TYPE_WORDS)
@@ -1836,6 +2108,15 @@ def _apply_overlay():
     saved["_build_state_event"] = P._Parser._build_state_event
     P._Parser._build_state_event = _build_state_event_B     # P2 도메인·부정·결과상 상태
 
+    saved["_build_motion"] = P._Parser._build_motion
+    P._Parser._build_motion = _build_motion_B               # L1 모션 방 전파
+
+    saved["_find_action_boundary"] = P._Parser._find_action_boundary
+    P._Parser._find_action_boundary = _find_action_boundary_B  # L1 후행 쉼표 액션 경계
+
+    saved["_extract_topic"] = P._Parser._extract_topic
+    P._Parser._extract_topic = _extract_topic_B             # L1 동사 관형형 '-는' 배제
+
     saved["_process_antecedent"] = P._Parser._process_antecedent
     P._Parser._process_antecedent = _process_antecedent_B   # P2 aspect 트리거/조건 라우팅
 
@@ -1867,6 +2148,9 @@ def _apply_overlay():
         P._Parser._clause_is_event = saved["_clause_is_event"]
         P._Parser._build_event_clause = saved["_build_event_clause"]
         P._Parser._build_state_event = saved["_build_state_event"]
+        P._Parser._build_motion = saved["_build_motion"]
+        P._Parser._find_action_boundary = saved["_find_action_boundary"]
+        P._Parser._extract_topic = saved["_extract_topic"]
         P._Parser._process_antecedent = saved["_process_antecedent"]
         P._Parser._process_consequent = saved["_process_consequent"]
         if hasattr(P._Parser, "_route_condition_segment_B"):
@@ -1894,4 +2178,35 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
             return _prohibition_result(sentence)
         result = P.parse(normalized, gz, settings, pins or {})
     # Phase 3a: 시간·달력 신규 노드 후처리(오버레이 컨텍스트 밖 — 순수 model 가공, 결정적).
-    return _augment_time_calendar(sentence, normalized, result, settings, gz)
+    result = _augment_time_calendar(sentence, normalized, result, settings, gz)
+    _remap_erv_fan(result, normalized, gz)                  # L1 환기팬(습도/미세먼지)→전열교환기
+    return result
+
+
+def _remap_erv_fan(result: dict, sentence: str, gz) -> None:
+    """'환기팬'이 습도/미세먼지 맥락에서 쓰이면 전열교환기(ERV)로 재매핑(환풍기≠ERV).
+    습도/공기질 환기는 항상 전열교환기이므로 오검출된 욕실 환풍기 대상만 바꾼다. 결정적."""
+    if gz is None or "환기팬" not in sentence:
+        return
+    if not re.search(r"습도|미세먼지|초미세|공기\s*질|공기질", sentence):
+        return
+    erv = next((e["entity_id"] for e in gz.entities if e["domain"] == "fan"
+                and ("전열교환기" in (e.get("name") or "") or e["entity_id"].endswith("erv"))), None)
+    bath = next((e["entity_id"] for e in gz.entities if e["domain"] == "fan"
+                 and "환풍기" in (e.get("name") or "")), None)
+    if not erv or not bath:
+        return
+    model = result.get("model") or {}
+    subs = model.get("subrules") if isinstance(model.get("subrules"), list) else [model]
+    for sub in subs:
+        if not isinstance(sub, dict):
+            continue
+        for a in sub.get("actions", []):
+            tgt = a.get("target")
+            if not isinstance(tgt, dict):
+                continue
+            ids = tgt.get("entity_id")
+            if isinstance(ids, str) and ids == bath:
+                tgt["entity_id"] = erv
+            elif isinstance(ids, list):
+                tgt["entity_id"] = [erv if x == bath else x for x in ids]

@@ -172,15 +172,37 @@ def _normalize_endings(text: str) -> str:
             out.append(stem + "면" + trail)
             i += 2
             continue
+        # (a2) L1: 이동 동사 '-ㄹ 때'(들어갈/지나갈/나갈 때) 2-토큰 → '-면'(입실·통과 시점 트리거).
+        #      명령형과 무관, 트리거 경계로만 쓰인다('거실 지나갈 때 불 켜' → 지나가면).
+        if core == "때" and _strip_josa_tail(tok) in _MOVE_LEX:
+            out.append(_MOVE_LEXICON[_strip_josa_tail(tok)] + nxt[len("때"):])
+            i += 2
+            continue
         # (b) 토큰말 어미 치환.
         m = re.match(r"^(.*?)(자마자|거들랑|거든|면은)([,.…]*)$", tok)
         if m and m.group(1):
             out.append(_fix_intrans(m.group(1)) + "면" + m.group(3))
             i += 1
             continue
+        # (b2) L1: 타동 개폐/이동 동사의 '-면'(열면/닫으면/닫면)은 문·창 상태 전이(트리거)이므로
+        #      자동사 '-리/-히면'으로. 명령형(열어/닫아)은 '-면'이 아니라 영향 없음.
+        core_tok = _strip_josa_tail(tok)
+        if core_tok in _OPENCLOSE_MYEON:
+            trail = tok[len(core_tok):]
+            out.append(_OPENCLOSE_MYEON[core_tok] + trail)
+            i += 1
+            continue
         out.append(tok)
         i += 1
     return " ".join(out)
+
+
+# L1: 타동 개폐 '-면' → 자동사 개폐 '-면'(문/창 상태 전이 트리거).
+_OPENCLOSE_MYEON = {"열면": "열리면", "닫으면": "닫히면", "닫면": "닫히면"}
+# L1: 이동 동사 '-ㄹ 때'(들어갈/지나갈/나갈 때) → '-면'. 값은 '-면' 형.
+_MOVE_LEXICON = {"들어갈": "들어가면", "지나갈": "지나가면", "나갈": "나가면",
+                 "들어올": "들어오면", "나올": "나오면"}
+_MOVE_LEX = set(_MOVE_LEXICON)
 
 
 # ---------------------------------------------------------------------------
@@ -308,11 +330,22 @@ def _reorder_postposed(text: str) -> str:
 # ---------------------------------------------------------------------------
 # 파이프라인
 # ---------------------------------------------------------------------------
+# L1: 임계 부기 괄호 '…면(N … 이상/이하)' → 'N … 이상/이하 …면'(트리거 절로 편입).
+#   괄호가 경계 '면'에 붙어 절 분리를 깨고 임계 수치가 액션으로 새는 것을 막는다.
+_THRESH_PAREN_RE = re.compile(
+    r"([가-힣]+면)\s*\(\s*(\d[^()]*?(?:이상|이하|초과|미만|넘)[^()]*?)\s*\)")
+
+
+def _relocate_threshold_paren(text: str) -> str:
+    return _THRESH_PAREN_RE.sub(lambda m: m.group(2).strip() + " " + m.group(1), text)
+
+
 def normalize_surface(sentence: str, gz=None) -> str:
     """비표준 표면형 → 정규형. 정규형 입력은 그대로 반환(회귀 0)."""
     if not sentence:
         return sentence
     t = sentence
+    t = _relocate_threshold_paren(t)  # 0) 임계 괄호 재배치(경계 복원)
     t = _convert_numerals(t)      # 1) 수사 → 숫자 (먼저 — 시각 'N시'가 존칭 '시' 오제거 방지)
     t = _strip_honorific(t)       # 3) 존칭 제거 + 보충법 (어미 정규화 전에 -시- 삭제)
     t = _normalize_endings(t)     # 2) 절경계 어미 → -면
