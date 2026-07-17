@@ -143,10 +143,17 @@ subscribe_events+재연결·/data 영속화·holidays(KR) 확정 / 형태소 분
 | a-3 | 라운드2: B그룹 기능규칙(zone/value/climate/time-range/scope-exclude/safety/media) + 매처배선 | Opus×2 | ✅ |
 | a-4 | 최종 측정(전량 CLI): **held-out 정직 75.2% ≥70% ✅**(L1 16.8%→규칙 69.0%→+CLI 75.2%, 회귀 0) | Fable | ✅ |
 | a-5 | 앱 보강 계획 수립 + 커밋 | Fable | ✅ |
-| a-6 | Phase 3: 앱 편입(규칙이식+매처레이어+CLI학습기능) | 진행 | |
+| a-6 | Phase 3A: 검증된 A+B 규칙을 실제 파서에 이식(f2e0fd9) | Opus | ✅ |
+| a-7 | Phase 3B: L2 템플릿 매처 레이어 + pattern_library.yaml 편입 | Opus | ✅ |
+| a-8 | Phase 3C: CLI 학습 기능(learn 엔드포인트·UI·LearnedStore) | Opus | ✅ |
+| a-9 | 적대적 멀티에이전트 리뷰(15에이전트) → 확정 3건 수정 + 회귀테스트 | Opus | ✅ |
+| a-10 | v3.1.0 커밋·푸시(748d34d), 389 passed | Opus | ✅ |
 
-**결과**: 오프라인 프로토타입(parser_overlay monkeypatch)으로 정직 정확도 25.3%→**75.2%** 실증. 대부분 결정적
-규칙(A+B, 103건), CLI가 롱테일 17건. tools/corpus/에 전부 있고 앱은 미수정. 다음: Phase 3로 앱 반영.
+**결과**: 오프라인 프로토타입(parser_overlay monkeypatch)으로 정직 정확도 25.3%→**75.2%** 실증(대부분
+결정적 규칙 A+B 103건, CLI가 롱테일 17건). 이를 앱에 하이브리드 3층(L1 규칙→L2 매처→L3 CLI)으로 편입하고
+**선택형 AI 학습 기능**(못 읽은 문장을 CLI가 표준 문형으로 변환→사용자 승인→로컬 학습)까지 추가해 v3.1.0
+릴리스. 리뷰에서 확정된 3결함(매처 도메인 뭉갬으로 조명→환풍기 오흡수 · validate 도메인/널 미검사 · 빈
+인벤토리 재검증 데이터소실) 수정 완료. 테스트 389 passed / 회귀 0.
 
 ## 4. 저장소 구조
 
