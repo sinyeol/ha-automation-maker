@@ -987,8 +987,9 @@ def _sun_offset(text: str) -> int:
         secs += 1800
     if secs == 0:
         return 0
-    # 음수는 'N분/시간 전'(이전) 만 — '완전히' 등에 든 '전' 오탐 방지.
-    return -secs if re.search(r"(?:분|시간|초)\s*(?:전|이전)", text) else secs
+    # 음수는 'N분/시간 (반) 전/앞'(이전) 만 — '완전히' 등에 든 '전' 오탐 방지.
+    # Phase 3b 수정: '한 시간 반 전'(→'1 시간 반 전')처럼 '반'이 사이에 껴도 '전'을 음수로 인식.
+    return -secs if re.search(r"(?:분|시간|초)\s*(?:반\s*)?(?:전|이전|앞)", text) else secs
 
 
 def _days_of_token(tok: str) -> list:
@@ -1149,9 +1150,151 @@ def _primary_subrule(model: dict):
     return None
 
 
-def _augment_time_calendar(sentence: str, normalized: str, result: dict) -> dict:
+# ===========================================================================
+# Phase 3b — 프레즌스 양화 presence_agg (SPEC-SCHEMA-90 §1.3 트리거 / §2.5 조건).
+#   집(zone.home) 단위 인원 양화. 방 단위 모션('욕실 아무도 없으면')과 구분하려고
+#   '집' 문맥·귀가/외출·그룹표현이 있을 때만 발화한다(방+모션은 건드리지 않음 — 회귀 방지).
+# ===========================================================================
+# 귀가(도착) 표지. presence 는 집 카운트 에지이므로 존/개인 도착과 별개(그룹 양화 문맥에서만).
+_PRES_ARRIVE_RE = re.compile(r"들어오|들어와|들어온|들어가|귀가|재실|도착|오면|와\s*있|집에\s*있|왔")
+
+
+def _presence_info(text: str):
+    """프레즌스 개념 판정 → {concept: empty|some|all, first?} 또는 None.
+
+    강한 집-프레즌스 신호(집 문맥·그룹 나감/귀가·'아무도 없다가...들어오' 전이)일 때만.
+    """
+    has_home = "집" in text
+    prior_then_arrive = bool(re.search(r"다가", text)) and bool(_PRES_ARRIVE_RE.search(text))
+    first_marker = bool(re.search(r"처음|먼저|있게\s*되|첫\s*사람", text))
+    # 집이 빔(모두 나감/아무도 없음). '하나도'는 normalize 로 '1도'가 되기도 한다.
+    empty = False
+    if re.search(r"아무도|(?:1도|하나도)?\s*안\s*남|사람이?\s*(?:1도|하나도)?\s*없", text) and has_home:
+        empty = True
+    if re.search(r"(?:다들|다|모두|전원|가족들?|가족이)\s*[가-힣]{0,3}?(?:나가|외출)", text):
+        empty = True
+    if re.search(r"집\s*(?:을|이|안)?\s*비[우어운는면]", text):
+        empty = True
+    all_word = re.search(
+        r"모두|둘\s*다|전원|온\s*가족|제일\s*늦게|가족이?\s*다|다\s*들어[오와온]|다\s*집에\s*있", text)
+    some_word = re.search(r"누구|누가|한\s*명|아무나", text)
+    has_arrive = bool(_PRES_ARRIVE_RE.search(text))
+    home_ctx = has_home or bool(re.search(
+        r"귀가|가족|전원|온\s*식구|제일\s*늦게\s*들어|다\s*들어[오와온]", text)) or prior_then_arrive
+    if (prior_then_arrive or (some_word and first_marker)) and (home_ctx or empty):
+        return {"concept": "some", "first": True}
+    if empty and not prior_then_arrive:
+        return {"concept": "empty"}
+    if all_word and has_arrive and home_ctx:
+        return {"concept": "all"}
+    if some_word and home_ctx:
+        return {"concept": "some", "first": bool(first_marker)}
+    return None
+
+
+def _presence_is_condition(text: str) -> bool:
+    """프레즌스가 (트리거 아니라) 조건 위치인가. 선행 이벤트 절(-는데)·벽시계 트리거·
+    모드 트리거 뒤에 오는 '있으면/없으면/있을 때'는 조건이다."""
+    # 이벤트 서술어 + '-는데'(선행 트리거 절). '좋겠는데' 같은 종결형 '-는데'는 제외.
+    if re.search(r"(?:열렸|열리|감지|됐|되|떨어졌|떨어지|올라갔|올라가|왔|울리)는데", text):
+        return True
+    # 벽시계 'N시'(N시간 제외) + 재실 서술어 → 시각 트리거 + 프레즌스 조건.
+    if re.search(r"\d+\s*시(?!간)", text) and re.search(r"있|없", text):
+        return True
+    if re.search(r"모드가?\s*(?:켜질\s*때|되면|켜지면)", text):
+        return True
+    return False
+
+
+_PRES_FOR_RE = re.compile(r"(\d+)\s*(분|시간|초)\s*(?:넘게|이상|동안|지나|계속)")
+
+
+def _presence_for(text: str):
+    """last/all 유지시간 for. 'N분 넘게/N시간 이상/N분 동안' → duration. 없으면 None."""
+    m = _PRES_FOR_RE.search(text)
+    if not m:
+        return None
+    key = {"분": "minutes", "시간": "hours", "초": "seconds"}[m.group(2)]
+    return {key: int(m.group(1))}
+
+
+def _augment_presence(normalized: str, sub: dict, settings: Optional[dict]) -> bool:
+    """§1.3/§2.5 presence_agg 후처리. 처리했으면 True(시간·달력 augment 는 건너뜀).
+
+    트리거 위치: 오파싱된 트리거(zone/daily 등)·조건을 걷어내고 presence_agg 트리거만 남긴다.
+    조건 위치: 실제 트리거는 두고 presence_agg 조건을 더한다.
+    """
+    info = _presence_info(normalized)
+    if info is None:
+        return False
+    is_cond = _presence_is_condition(normalized)
+    concept = info["concept"]
+    if is_cond:
+        quant = "none" if concept == "empty" else ("all" if concept == "all" else "any")
+    else:
+        if concept == "empty":
+            quant = "last"
+        elif concept == "all":
+            quant = "all"
+        else:
+            quant = "first" if info.get("first") else "any"
+    node = {"type": "presence_agg", "quant": quant}
+    # 특정 인물(나/와이프/우리 둘) 언급 → persons 명시. 생략 = 전체 person.*.
+    if re.search(r"둘\s*다|우리\s*둘|나랑\s*와이프|와이프랑\s*나|부부|두\s*사람", normalized):
+        persons = sorted(set((settings or {}).get("persons", {}).values())) \
+            or ["person.user", "person.wife"]
+        node["persons"] = persons
+    if quant in ("last", "all") and not is_cond:
+        fr = _presence_for(normalized)
+        if fr is not None:
+            node["for"] = fr
+    if is_cond:
+        if not any(c.get("type") == "presence_agg" for c in sub["conditions"]):
+            sub["conditions"].append(node)
+    else:
+        # 트리거 위치: 오파싱 트리거/조건 제거(gold 는 presence 단일 트리거 + 조건 없음).
+        sub["triggers"] = [node]
+        sub["conditions"] = []
+    return True
+
+
+def _augment_actions_only(sentence: str, sub: dict, is_repeat: bool) -> None:
+    """액션측 후처리(§3.3·§3.4) — repeat 우선, 아니면 인용 notify. sub 를 제자리 수정.
+    프레즌스 처리 경로와 시간·달력 경로 양쪽에서 공유(중복 제거)."""
+    if is_repeat:
+        # 트리거가 비었는데(어순 문제) 상태/수치 조건이 있으면 진입에지로 승격.
+        if not sub["triggers"]:
+            for c in list(sub["conditions"]):
+                if c.get("type") == "state":
+                    sub["triggers"].append({"type": "state",
+                                            "entity_id": c.get("entity_id"),
+                                            "to": c.get("state")})
+                    sub["conditions"].remove(c)
+                    break
+                if c.get("type") == "numeric_state":
+                    nt = {"type": "numeric_state", "entity_id": c.get("entity_id")}
+                    if c.get("above") is not None:
+                        nt["above"] = c["above"]
+                    if c.get("below") is not None:
+                        nt["below"] = c["below"]
+                    sub["triggers"].append(nt)
+                    sub["conditions"].remove(c)
+                    break
+        sub["actions"] = [{"type": "repeat"}]
+        sub["conditions"] = [c for c in sub["conditions"]
+                             if c.get("type") in ("weekday", "day_of_month",
+                                                  "interval_anchor", "sun_window")]
+    else:
+        nd = _detect_notify(sentence)
+        if nd is not None:
+            sub["actions"] = [{"type": "service", "action": "notify.notify", "data": nd}]
+
+
+def _augment_time_calendar(sentence: str, normalized: str, result: dict,
+                           settings: Optional[dict] = None) -> dict:
     """Phase 3a 후처리 — sun/time_pattern/sun_window/weekday/day_of_month/interval_anchor/
-    repeat/notify 노드를 결정적으로 얹는다. result(model) 를 제자리 수정."""
+    repeat/notify 노드를 결정적으로 얹는다. result(model) 를 제자리 수정.
+    Phase 3b: presence_agg(§1.3/§2.5) 를 먼저 처리하고, 처리되면 시간·달력 축은 건너뛴다."""
     model = result.get("model") or {}
     sub = _primary_subrule(model)
     if sub is None:
@@ -1161,6 +1304,12 @@ def _augment_time_calendar(sentence: str, normalized: str, result: dict) -> dict
     sub.setdefault("actions", [])
 
     is_repeat = _is_repeat_action(normalized)
+
+    # Phase 3b: 프레즌스 양화가 적용되면 시간·달력 신규노드는 건너뛴다(상호배타 문장군).
+    presence_done = _augment_presence(normalized, sub, settings)
+    if presence_done:
+        _augment_actions_only(sentence, sub, is_repeat)
+        return result
 
     # --- 조건: 요일(§2.2). 개별 요일/축약/부정은 항상 weekday. 맨 평일/주말(긍정)은
     #     이벤트(상태/수치/존) 트리거가 있을 때만 weekday 로 승격(daily/segment 문맥의
@@ -1273,33 +1422,7 @@ def _augment_time_calendar(sentence: str, normalized: str, result: dict) -> dict
             sub["triggers"].append({"type": "daily", "at": clk["hhmm"]})
 
     # --- 액션: repeat(§3.4) 우선, 아니면 인용 notify(§3.3). ---
-    if is_repeat:
-        # 트리거가 비었는데(어순 문제) 상태/수치 조건이 있으면 진입에지로 승격.
-        if not sub["triggers"]:
-            for c in list(sub["conditions"]):
-                if c.get("type") == "state":
-                    sub["triggers"].append({"type": "state",
-                                            "entity_id": c.get("entity_id"),
-                                            "to": c.get("state")})
-                    sub["conditions"].remove(c)
-                    break
-                if c.get("type") == "numeric_state":
-                    nt = {"type": "numeric_state", "entity_id": c.get("entity_id")}
-                    if c.get("above") is not None:
-                        nt["above"] = c["above"]
-                    if c.get("below") is not None:
-                        nt["below"] = c["below"]
-                    sub["triggers"].append(nt)
-                    sub["conditions"].remove(c)
-                    break
-        sub["actions"] = [{"type": "repeat"}]
-        sub["conditions"] = [c for c in sub["conditions"]
-                             if c.get("type") in ("weekday", "day_of_month",
-                                                  "interval_anchor", "sun_window")]
-    else:
-        nd = _detect_notify(sentence)
-        if nd is not None:
-            sub["actions"] = [{"type": "service", "action": "notify.notify", "data": nd}]
+    _augment_actions_only(sentence, sub, is_repeat)
     return result
 
 
@@ -1422,4 +1545,4 @@ def parse_patched(sentence: str, gz: Gazetteer, settings: dict,
             return _prohibition_result(sentence)
         result = P.parse(normalized, gz, settings, pins or {})
     # Phase 3a: 시간·달력 신규 노드 후처리(오버레이 컨텍스트 밖 — 순수 model 가공, 결정적).
-    return _augment_time_calendar(sentence, normalized, result)
+    return _augment_time_calendar(sentence, normalized, result, settings)
