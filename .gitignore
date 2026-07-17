@@ -9,3 +9,5 @@ claude-work/
 .claude/worktrees/
 devdata/
 claude-work/
+tools/corpus/out/results.jsonl
+tools/corpus/out/corpus_*.jsonl

@@ -1,0 +1,484 @@
+# templates.yaml — 시드 문법 (SPEC-CORPUS §2.2, 라벨 자동)
+#
+# 문장부는 hassil 인라인 문법을 쓴다:
+#   {slot}        슬롯 표면형 삽입(slots.yaml)
+#   {가} / {을}   앞 슬롯 표면형의 받침으로 이/가·을/를 재계산(backend.nl.normalize 재사용, §7.2)
+#   <off> / <on>  slots.yaml expansion_rules 의 대안 그룹(어미·존대 변이, §7.1)
+# gold 는 슬롯 값 참조로 구체 RuleModel 을 기술한다:
+#   {slot.value} {slot.entity} {slot.dur} {scope.expand}
+# gold 상태값은 반드시 문자열로 인용한다("on"/"off") — YAML 1.1 이 on/off 를 bool 로 파싱하기 때문.
+# 모든 gold 는 subrules 래퍼를 쓴다(structural_match 가 단일/다중을 subrules 로 평탄화해 비교).
+#
+# tags 의 `misparse` 는 "조용한 오판" 유발 시드 — gold 는 '사용자 의도(정답)'로 라벨하며,
+# 현재 파서는 이를 다르게(또는 부분/실패로) 해석해 커버리지 리포트에서 파서 갭을 드러낸다.
+
+# ===========================================================================
+# MODE 영역 — 모드 트리거/조건 (type: mode). 스펙 독립(mode 노드는 mode 스펙과 무관).
+# ===========================================================================
+- id: mode_trig_on_light
+  area: mode
+  template: "{mode}{가} 켜지면 {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, device_light]
+  tags: [mode-trigger]
+
+- id: mode_trig_off_light
+  area: mode
+  template: "{mode}{가} 꺼지면 {device_light}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, device_light]
+  tags: [mode-trigger]
+
+- id: mode_trig_scope_off
+  area: mode
+  template: "{mode}{가} 켜지면 {scope} {device_light}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: "{scope.expand}"}}]
+  slots: [mode, scope, device_light]
+  tags: [mode-trigger, scope-all]
+
+- id: mode_cond_motion_on
+  area: mode
+  template: "{mode}이고 {motion}{가} 감지되면 {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: mode, mode: "{mode.value}", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, motion, device_light]
+  tags: [mode-condition, motion-trigger]
+
+- id: mode_cond_motion_off
+  area: mode
+  template: "{mode}이고 {motion}{가} 작동하면 {device_light}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: mode, mode: "{mode.value}", state: "on"}]
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, motion, device_light]
+  tags: [mode-condition, motion-trigger]
+
+- id: mode_seg_cond_motion_on
+  area: mode
+  template: "{segment} {mode}이고 {motion}{가} 감지되면 {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: time_segment, segments: ["{segment.value}"]},
+                     {type: mode, mode: "{mode.value}", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [segment, mode, motion, device_light]
+  tags: [mode-condition, time-segment, motion-trigger]
+
+- id: mode_cond_whenclause
+  area: mode
+  template: "{mode}일 때 {motion}{가} 감지되면 {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: mode, mode: "{mode.value}", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, motion, device_light]
+  tags: [mode-condition, motion-trigger]
+
+- id: mode_qm_release_off
+  area: mode
+  template: "{mode}{가} 해제되면 {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "{mode.value}", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, device_light]
+  tags: [mode-trigger, misparse]
+  misparse_note: >-
+    '해제되면'은 모드 off 트리거 의도지만 현재 파서는 '켜지/꺼지/아니'만 인식해
+    조건(on)으로 잘못 읽고 트리거를 못 만든다.
+
+# ===========================================================================
+# MULTICLAUSE 영역 — 2~3 규칙쌍(subrules) + 컨텍스트 상속(§2.1).
+# held-off 절은 앞 절 모션 센서를 재참조하므로 bare "모션"/"움직임" 을 쓴다.
+# ===========================================================================
+- id: multiclause_golden_b
+  area: multiclause
+  template: "{segment} {mode}이고 {motion}{가} 작동하면 {device_light}{을} {percent} 켜주고 {duration} 동안 모션이 없으면 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: time_segment, segments: ["{segment.value}"]},
+                     {type: mode, mode: "{mode.value}", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]},
+                   data: {brightness_pct: "{percent.value}"}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: "{duration.dur}"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [segment, mode, motion, device_light, percent, duration]
+  tags: [multiclause, context-inherit, mode-condition]
+
+- id: multiclause_seg_dim_off
+  area: multiclause
+  template: "{segment} {motion}{가} 작동하면 {device_light}{을} {percent} 켜주고 {duration} 동안 움직임이 없으면 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: time_segment, segments: ["{segment.value}"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]},
+                   data: {brightness_pct: "{percent.value}"}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: "{duration.dur}"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [segment, motion, device_light, percent, duration]
+  tags: [multiclause, context-inherit, time-segment]
+
+- id: multiclause_dim_off
+  area: multiclause
+  template: "{motion}{가} 감지되면 {device_light}{을} {percent} 켜주고 {duration} 동안 움직임이 없으면 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]},
+                   data: {brightness_pct: "{percent.value}"}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: "{duration.dur}"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [motion, device_light, percent, duration]
+  tags: [multiclause, context-inherit]
+
+- id: multiclause_plain_onoff
+  area: multiclause
+  template: "{motion}{가} 감지되면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: "{duration.dur}"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [motion, device_light, duration]
+  tags: [multiclause, context-inherit]
+
+- id: multiclause_mode_cond_onoff
+  area: multiclause
+  template: "{mode}이고 {motion}{가} 작동하면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: [{type: mode, mode: "{mode.value}", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: "{duration.dur}"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [mode, motion, device_light, duration]
+  tags: [multiclause, context-inherit, mode-condition]
+
+- id: multiclause_three_rules
+  area: multiclause
+  template: "{motion}{가} 감지되면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면 {device_light}{을} 꺼주고 {mode}{가} 켜지면 {scope} 조명을 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: "{duration.dur}"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+      - triggers: [{type: mode, mode: "{mode.value}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: "{scope.expand}"}}]
+  slots: [motion, device_light, duration, mode, scope]
+  tags: [multiclause, three-rules, mode-trigger, scope-all]
+
+- id: multiclause_qm_comma
+  area: multiclause
+  template: "거실 모션이 감지되면 거실 조명을 켜주고, 안방 모션이 감지되면 안방 조명을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+      - triggers: [{type: state, entity_id: "binary_sensor.master_bedroom_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  slots: []
+  tags: [multiclause, two-rules, misparse]
+  misparse_note: >-
+    '켜주고,'의 부착 쉼표 때문에 액션 경계('-고/-며' 종결) 토큰이 ','로 끝나 인식되지 않아
+    2번째 규칙 조건존('안방 모션이')이 1번째 규칙 액션존으로 흡수돼 규칙 분해가 어긋난다.
+    의도는 서로 다른 두 방의 독립 2 규칙쌍.
+
+- id: multiclause_qm_5bungan
+  area: multiclause
+  template: "{motion}{가} 감지되면 {device_light}{을} 켜주고 5분간 움직임이 없으면 <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+      - triggers: [{type: state_held, entity_id: "{motion.entity}", to: "off",
+                    for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [motion, device_light]
+  tags: [multiclause, context-inherit, misparse]
+  misparse_note: >-
+    '5분간'은 '5분 동안'과 동의지만 지속시간 패턴(P1)이 '동안'을 요구해 매칭되지 않아
+    state_held 대신 즉시 state(off)로 오판(지속시간 유실).
+
+# ===========================================================================
+# TARGET 영역 — 단일 규칙 대상 해석(수동매핑 유발 후보 포함).
+# ===========================================================================
+- id: target_basic_on
+  area: target
+  template: "{motion}{가} 감지되면 {device_light}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [motion, device_light]
+  tags: [target, motion-trigger]
+
+- id: target_basic_off
+  area: target
+  template: "{motion}{가} 없으면 {device_light}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["{device_light.entity}"]}}]
+  slots: [motion, device_light]
+  tags: [target, motion-trigger]
+
+- id: target_scope_all
+  area: target
+  template: "{motion}{가} 감지되면 {scope} {device_light}{을} <off>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: "{scope.expand}"}}]
+  slots: [motion, scope, device_light]
+  tags: [target, scope-all]
+
+- id: target_fan_on
+  area: target
+  template: "{motion}{가} 감지되면 {device_fan}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["{device_fan.entity}"]}}]
+  slots: [motion, device_fan]
+  tags: [target, fan]
+
+- id: target_climate_on
+  area: target
+  template: "{motion}{가} 감지되면 {device_climate}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["{device_climate.entity}"]}}]
+  slots: [motion, device_climate]
+  tags: [target, climate]
+
+- id: target_two_actions
+  area: target
+  template: "{motion}{가} 감지되면 {device_light}{을} 켜고 {device_fan}{을} <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]}},
+                  {type: service, action: "fan.turn_on",
+                   target: {entity_id: ["{device_fan.entity}"]}}]
+  slots: [motion, device_light, device_fan]
+  tags: [target, multi-action]
+
+- id: target_percent
+  area: target
+  template: "{motion}{가} 감지되면 {device_light}{을} {percent} 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["{device_light.entity}"]},
+                   data: {brightness_pct: "{percent.value}"}}]
+  slots: [motion, device_light, percent]
+  tags: [target, brightness]
+
+- id: target_qm_moodlight
+  area: target
+  template: "{motion}{가} 감지되면 무드등을 <on>"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "{motion.entity}", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_mood"]}}]
+  slots: [motion]
+  tags: [target, manual-mapping, misparse]
+  misparse_note: >-
+    '무드등'은 거실 무드등(light.living_room_mood)을 뜻하지만 개념어/이름 사전에
+    표면형이 없어 미해석 → 사용자 수동매핑 유발(파서 unresolved).
+
+# ===========================================================================
+# SINGLE 영역 — 기존 v2 골든 회귀(고정 문장, 알려진 정답 gold).
+# ===========================================================================
+- id: single_golden_1_bathroom_fan_off
+  area: single
+  template: "화장실은 5분 동안 움직임이 없으면 환풍기와 조명을 꺼줘"
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.bathroom_motion",
+                    to: "off", for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_off",
+                   target: {entity_id: ["fan.bathroom_fan"]}},
+                  {type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.bathroom"]}}]
+  slots: []
+  tags: [single, regression, held, multi-action]
+
+- id: single_golden_2_arrival_two_persons
+  area: single
+  template: "나와 와이프가 집에 도착하면 현관 조명을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: zone, entity_id: "person.wife", zone: "zone.home",
+                    event: "enter"}]
+        conditions: [{type: state, entity_id: "person.user", state: "home"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.entrance"]}}]
+  slots: []
+  tags: [single, regression, zone]
+
+- id: single_golden_3_numeric_ac_on
+  area: single
+  template: "여름에 거실 온도가 28도 이상이면 에어컨을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    above: 28.0}]
+        conditions: [{type: season, seasons: ["summer"]}]
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_ac"]}}]
+  slots: []
+  tags: [single, regression, numeric, season]
+
+- id: single_golden_4_loop_basic
+  area: single
+  template: "거실에 움직임이 감지되면 거실 조명을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion",
+                    to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  slots: []
+  tags: [single, regression, motion-trigger]
+
+- id: single_golden_5_segment_brightness
+  area: single
+  template: "거실 조명은 새벽시간에 거실에 움직임이 있으면 10%로 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion",
+                    to: "on"}]
+        conditions: [{type: time_segment, segments: ["dawn"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]},
+                   data: {brightness_pct: 10}}]
+  slots: []
+  tags: [single, regression, time-segment, brightness]
+
+- id: single_golden_6_bedroom_loop
+  area: single
+  template: "안방에 움직임이 감지되면 안방 조명을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.master_bedroom_motion",
+                    to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  slots: []
+  tags: [single, regression, motion-trigger]
+
+- id: single_golden_7_bathroom_loop
+  area: single
+  template: "욕실에 움직임이 감지되면 욕실 조명을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.bathroom_motion",
+                    to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.bathroom"]}}]
+  slots: []
+  tags: [single, regression, motion-trigger]
+
+- id: single_golden_8_segment_trigger
+  area: single
+  template: "저녁이 되면 거실 조명을 켜줘"
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: evening}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  slots: []
+  tags: [single, regression, segment-trigger]

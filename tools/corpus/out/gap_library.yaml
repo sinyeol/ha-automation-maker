@@ -1,0 +1,3825 @@
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR}간 {DEVICE}{J} 없으면 꺼'
+  count: 13
+  area: multiclause
+  verdict_mix:
+    fail: 13
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 움직임이 감지되면 베란다 조명을 켜주고 5분간 움직임이 없으면 꺼
+  - 안방 모션이 감지되면 작은방 조명을 켜주고 5분간 움직임이 없으면 꺼
+  - 욕실 움직임이 감지되면 안방 불을 켜주고 5분간 움직임이 없으면 꺼
+  - 거실 움직임이 감지되면 거실등을 켜주고 5분간 움직임이 없으면 꺼
+  - 거실 움직임이 감지되면 거실 전등을 켜주고 5분간 움직임이 없으면 꺼
+- pattern: '{DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR}간 {DEVICE}{J} 없으면 끄다'
+  count: 12
+  area: multiclause
+  verdict_mix:
+    fail: 12
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 모션이 감지되면 안방 조명을 켜주고 5분간 움직임이 없으면 끄다
+  - 거실 모션이 감지되면 부엌 조명을 켜주고 5분간 움직임이 없으면 끄다
+  - 욕실 움직임이 감지되면 베란다 조명을 켜주고 5분간 움직임이 없으면 끄다
+  - 안방 움직임이 감지되면 욕실 불을 켜주고 5분간 움직임이 없으면 끄다
+  - 거실 인기척이 감지되면 욕실 불을 켜주고 5분간 움직임이 없으면 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR}간 {DEVICE}{J} 없으면
+    꺼줘'
+  count: 7
+  area: multiclause
+  verdict_mix:
+    fail: 7
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 움직임이 감지되면 현관 불을 켜주고 5분간 움직임이 없으면 꺼줘
+  - 욕실 움직임이 감지되면 거실등을 켜주고 5분간 움직임이 없으면 꺼줘
+  - 거실 인기척이 감지되면 거실 전등을 켜주고 5분간 움직임이 없으면 꺼줘
+  - 거실 움직임이 감지되면 현관 불을 켜주고 5분간 움직임이 없으면 꺼줘
+  - 거실 모션이 감지되면 거실 조명을 켜주고 5분간 움직임이 없으면 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 다 {DEVICE}{J} 꺼'
+  count: 7
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 7
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임이 감지되면 다 작은방 조명을 꺼
+  - 안방 움직임이 감지되면 다 욕실 조명을 꺼
+  - 안방 모션이 감지되면 다 현관 불을 꺼
+  - 안방 모션이 감지되면 다 주방 불을 꺼
+  - 거실 인기척이 감지되면 다 욕실 불을 꺼
+- pattern: 취침 모드이고 {ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 틀어줘
+  count: 5
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 5
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 인기척이 감지되면 주방 조명을 틀어줘
+  - 취침 모드이고 욕실 움직임이 감지되면 화장실 조명을 틀어줘
+  - 취침 모드이고 욕실 움직임이 감지되면 안방 조명을 틀어줘
+  - 취침 모드이고 거실 모션이 감지되면 거실 조명을 틀어줘
+  - 취침 모드이고 안방 모션이 감지되면 안방 불을 틀어줘
+- pattern: 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} 꺼줘
+  count: 5
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 5
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 움직임이 작동하면 작은방 조명을 꺼줘
+  - 취침모드이고 욕실 움직임이 작동하면 안방 불을 꺼줘
+  - 취침모드이고 거실 움직임이 작동하면 화장실 조명을 꺼줘
+  - 취침모드이고 거실 인기척이 작동하면 부엌 조명을 꺼줘
+  - 취침모드이고 안방 움직임이 작동하면 안방 조명을 꺼줘
+- pattern: '{SEG}{J} 취침 모드이고 {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜줘'
+  count: 5
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 5
+  error_tags:
+  - missing_node
+  examples:
+  - 저녁에 취침 모드이고 거실 모션이 감지되면 안방 불을 켜줘
+  - 아침에 취침 모드이고 거실 모션이 감지되면 주방 불을 켜줘
+  - 저녁에 취침 모드이고 안방 움직임이 감지되면 거실 전등을 켜줘
+  - 새벽에 취침 모드이고 거실 움직임이 감지되면 거실 조명을 켜줘
+  - 아침에 취침 모드이고 거실 모션이 감지되면 안방 조명을 켜줘
+- pattern: '{SEG}{J} 취침 모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} {PERCENT}
+    켜주고 {DUR} 동안 {DEVICE}{J} 없으면 꺼줘'
+  count: 5
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 5
+  error_tags:
+  - missing_node
+  examples:
+  - 아침에 취침 모드이고 안방 움직임이 작동하면 욕실 불을 30% 켜주고 3분 동안 모션이 없으면 꺼줘
+  - 새벽에 취침 모드이고 거실 움직임이 작동하면 현관 조명을 10퍼센트 켜주고 5분 동안 모션이 없으면 꺼줘
+  - 저녁에 취침 모드이고 욕실 움직임이 작동하면 욕실 조명을 50프로 켜주고 5분 동안 모션이 없으면 꺼줘
+  - 밤에 취침 모드이고 욕실 움직임이 작동하면 부엌 조명을 30% 켜주고 5분 동안 모션이 없으면 꺼줘
+  - 저녁에 취침 모드이고 거실 모션이 작동하면 부엌 조명을 10퍼센트 켜주고 10분 동안 모션이 없으면 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}등을
+    꺼주고 {DEVICE}{J} 켜지면 집의 모든 {DEVICE}{J} 끄다'
+  count: 5
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 4
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 안방등을 켜주고 5분 동안 움직임이 없으면 안방등을 꺼주고 슬립모드가 켜지면 집의 모든 조명을 끄다
+  - 안방 움직임이 감지되면 거실 전등을 켜주고 3분 동안 움직임이 없으면 거실 전등을 꺼주고 슬립 모드가 켜지면 집의 모든 조명을 끄다
+  - 안방 모션이 감지되면 주방 불을 켜주고 10분 동안 움직임이 없으면 주방 불을 꺼주고 슬립 모드가 켜지면 집의 모든 조명을 끄다
+  - 거실 인기척이 감지되면 거실등을 켜주고 10분 동안 움직임이 없으면 거실등을 꺼주고 취침모드가 켜지면 모든 조명을 끄다
+  - 안방 모션이 감지되면 현관 불을 켜주고 5분 동안 움직임이 없으면 현관 불을 꺼주고 슬립모드가 켜지면 집의 모든 조명을 끄다
+- pattern: 취침모드가 꺼지면 {ROOM} {DEVICE}{J} 꺼주세요
+  count: 4
+  area: mode
+  verdict_mix:
+    fail: 4
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 꺼지면 욕실 불을 꺼주세요
+  - 취침모드가 꺼지면 부엌 조명을 꺼주세요
+  - 취침모드가 꺼지면 현관 불을 꺼주세요
+  - 취침모드가 꺼지면 주방 불을 꺼주세요
+- pattern: 취침 모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 꺼줘
+  count: 4
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 움직임이 작동하면 거실 불을 꺼줘
+  - 취침 모드이고 욕실 움직임이 작동하면 욕실 조명을 꺼줘
+  - 취침 모드이고 안방 움직임이 작동하면 부엌 조명을 꺼줘
+  - 취침 모드이고 안방 움직임이 작동하면 현관 조명을 꺼줘
+- pattern: 취침 모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 끄다
+  count: 4
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 욕실 움직임이 작동하면 부엌 조명을 끄다
+  - 취침 모드이고 욕실 모션이 작동하면 화장실 조명을 끄다
+  - 취침 모드이고 안방 움직임이 작동하면 화장실 조명을 끄다
+  - 취침 모드이고 안방 움직임이 작동하면 욕실 조명을 끄다
+- pattern: 취침모드일 때 {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜
+  count: 4
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드일 때 욕실 움직임이 감지되면 거실 조명을 켜
+  - 취침모드일 때 거실 모션이 감지되면 작은방 불을 켜
+  - 취침모드일 때 욕실 움직임이 감지되면 거실 전등을 켜
+  - 취침모드일 때 욕실 모션이 감지되면 부엌 조명을 켜
+- pattern: 취침 모드가 해제되면 {ROOM} {DEVICE}{J} 틀어줘
+  count: 4
+  area: mode
+  verdict_mix:
+    fail: 4
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드가 해제되면 거실 조명을 틀어줘
+  - 취침 모드가 해제되면 거실 불을 틀어줘
+  - 취침 모드가 해제되면 안방 불을 틀어줘
+  - 취침 모드가 해제되면 주방 불을 틀어줘
+- pattern: '{DEVICE}{J} 해제되면 {ROOM} {DEVICE}{J} 켜'
+  count: 4
+  area: mode
+  verdict_mix:
+    fail: 4
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드가 해제되면 안방 불을 켜
+  - 슬립모드가 해제되면 화장실 조명을 켜
+  - 슬립 모드가 해제되면 거실 조명을 켜
+  - 슬립 모드가 해제되면 욕실 불을 켜
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 끄다'
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 안방 움직임이 감지되면 안방등을 켜주고 10분 동안 움직임이 없으면 끄다
+  - 거실 움직임이 감지되면 안방등을 켜주고 5분 동안 움직임이 없으면 끄다
+  - 욕실 움직임이 감지되면 안방등을 켜주고 5분 동안 움직임이 없으면 끄다
+  - 욕실 모션이 감지되면 거실등을 켜주고 30분 동안 움직임이 없으면 끄다
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    꺼주세요
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 모션이 작동하면 욕실 불을 켜주고 30분 동안 움직임이 없으면 꺼주세요
+  - 취침모드이고 거실 모션이 작동하면 주방 불을 켜주고 3분 동안 움직임이 없으면 꺼주세요
+  - 취침모드이고 욕실 움직임이 작동하면 거실 조명을 켜주고 5분 동안 움직임이 없으면 꺼주세요
+  - 취침모드이고 거실 인기척이 작동하면 거실등을 켜주고 3분 동안 움직임이 없으면 꺼주세요
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    꺼줘
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 작동하면 거실 불을 켜주고 3분 동안 움직임이 없으면 꺼줘
+  - 취침모드이고 거실 움직임이 작동하면 주방 불을 켜주고 30분 동안 움직임이 없으면 꺼줘
+  - 취침모드이고 거실 움직임이 작동하면 안방등을 켜주고 10분 동안 움직임이 없으면 꺼줘
+  - 취침모드이고 안방 움직임이 작동하면 작은방 조명을 켜주고 3분 동안 움직임이 없으면 꺼줘
+- pattern: 취침 모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    꺼
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 안방 움직임이 작동하면 베란다 조명을 켜주고 3분 동안 움직임이 없으면 꺼
+  - 취침 모드이고 욕실 모션이 작동하면 작은방 불을 켜주고 3분 동안 움직임이 없으면 꺼
+  - 취침 모드이고 욕실 모션이 작동하면 거실 전등을 켜주고 30분 동안 움직임이 없으면 꺼
+  - 취침 모드이고 욕실 모션이 작동하면 화장실 조명을 켜주고 5분 동안 움직임이 없으면 꺼
+- pattern: 취침 모드이고 {DEVICE}{J} 작동하면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 끄다
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 욕실 모션이 작동하면 베란다 조명을 켜주고 10분 동안 움직임이 없으면 끄다
+  - 취침 모드이고 거실 인기척이 작동하면 거실 조명을 켜주고 10분 동안 움직임이 없으면 끄다
+  - 취침 모드이고 거실 움직임이 작동하면 욕실 조명을 켜주고 10분 동안 움직임이 없으면 끄다
+  - 취침 모드이고 거실 모션이 작동하면 부엌 조명을 켜주고 5분 동안 움직임이 없으면 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {DEVICE}{J}
+    꺼주고 취침 모드가 켜지면 다 {DEVICE}{J} 꺼줘'
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 4
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 거실 인기척이 감지되면 욕실 조명을 켜주고 10분 동안 움직임이 없으면 욕실 조명을 꺼주고 취침 모드가 켜지면 다 조명을 꺼줘
+  - 거실 인기척이 감지되면 작은방 불을 켜주고 30분 동안 움직임이 없으면 작은방 불을 꺼주고 취침 모드가 켜지면 전부 조명을 꺼줘
+  - 안방 모션이 감지되면 거실 불을 켜주고 10분 동안 움직임이 없으면 거실 불을 꺼주고 취침 모드가 켜지면 다 조명을 꺼주세요
+  - 욕실 움직임이 감지되면 욕실 조명을 켜주고 3분 동안 움직임이 없으면 욕실 조명을 꺼주고 취침 모드가 켜지면 모든 조명을 꺼줘
+- pattern: '{DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}
+    {DEVICE}{J} 꺼주고 {DEVICE}{J} 켜지면 모든 {DEVICE}{J} 끄다'
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 2
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 모션이 감지되면 거실 전등을 켜주고 30분 동안 움직임이 없으면 거실 전등을 꺼주고 슬립 모드가 켜지면 모든 조명을 끄다
+  - 거실 움직임이 감지되면 거실 불을 켜주고 30분 동안 움직임이 없으면 거실 불을 꺼주고 슬립 모드가 켜지면 모든 조명을 끄다
+  - 안방 모션이 감지되면 현관 불을 켜주고 30분 동안 움직임이 없으면 현관 불을 꺼주고 취침모드가 켜지면 모든 조명을 끄다
+  - 거실 인기척이 감지되면 욕실 불을 켜주고 3분 동안 움직임이 없으면 욕실 불을 꺼주고 취침모드가 켜지면 모든 조명을 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR}간 {DEVICE}{J} 없으면 꺼주세요'
+  count: 4
+  area: multiclause
+  verdict_mix:
+    fail: 4
+    partial: 0
+  error_tags:
+  - wrong_node_type
+  examples:
+  - 거실 움직임이 감지되면 주방 조명을 켜주고 5분간 움직임이 없으면 꺼주세요
+  - 거실 움직임이 감지되면 화장실 조명을 켜주고 5분간 움직임이 없으면 꺼주세요
+  - 안방 움직임이 감지되면 욕실 조명을 켜주고 5분간 움직임이 없으면 꺼주세요
+  - 안방 움직임이 감지되면 안방 조명을 켜주고 5분간 움직임이 없으면 꺼주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 무드등을 틀어줘'
+  count: 4
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 움직임이 감지되면 무드등을 틀어줘
+  - 안방 움직임이 감지되면 무드등을 틀어줘
+  - 거실 움직임이 감지되면 무드등을 틀어줘
+  - 거실 인기척이 감지되면 무드등을 틀어줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 무드등을 켜'
+  count: 4
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 안방 움직임이 감지되면 무드등을 켜
+  - 거실 움직임이 감지되면 무드등을 켜
+  - 거실 인기척이 감지되면 무드등을 켜
+  - 욕실 움직임이 감지되면 무드등을 켜
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 무드등을 켜주세요'
+  count: 4
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 움직임이 감지되면 무드등을 켜주세요
+  - 거실 움직임이 감지되면 무드등을 켜주세요
+  - 거실 인기척이 감지되면 무드등을 켜주세요
+  - 안방 움직임이 감지되면 무드등을 켜주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 무드등을 켜줘'
+  count: 4
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 4
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 움직임이 감지되면 무드등을 켜줘
+  - 안방 움직임이 감지되면 무드등을 켜줘
+  - 욕실 움직임이 감지되면 무드등을 켜줘
+  - 거실 인기척이 감지되면 무드등을 켜줘
+- pattern: 취침모드가 켜지면 {ROOM} {DEVICE}{J} 켜
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 욕실 불을 켜
+  - 취침모드가 켜지면 현관 불을 켜
+  - 취침모드가 켜지면 거실 조명을 켜
+- pattern: 취침모드가 꺼지면 {ROOM} {DEVICE}{J} 꺼줘
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 꺼지면 거실 전등을 꺼줘
+  - 취침모드가 꺼지면 부엌 조명을 꺼줘
+  - 취침모드가 꺼지면 현관 불을 꺼줘
+- pattern: 취침 모드이고 {ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 움직임이 감지되면 베란다 조명을 켜
+  - 밤에 취침 모드이고 욕실 움직임이 감지되면 현관 불을 켜
+  - 새벽에 취침 모드이고 거실 인기척이 감지되면 현관 조명을 켜
+- pattern: 취침모드이고 {ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜줘
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 움직임이 감지되면 베란다 조명을 켜줘
+  - 취침모드이고 안방 움직임이 감지되면 안방 불을 켜줘
+  - 취침모드이고 욕실 움직임이 감지되면 작은방 조명을 켜줘
+- pattern: 취침 모드이고 {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주세요
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 모션이 감지되면 욕실 불을 켜주세요
+  - 밤에 취침 모드이고 욕실 모션이 감지되면 현관 불을 켜주세요
+  - 아침에 취침 모드이고 거실 모션이 감지되면 거실 전등을 켜주세요
+- pattern: 취침 모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 꺼주세요
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 인기척이 작동하면 거실 불을 꺼주세요
+  - 취침 모드이고 욕실 움직임이 작동하면 현관 불을 꺼주세요
+  - 취침 모드이고 거실 인기척이 작동하면 거실 전등을 꺼주세요
+- pattern: '{SEG}{J} {DEVICE}{J} {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜줘'
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 저녁에 슬립모드이고 거실 인기척이 감지되면 안방 불을 켜줘
+  - 아침에 슬립모드이고 거실 인기척이 감지되면 주방 불을 켜줘
+  - 새벽에 슬립모드이고 안방 모션이 감지되면 거실 조명을 켜줘
+- pattern: '{SEG}{J} {DEVICE}{J} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주세요'
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 아침에 슬립모드이고 거실 모션이 감지되면 작은방 불을 켜주세요
+  - 새벽에 슬립모드이고 안방 모션이 감지되면 거실 조명을 켜주세요
+  - 저녁에 슬립모드이고 거실 모션이 감지되면 거실 불을 켜주세요
+- pattern: '{SEG}{J} 취침모드이고 {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜'
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 아침에 취침모드이고 거실 모션이 감지되면 화장실 조명을 켜
+  - 저녁에 취침모드이고 안방 움직임이 감지되면 작은방 불을 켜
+  - 밤에 취침모드이고 거실 인기척이 감지되면 주방 조명을 켜
+- pattern: 취침 모드일 때 {ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜줘
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드일 때 욕실 움직임이 감지되면 작은방 조명을 켜줘
+  - 취침 모드일 때 욕실 움직임이 감지되면 주방 불을 켜줘
+  - 취침 모드일 때 거실 움직임이 감지되면 작은방 불을 켜줘
+- pattern: 취침모드일 때 {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜줘
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드일 때 안방 움직임이 감지되면 거실 불을 켜줘
+  - 취침모드일 때 거실 움직임이 감지되면 거실 전등을 켜줘
+  - 취침모드일 때 거실 인기척이 감지되면 작은방 불을 켜줘
+- pattern: 취침 모드일 때 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드일 때 안방 모션이 감지되면 안방 조명을 켜
+  - 취침 모드일 때 안방 모션이 감지되면 베란다 조명을 켜
+  - 취침 모드일 때 안방 모션이 감지되면 현관 불을 켜
+- pattern: 취침 모드가 해제되면 {ROOM} {DEVICE}{J} 켜줘
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드가 해제되면 부엌 조명을 켜줘
+  - 취침 모드가 해제되면 작은방 불을 켜줘
+  - 취침 모드가 해제되면 거실 조명을 켜줘
+- pattern: '{DEVICE}{J} 해제되면 {ROOM} {DEVICE}{J} 틀어줘'
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 해제되면 거실 조명을 틀어줘
+  - 슬립 모드가 해제되면 욕실 불을 틀어줘
+  - 슬립 모드가 해제되면 거실 불을 틀어줘
+- pattern: '{DEVICE}{J} 해제되면 {ROOM} {DEVICE}{J} 켜줘'
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드가 해제되면 욕실 불을 켜줘
+  - 슬립모드가 해제되면 거실 전등을 켜줘
+  - 슬립모드가 해제되면 화장실 조명을 켜줘
+- pattern: '{DEVICE}{J} 해제되면 {DEVICE}{J} 켜주세요'
+  count: 3
+  area: mode
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드가 해제되면 베란다 조명을 켜주세요
+  - 슬립 모드가 해제되면 주방 조명을 켜주세요
+  - 슬립모드가 해제되면 안방 조명을 켜주세요
+- pattern: '{SEG}{J} 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} {PERCENT} 켜주고
+    {DUR} 동안 {DEVICE}{J} 없으면 꺼'
+  count: 3
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 저녁에 취침모드이고 거실 움직임이 작동하면 화장실 조명을 10프로 켜주고 3분 동안 모션이 없으면 꺼
+  - 새벽에 취침모드이고 안방 움직임이 작동하면 작은방 불을 30% 켜주고 10분 동안 모션이 없으면 꺼
+  - 새벽에 취침모드이고 거실 인기척이 작동하면 부엌 조명을 50프로 켜주고 3분 동안 모션이 없으면 꺼
+- pattern: '{DEVICE}{J} 감지되면 {ROOM}등을 {PERCENT} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 꺼줘'
+  count: 3
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 모션이 감지되면 안방등을 50프로 켜주고 3분 동안 움직임이 없으면 꺼줘
+  - 거실 모션이 감지되면 안방등을 30퍼센트 켜주고 5분 동안 움직임이 없으면 꺼줘
+  - 안방 모션이 감지되면 안방등을 켜주고 10분 동안 움직임이 없으면 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    {ROOM} {DEVICE}{J} 꺼주고 취침모드가 켜지면 모든 {DEVICE}{J} 꺼'
+  count: 3
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 2
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 거실 인기척이 감지되면 부엌 조명을 켜주고 30분 동안 움직임이 없으면 부엌 조명을 꺼주고 취침모드가 켜지면 모든 조명을 꺼
+  - 거실 인기척이 감지되면 화장실 조명을 켜주고 30분 동안 움직임이 없으면 화장실 조명을 꺼주고 슬립모드가 켜지면 모든 조명을 꺼
+  - 거실 움직임이 감지되면 거실 조명을 켜주고 5분 동안 움직임이 없으면 거실 조명을 꺼주고 슬립모드가 켜지면 모든 조명을 꺼
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    {ROOM} {DEVICE}{J} 꺼주고 {DEVICE}{J} 켜지면 다 {DEVICE}{J} 꺼줘'
+  count: 3
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척이 감지되면 거실 조명을 켜주고 10분 동안 움직임이 없으면 거실 조명을 꺼주고 슬립모드가 켜지면 다 조명을 꺼줘
+  - 욕실 움직임이 감지되면 거실 조명을 켜주고 30분 동안 움직임이 없으면 거실 조명을 꺼주고 취침모드가 켜지면 다 조명을 꺼줘
+  - 욕실 모션이 감지되면 안방 조명을 켜주고 10분 동안 움직임이 없으면 안방 조명을 꺼주고 슬립 모드가 켜지면 다 조명을 꺼줘
+- pattern: '{DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR}간 {DEVICE}{J} 없으면 꺼주세요'
+  count: 3
+  area: multiclause
+  verdict_mix:
+    fail: 3
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 모션이 감지되면 거실등을 켜주고 5분간 움직임이 없으면 꺼주세요
+  - 거실 움직임이 감지되면 안방등을 켜주고 5분간 움직임이 없으면 꺼주세요
+  - 안방 모션이 감지되면 안방 조명을 켜주고 5분간 움직임이 없으면 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 전부 {ROOM} {DEVICE}{J} 꺼줘'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 모션이 감지되면 전부 거실 불을 꺼줘
+  - 거실 움직임이 감지되면 전부 욕실 불을 꺼줘
+  - 안방 움직임이 감지되면 전부 현관 조명을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 전부 {ROOM} {DEVICE}{J} 꺼주세요'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 전부 현관 불을 꺼주세요
+  - 욕실 움직임이 감지되면 전부 거실 전등을 꺼주세요
+  - 거실 모션이 감지되면 전부 거실 조명을 꺼주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜고 {DEVICE}{J} 켜줘'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 움직임이 감지되면 안방등을 켜고 욕실 환풍기를 켜줘
+  - 거실 모션이 감지되면 거실등을 켜고 욕실 환기팬을 켜줘
+  - 욕실 모션이 감지되면 거실등을 켜고 욕실 환기팬을 켜줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 {PERCENT} 켜줘'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임이 감지되면 거실등을 10% 켜줘
+  - 거실 움직임이 감지되면 안방등을 10프로 켜줘
+  - 거실 인기척이 감지되면 안방등을 10프로 켜줘
+- pattern: '{DEVICE}{J} 감지되면 무드등을 켜줘'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 안방 모션이 감지되면 무드등을 켜줘
+  - 욕실 모션이 감지되면 무드등을 켜줘
+  - 거실 모션이 감지되면 무드등을 켜줘
+- pattern: '{DEVICE}{J} 감지되면 무드등을 켜주세요'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 안방 모션이 감지되면 무드등을 켜주세요
+  - 욕실 모션이 감지되면 무드등을 켜주세요
+  - 거실 모션이 감지되면 무드등을 켜주세요
+- pattern: '{DEVICE}{J} 감지되면 무드등을 틀어줘'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 모션이 감지되면 무드등을 틀어줘
+  - 안방 모션이 감지되면 무드등을 틀어줘
+  - 거실 모션이 감지되면 무드등을 틀어줘
+- pattern: '{DEVICE}{J} 감지되면 무드등을 켜'
+  count: 3
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 3
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 모션이 감지되면 무드등을 켜
+  - 안방 모션이 감지되면 무드등을 켜
+  - 거실 모션이 감지되면 무드등을 켜
+- pattern: 취침모드가 켜지면 {DEVICE}{J} 켜주세요
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 주방 조명을 켜주세요
+  - 취침모드가 켜지면 작은방 조명을 켜주세요
+- pattern: 취침 모드가 켜지면 {ROOM} {DEVICE}{J} 켜주세요
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 거실 조명을 켜주세요
+  - 취침 모드가 켜지면 현관 불을 켜주세요
+- pattern: 취침모드가 꺼지면 {ROOM}등을 꺼
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 꺼지면 안방등을 꺼
+  - 취침모드가 꺼지면 거실등을 꺼
+- pattern: 취침모드가 꺼지면 {DEVICE}{J} 꺼
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 꺼지면 현관 조명을 꺼
+  - 취침모드가 꺼지면 욕실 조명을 꺼
+- pattern: 취침모드가 꺼지면 {ROOM} {DEVICE}{J} 꺼
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 꺼지면 거실 조명을 꺼
+  - 취침모드가 꺼지면 부엌 조명을 꺼
+- pattern: '{DEVICE}{J} 켜지면 다 {ROOM} {DEVICE}{J} 꺼'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 다 주방 불을 꺼
+  - 슬립모드가 켜지면 다 작은방 불을 꺼
+- pattern: 취침모드가 켜지면 전부 {ROOM} {DEVICE}{J} 끄다
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 전부 안방 불을 끄다
+  - 취침모드가 켜지면 전부 현관 불을 끄다
+- pattern: 취침모드가 켜지면 다 {ROOM} {DEVICE}{J} 꺼
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 다 욕실 불을 꺼
+  - 취침모드가 켜지면 다 부엌 조명을 꺼
+- pattern: 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜줘
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 감지되면 안방 조명을 켜줘
+  - 취침모드이고 거실 모션이 감지되면 안방 조명을 켜줘
+- pattern: 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 틀어줘
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 감지되면 욕실 조명을 틀어줘
+  - 취침모드이고 욕실 모션이 감지되면 주방 조명을 틀어줘
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 끄다
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 모션이 작동하면 거실 불을 끄다
+  - 취침모드이고 욕실 움직임이 작동하면 부엌 조명을 끄다
+- pattern: '{SEG}시간에 취침모드이고 {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽시간에 취침모드이고 욕실 모션이 감지되면 작은방 불을 켜
+  - 새벽시간에 취침모드이고 욕실 움직임이 감지되면 안방 불을 켜
+- pattern: '{SEG}{J} {DEVICE}{J} {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 새벽에 슬립모드이고 거실 움직임이 감지되면 화장실 조명을 켜
+  - 아침에 슬립모드이고 욕실 모션이 감지되면 현관 불을 켜
+- pattern: '{SEG}{J} 취침모드이고 {ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주세요'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 저녁에 취침모드이고 안방 움직임이 감지되면 현관 조명을 켜주세요
+  - 밤에 취침모드이고 거실 모션이 감지되면 거실 조명을 켜주세요
+- pattern: '{SEG}시간에 취침 모드이고 {DEVICE}{J} 감지되면 {ROOM}등을 틀어줘'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 새벽시간에 취침 모드이고 욕실 모션이 감지되면 안방등을 틀어줘
+  - 새벽시간에 취침 모드이고 안방 모션이 감지되면 욕실 조명을 틀어줘
+- pattern: '{SEG}{J} {DEVICE}{J} {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 틀어줘'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 아침에 슬립모드이고 거실 인기척이 감지되면 거실 조명을 틀어줘
+  - 밤에 슬립모드이고 거실 움직임이 감지되면 욕실 불을 틀어줘
+- pattern: 취침 모드일 때 {DEVICE}{J} 감지되면 {ROOM}등을 틀어줘
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침 모드일 때 욕실 모션이 감지되면 안방등을 틀어줘
+  - 취침 모드일 때 거실 움직임이 감지되면 거실등을 틀어줘
+- pattern: 취침 모드일 때 {ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주세요
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드일 때 거실 움직임이 감지되면 작은방 조명을 켜주세요
+  - 취침 모드일 때 안방 모션이 감지되면 화장실 조명을 켜주세요
+- pattern: 취침 모드가 해제되면 {DEVICE}{J} 켜줘
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드가 해제되면 작은방 조명을 켜줘
+  - 취침 모드가 해제되면 주방 조명을 켜줘
+- pattern: '{DEVICE}{J} 해제되면 {DEVICE}{J} 틀어줘'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 해제되면 주방 조명을 틀어줘
+  - 슬립 모드가 해제되면 안방 조명을 틀어줘
+- pattern: 취침모드가 해제되면 {DEVICE}{J} 켜주세요
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드가 해제되면 주방 조명을 켜주세요
+  - 취침모드가 해제되면 베란다 조명을 켜주세요
+- pattern: 취침모드가 해제되면 {DEVICE}{J} 틀어줘
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드가 해제되면 작은방 조명을 틀어줘
+  - 취침모드가 해제되면 현관 조명을 틀어줘
+- pattern: '{DEVICE}{J} 해제되면 {DEVICE}{J} 켜줘'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 해제되면 현관 조명을 켜줘
+  - 슬립모드가 해제되면 작은방 조명을 켜줘
+- pattern: '{DEVICE}{J} 해제되면 {ROOM} {DEVICE}{J} 켜주세요'
+  count: 2
+  area: mode
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드가 해제되면 안방 불을 켜주세요
+  - 슬립모드가 해제되면 화장실 조명을 켜주세요
+- pattern: '{SEG}{J} 취침 모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} {PERCENT} 켜주고 {DUR}
+    동안 {DEVICE}{J} 없으면 끄다'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽에 취침 모드이고 안방 움직임이 작동하면 베란다 조명을 10퍼센트 켜주고 3분 동안 모션이 없으면 끄다
+  - 새벽에 취침 모드이고 욕실 모션이 작동하면 욕실 조명을 70% 켜주고 10분 동안 모션이 없으면 끄다
+- pattern: '{SEG}{J} 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} {PERCENT} 켜주고 {DUR}
+    동안 {DEVICE}{J} 없으면 꺼주세요'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 밤에 취침모드이고 거실 움직임이 작동하면 작은방 조명을 50% 켜주고 30분 동안 모션이 없으면 꺼주세요
+  - 새벽에 취침모드이고 욕실 움직임이 작동하면 현관 조명을 70% 켜주고 5분 동안 모션이 없으면 꺼주세요
+- pattern: '{SEG}{J} 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} {PERCENT} 켜주고 {DUR}
+    동안 {DEVICE}{J} 없으면 꺼줘'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 저녁에 취침모드이고 안방 움직임이 작동하면 안방 조명을 30퍼센트 켜주고 30분 동안 모션이 없으면 꺼줘
+  - 밤에 취침모드이고 거실 모션이 작동하면 현관 조명을 30퍼센트 켜주고 10분 동안 모션이 없으면 꺼줘
+- pattern: '{SEG}시간에 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} {PERCENT} 켜주고
+    {DUR} 동안 {DEVICE}{J} 없으면 꺼'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽시간에 취침모드이고 거실 인기척이 작동하면 거실 조명을 50% 켜주고 10분 동안 모션이 없으면 꺼
+  - 새벽시간에 취침모드이고 안방 움직임이 작동하면 주방 조명을 10퍼센트 켜주고 3분 동안 모션이 없으면 꺼
+- pattern: '{SEG}{J} {DEVICE}{J} {DEVICE}{J} 작동하면 {ROOM}등을 {PERCENT} 켜주고 {DUR} 동안
+    {DEVICE}{J} 없으면 꺼줘'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 저녁에 슬립모드이고 거실 모션이 작동하면 거실등을 70% 켜주고 10분 동안 모션이 없으면 꺼줘
+  - 새벽에 거실 움직임이 작동하면 안방등을 50프로 켜주고 5분 동안 움직임이 없으면 꺼줘
+- pattern: '{SEG}{J} {ROOM} {DEVICE}{J} 작동하면 {ROOM}등을 {PERCENT} 켜주고 {DUR} 동안 {DEVICE}{J}
+    없으면 끄다'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 저녁에 욕실 움직임이 작동하면 거실등을 70% 켜주고 10분 동안 움직임이 없으면 끄다
+  - 아침에 안방 움직임이 작동하면 거실등을 50% 켜주고 10분 동안 움직임이 없으면 끄다
+- pattern: 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    꺼
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 인기척이 작동하면 베란다 조명을 켜주고 30분 동안 움직임이 없으면 꺼
+  - 취침모드이고 거실 움직임이 작동하면 베란다 조명을 켜주고 3분 동안 움직임이 없으면 꺼
+- pattern: '{DEVICE}{J} {ROOM} {DEVICE}{J} 작동하면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J}
+    없으면 끄다'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 슬립 모드이고 욕실 움직임이 작동하면 안방등을 켜주고 3분 동안 움직임이 없으면 끄다
+  - 슬립모드이고 욕실 움직임이 작동하면 거실등을 켜주고 30분 동안 움직임이 없으면 끄다
+- pattern: 취침 모드이고 {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    꺼줘
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 욕실 모션이 작동하면 거실 불을 켜주고 30분 동안 움직임이 없으면 꺼줘
+  - 취침 모드이고 안방 움직임이 작동하면 현관 조명을 켜주고 5분 동안 움직임이 없으면 꺼줘
+- pattern: '{DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}
+    {DEVICE}{J} 꺼주고 {DEVICE}{J} 켜지면 전부 {DEVICE}{J} 꺼줘'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 모션이 감지되면 거실 불을 켜주고 10분 동안 움직임이 없으면 거실 불을 꺼주고 슬립모드가 켜지면 전부 조명을 꺼줘
+  - 거실 움직임이 감지되면 작은방 불을 켜주고 10분 동안 움직임이 없으면 작은방 불을 꺼주고 취침모드가 켜지면 전부 조명을 꺼줘
+- pattern: '{DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {DEVICE}{J}
+    꺼주고 {DEVICE}{J} 켜지면 집의 모든 {DEVICE}{J} 꺼주세요'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 모션이 감지되면 작은방 조명을 켜주고 3분 동안 움직임이 없으면 작은방 조명을 꺼주고 슬립 모드가 켜지면 집의 모든 조명을 꺼주세요
+  - 안방 움직임이 감지되면 거실 불을 켜주고 30분 동안 움직임이 없으면 거실 불을 꺼주고 슬립 모드가 켜지면 집의 모든 조명을 꺼주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {DEVICE}{J}
+    꺼주고 취침모드가 켜지면 다 {DEVICE}{J} 끄다'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 거실 움직임이 감지되면 작은방 조명을 켜주고 10분 동안 움직임이 없으면 작은방 조명을 꺼주고 취침모드가 켜지면 다 조명을 끄다
+  - 욕실 모션이 감지되면 부엌 조명을 켜주고 30분 동안 움직임이 없으면 부엌 조명을 꺼주고 슬립 모드가 켜지면 다 조명을 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}등을
+    꺼주고 {DEVICE}{J} 켜지면 전부 {DEVICE}{J} 꺼'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 거실등을 켜주고 5분 동안 움직임이 없으면 거실등을 꺼주고 슬립 모드가 켜지면 전부 조명을 꺼
+  - 욕실 움직임이 감지되면 거실 전등을 켜주고 3분 동안 움직임이 없으면 거실 전등을 꺼주고 슬립모드가 켜지면 전부 조명을 꺼
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    {ROOM} {DEVICE}{J} 꺼주고 취침모드가 켜지면 전부 {DEVICE}{J} 꺼'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 거실 움직임이 감지되면 화장실 조명을 켜주고 5분 동안 움직임이 없으면 화장실 조명을 꺼주고 취침모드가 켜지면 전부 조명을 꺼
+  - 안방 움직임이 감지되면 거실 전등을 켜주고 10분 동안 움직임이 없으면 거실 전등을 꺼주고 취침모드가 켜지면 전부 조명을 꺼
+- pattern: '{DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}
+    {DEVICE}{J} 꺼주고 취침모드가 켜지면 집의 모든 {DEVICE}{J} 꺼줘'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 모션이 감지되면 작은방 불을 켜주고 3분 동안 움직임이 없으면 작은방 불을 꺼주고 취침모드가 켜지면 집의 모든 조명을 꺼줘
+  - 욕실 움직임이 감지되면 주방 불을 켜주고 10분 동안 움직임이 없으면 주방 불을 꺼주고 슬립 모드가 켜지면 집의 모든 조명을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {DEVICE}{J}
+    꺼주고 취침 모드가 켜지면 모든 {DEVICE}{J} 꺼주세요'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 움직임이 감지되면 주방 조명을 켜주고 5분 동안 움직임이 없으면 주방 조명을 꺼주고 취침 모드가 켜지면 모든 조명을 꺼주세요
+  - 거실 인기척이 감지되면 화장실 조명을 켜주고 10분 동안 움직임이 없으면 화장실 조명을 꺼주고 취침 모드가 켜지면 전부 조명을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {DEVICE}{J}
+    꺼주고 취침모드가 켜지면 전부 {DEVICE}{J} 꺼줘'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 욕실 모션이 감지되면 베란다 조명을 켜주고 3분 동안 움직임이 없으면 베란다 조명을 꺼주고 취침모드가 켜지면 전부 조명을 꺼줘
+  - 거실 모션이 감지되면 베란다 조명을 켜주고 30분 동안 움직임이 없으면 베란다 조명을 꺼주고 취침모드가 켜지면 전부 조명을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    {ROOM} {DEVICE}{J} 꺼주고 취침모드가 켜지면 전부 {DEVICE}{J} 꺼주세요'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 안방 움직임이 감지되면 거실 불을 켜주고 10분 동안 움직임이 없으면 거실 불을 꺼주고 취침모드가 켜지면 전부 조명을 꺼주세요
+  - 거실 움직임이 감지되면 욕실 불을 켜주고 5분 동안 움직임이 없으면 욕실 불을 꺼주고 슬립모드가 켜지면 전부 조명을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 {ROOM}등을 켜'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션이 감지되면 안방등을 켜
+  - 욕실 모션이 감지되면 안방등을 켜
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 모든 {ROOM} {DEVICE}{J} 꺼줘'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 모든 거실 조명을 꺼줘
+  - 욕실 움직임이 감지되면 모든 현관 조명을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 집의 모든 {ROOM} {DEVICE}{J} 꺼'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척이 감지되면 집의 모든 현관 불을 꺼
+  - 욕실 움직임이 감지되면 집의 모든 안방 조명을 꺼
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 전부 {DEVICE}{J} 끄다'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 움직임이 감지되면 전부 주방 조명을 끄다
+  - 안방 모션이 감지되면 전부 화장실 조명을 끄다
+- pattern: '{DEVICE}{J} 감지되면 모든 {ROOM} {DEVICE}{J} 꺼주세요'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션이 감지되면 모든 거실 불을 꺼주세요
+  - 안방 모션이 감지되면 모든 현관 불을 꺼주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 전부 {ROOM} {DEVICE}{J} 꺼'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척이 감지되면 전부 거실 조명을 꺼
+  - 욕실 모션이 감지되면 전부 화장실 조명을 꺼
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 다 {ROOM} {DEVICE}{J} 끄다'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척이 감지되면 다 작은방 불을 끄다
+  - 안방 모션이 감지되면 다 화장실 조명을 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 모든 {DEVICE}{J} 끄다'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척이 감지되면 모든 작은방 조명을 끄다
+  - 거실 모션이 감지되면 모든 거실 전등을 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜고 {ROOM} {DEVICE}{J} 켜'
+  count: 2
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 2
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 움직임이 감지되면 거실등을 켜고 욕실 환기팬을 켜
+  - 욕실 모션이 감지되면 거실등을 켜고 욕실 환기팬을 켜
+- pattern: '{DEVICE} 감지되면 {ROOM} {DEVICE} 켜 주고 {DUR} 동안 {DEVICE} 없으면 {ROOM} {DEVICE}
+    꺼 주고 취침모드 켜지면 모든 {DEVICE} 꺼줘'
+  count: 2
+  area: multiclause
+  verdict_mix:
+    fail: 2
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 거실 모션 감지되면 거실 조명 켜 주고 3분 동안 움직임 없으면 거실 조명 꺼 주고 취침모드 켜지면 모든 조명 꺼줘
+  - 안방 움직임 감지되면 안방 조명 켜 주고 10분 동안 없으면 안방 조명 꺼 주고 슬립 모드 켜지면 집의 모든 조명 꺼줘
+- pattern: 취침 모드가 켜지면 {DEVICE}{J} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 현관 조명을 켜줘
+- pattern: '{DEVICE}{J} 켜지면 {ROOM}등을 켜주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 안방등을 켜주세요
+- pattern: 취침모드가 켜지면 {ROOM} {DEVICE}{J} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 거실 전등을 켜줘
+- pattern: 취침모드가 켜지면 {DEVICE}{J} 켜
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 베란다 조명을 켜
+- pattern: 취침모드가 켜지면 {ROOM} {DEVICE}{J} 틀어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 거실 불을 틀어줘
+- pattern: 취침모드가 켜지면 {ROOM}등을 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 안방등을 켜줘
+- pattern: '{DEVICE}{J} 켜지면 {ROOM}등을 켜'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 안방등을 켜
+- pattern: 취침 모드가 켜지면 {ROOM} {DEVICE}{J} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 주방 불을 켜줘
+- pattern: 취침모드가 켜지면 {ROOM} {DEVICE}{J} 켜주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 현관 불을 켜주세요
+- pattern: '{DEVICE}{J} 켜지면 {ROOM}등을 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 거실등을 켜줘
+- pattern: 취침 모드가 꺼지면 {ROOM} {DEVICE}{J} 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 현관 불을 꺼
+- pattern: 취침 모드가 꺼지면 {ROOM} {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 안방 불을 끄다
+- pattern: 취침모드가 꺼지면 {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 꺼지면 주방 조명을 끄다
+- pattern: 취침 모드가 꺼지면 {DEVICE}{J} 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 베란다 조명을 꺼
+- pattern: '{DEVICE}{J} 꺼지면 {ROOM}등을 꺼'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 꺼지면 거실등을 꺼
+- pattern: 취침 모드가 꺼지면 {ROOM}등을 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 거실등을 꺼줘
+- pattern: 취침 모드가 꺼지면 {DEVICE}{J} 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 안방 조명을 꺼줘
+- pattern: 취침 모드가 꺼지면 {DEVICE}{J} 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 주방 조명을 꺼주세요
+- pattern: 취침 모드가 꺼지면 {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 꺼지면 작은방 조명을 끄다
+- pattern: '{DEVICE}{J} 켜지면 전부 {ROOM} {DEVICE}{J} 꺼주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 전부 부엌 조명을 꺼주세요
+- pattern: 취침모드가 켜지면 전부 {ROOM}등을 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 전부 거실등을 꺼주세요
+- pattern: '{DEVICE}{J} 켜지면 다 {DEVICE}{J} 끄다'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 다 주방 조명을 끄다
+- pattern: 취침 모드가 켜지면 모든 {DEVICE}{J} 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 모든 베란다 조명을 꺼줘
+- pattern: 취침 모드가 켜지면 모든 {ROOM}등을 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 모든 거실등을 꺼
+- pattern: 취침 모드가 켜지면 전부 {ROOM} {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 전부 욕실 불을 끄다
+- pattern: 취침 모드가 켜지면 모든 {ROOM} {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 모든 주방 불을 끄다
+- pattern: 취침 모드가 켜지면 집의 모든 {ROOM} {DEVICE}{J} 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 집의 모든 부엌 조명을 꺼
+- pattern: 취침 모드가 켜지면 전부 {ROOM} {DEVICE}{J} 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 전부 욕실 불을 꺼주세요
+- pattern: 취침모드가 켜지면 전부 {ROOM} {DEVICE}{J} 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 전부 화장실 조명을 꺼
+- pattern: '{DEVICE}{J} 켜지면 다 {DEVICE}{J} 꺼'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 다 욕실 조명을 꺼
+- pattern: '{DEVICE}{J} 켜지면 다 {ROOM} {DEVICE}{J} 꺼주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 다 거실 전등을 꺼주세요
+- pattern: 취침모드가 켜지면 전부 {ROOM}등을 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 전부 안방등을 꺼
+- pattern: '{DEVICE}{J} 켜지면 다 {ROOM} {DEVICE}{J} 끄다'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 다 안방 불을 끄다
+- pattern: 취침모드가 켜지면 전부 {DEVICE}{J} 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 전부 현관 조명을 꺼줘
+- pattern: '{DEVICE}{J} 켜지면 전부 {DEVICE}{J} 꺼주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 전부 작은방 조명을 꺼주세요
+- pattern: 취침모드가 켜지면 모든 {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 모든 현관 조명을 끄다
+- pattern: 취침모드가 켜지면 모든 {DEVICE}{J} 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 모든 현관 조명을 꺼주세요
+- pattern: 취침 모드가 켜지면 집의 모든 {DEVICE}{J} 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침 모드가 켜지면 집의 모든 작은방 조명을 꺼주세요
+- pattern: '{DEVICE}{J} 켜지면 전부 {ROOM} {DEVICE}{J} 꺼줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 전부 부엌 조명을 꺼줘
+- pattern: 취침모드가 켜지면 모든 {ROOM}등을 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 모든 거실등을 끄다
+- pattern: '{DEVICE}{J} 켜지면 전부 {ROOM} {DEVICE}{J} 끄다'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드가 켜지면 전부 주방 불을 끄다
+- pattern: 취침모드가 켜지면 집의 모든 {ROOM} {DEVICE}{J} 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 집의 모든 거실 조명을 꺼
+- pattern: '{DEVICE}{J} 켜지면 전부 {ROOM} {DEVICE}{J} 꺼'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 전부 작은방 불을 꺼
+- pattern: 취침모드가 켜지면 전부 {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드가 켜지면 전부 베란다 조명을 끄다
+- pattern: '{DEVICE}{J} 켜지면 전부 {DEVICE}{J} 끄다'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드가 켜지면 전부 현관 조명을 끄다
+- pattern: 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 감지되면 작은방 조명을 켜
+- pattern: 취침 모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 모션이 감지되면 욕실 조명을 켜줘
+- pattern: 취침모드이고 {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 감지되면 안방 불을 켜
+- pattern: 취침모드이고 {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 안방 모션이 감지되면 부엌 조명을 켜주세요
+- pattern: 취침 모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 모션이 감지되면 베란다 조명을 켜
+- pattern: 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 모션이 감지되면 베란다 조명을 켜주세요
+- pattern: '{DEVICE}{J} {DEVICE}{J} 감지되면 {ROOM}등을 틀어줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드이고 거실 모션이 감지되면 안방등을 틀어줘
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 모션이 작동하면 작은방 조명을 끄다
+- pattern: 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {DEVICE}{J} 꺼
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 움직임이 작동하면 베란다 조명을 꺼
+- pattern: '{DEVICE}{J} {DEVICE}{J} 작동하면 {ROOM}등을 꺼'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드이고 안방 모션이 작동하면 거실등을 꺼
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {ROOM}등을 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 작동하면 거실등을 꺼줘
+- pattern: 취침 모드이고 {DEVICE}{J} 작동하면 {DEVICE}{J} 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드이고 거실 모션이 작동하면 현관 조명을 끄다
+- pattern: '{DEVICE}{J} {ROOM} {DEVICE}{J} 작동하면 {ROOM}등을 꺼'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드이고 욕실 움직임이 작동하면 안방등을 꺼
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {DEVICE}{J} 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 안방 모션이 작동하면 베란다 조명을 꺼주세요
+- pattern: 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM}등을 끄다
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드이고 거실 움직임이 작동하면 안방등을 끄다
+- pattern: '{SEG}{J} 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 밤에 취침모드이고 거실 모션이 감지되면 안방 조명을 켜
+- pattern: '{SEG}{J} 취침 모드이고 {ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 틀어줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 새벽에 취침 모드이고 거실 인기척이 감지되면 안방등을 틀어줘
+- pattern: '{SEG}{J} 취침 모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽에 취침 모드이고 거실 모션이 감지되면 베란다 조명을 켜
+- pattern: '{SEG}시간에 {DEVICE}{J} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 새벽시간에 슬립모드이고 욕실 모션이 감지되면 주방 불을 켜주세요
+- pattern: '{SEG}{J} 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 아침에 취침모드이고 욕실 모션이 감지되면 안방 조명을 켜줘
+- pattern: '{SEG}{J} {DEVICE}{J} {DEVICE}{J} 감지되면 {DEVICE}{J} 켜'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 새벽에 슬립모드이고 거실 모션이 감지되면 현관 조명을 켜
+- pattern: '{SEG}시간에 취침모드이고 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽시간에 취침모드이고 거실 모션이 감지되면 욕실 조명을 켜줘
+- pattern: 취침 모드일 때 {DEVICE}{J} 감지되면 {ROOM}등을 켜주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침 모드일 때 욕실 모션이 감지되면 거실등을 켜주세요
+- pattern: 취침 모드일 때 {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 틀어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드일 때 욕실 움직임이 감지되면 부엌 조명을 틀어줘
+- pattern: '{DEVICE}일 때 {DEVICE}{J} 감지되면 {ROOM}등을 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드일 때 욕실 모션이 감지되면 거실등을 켜줘
+- pattern: 취침모드일 때 {DEVICE}{J} 감지되면 {DEVICE}{J} 켜
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드일 때 안방 모션이 감지되면 주방 조명을 켜
+- pattern: 취침모드일 때 {ROOM} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 틀어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드일 때 안방 움직임이 감지되면 거실 전등을 틀어줘
+- pattern: 취침 모드가 해제되면 {DEVICE}{J} 틀어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드가 해제되면 작은방 조명을 틀어줘
+- pattern: '{DEVICE}{J} 해제되면 {ROOM}등을 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 해제되면 안방등을 켜줘
+- pattern: 취침모드가 해제되면 {ROOM}등을 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드가 해제되면 안방등을 켜줘
+- pattern: '{DEVICE}{J} 해제되면 {DEVICE}{J} 켜'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 해제되면 베란다 조명을 켜
+- pattern: '{DEVICE}{J} 해제되면 {ROOM}등을 켜주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 해제되면 안방등을 켜주세요
+- pattern: 취침 모드가 해제되면 {DEVICE}{J} 켜주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드가 해제되면 베란다 조명을 켜주세요
+- pattern: 취침 모드가 해제되면 {ROOM}등을 틀어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침 모드가 해제되면 안방등을 틀어줘
+- pattern: 취침모드가 해제되면 {ROOM} {DEVICE}{J} 켜
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드가 해제되면 거실 조명을 켜
+- pattern: '{SEG}시간에 취침 모드이고 {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} {PERCENT} 켜주고 {DUR}
+    동안 {DEVICE}{J} 없으면 끄다'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽시간에 취침 모드이고 거실 모션이 작동하면 작은방 불을 10퍼센트 켜주고 10분 동안 모션이 없으면 끄다
+- pattern: '{SEG}{J} 취침모드이고 {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} {PERCENT} 켜주고 {DUR}
+    동안 {DEVICE}{J} 없으면 끄다'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽에 취침모드이고 안방 모션이 작동하면 작은방 불을 30% 켜주고 5분 동안 모션이 없으면 끄다
+- pattern: '{SEG}시간에 취침모드이고 {ROOM} {DEVICE}{J} 작동하면 {ROOM} {DEVICE}{J} {PERCENT} 켜주고
+    {DUR} 동안 {DEVICE}{J} 없으면 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽시간에 취침모드이고 안방 움직임이 작동하면 주방 불을 50프로 켜주고 30분 동안 모션이 없으면 꺼주세요
+- pattern: '{SEG}시간에 {ROOM} {DEVICE}{J} 작동하면 {ROOM}등을 {PERCENT} 켜주고 {DUR} 동안 {DEVICE}{J}
+    없으면 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 새벽시간에 거실 인기척이 작동하면 안방등을 50프로 켜주고 3분 동안 움직임이 없으면 꺼
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 {PERCENT} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면
+    꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 움직임이 감지되면 안방등을 10프로 켜주고 5분 동안 움직임이 없으면 꺼주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 인기척이 감지되면 거실등을 켜주고 3분 동안 움직임이 없으면 꺼
+- pattern: 취침모드이고 {DEVICE}{J} 작동하면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 꺼
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드이고 욕실 모션이 작동하면 거실등을 켜주고 10분 동안 움직임이 없으면 꺼
+- pattern: '{DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}등을 꺼주고 {DEVICE}{J}
+    켜지면 전부 {DEVICE}{J} 끄다'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 모션이 감지되면 안방등을 켜주고 10분 동안 움직임이 없으면 안방등을 꺼주고 슬립 모드가 켜지면 전부 조명을 끄다
+- pattern: '{DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}등을 꺼주고 취침모드가
+    켜지면 모든 {DEVICE}{J} 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 거실 모션이 감지되면 안방등을 켜주고 5분 동안 움직임이 없으면 안방등을 꺼주고 취침모드가 켜지면 모든 조명을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 {ROOM}
+    {DEVICE}{J} 꺼주고 취침모드가 켜지면 모든 {DEVICE}{J} 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 안방 모션이 감지되면 거실 조명을 켜주고 30분 동안 움직임이 없으면 거실 조명을 꺼주고 취침모드가 켜지면 모든 조명을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J} 켜주고, {DEVICE}{J} 감지되면 {DEVICE}{J}
+    켜줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - value_mismatch
+  examples:
+  - 거실 모션이 감지되면 거실 조명을 켜주고, 안방 모션이 감지되면 안방 조명을 켜줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜주고 {DUR}간 {DEVICE}{J} 없으면 끄다'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  - wrong_node_type
+  examples:
+  - 거실 인기척이 감지되면 안방등을 켜주고 5분간 움직임이 없으면 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 움직임이 감지되면 안방등을 켜줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임이 감지되면 거실등을 켜주세요
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임이 감지되면 안방등을 켜
+- pattern: '{DEVICE}{J} 없으면 {ROOM}등을 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션이 없으면 거실등을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 없으면 {ROOM}등을 꺼'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 움직임이 없으면 거실등을 꺼
+- pattern: '{ROOM} {DEVICE}{J} 없으면 {ROOM}등을 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임이 없으면 거실등을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 집의 모든 {ROOM} {DEVICE}{J} 끄다'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 집의 모든 거실 전등을 끄다
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 다 {ROOM}등을 꺼주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 다 거실등을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 다 {ROOM}등을 꺼'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 모션이 감지되면 다 거실등을 꺼
+- pattern: '{DEVICE}{J} 감지되면 모든 {DEVICE}{J} 꺼'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 모션이 감지되면 모든 베란다 조명을 꺼
+- pattern: '{DEVICE}{J} 감지되면 집의 모든 {DEVICE}{J} 꺼'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션이 감지되면 집의 모든 주방 조명을 꺼
+- pattern: '{DEVICE}{J} 감지되면 다 {DEVICE}{J} 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 모션이 감지되면 다 베란다 조명을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 집의 모든 {ROOM} {DEVICE}{J} 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척이 감지되면 집의 모든 작은방 불을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 모든 {ROOM}등을 꺼주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 모든 거실등을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 전부 {DEVICE}{J} 꺼주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 모션이 감지되면 전부 욕실 조명을 꺼주세요
+- pattern: '{DEVICE}{J} 감지되면 모든 {ROOM} {DEVICE}{J} 꺼'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션이 감지되면 모든 거실 불을 꺼
+- pattern: '{DEVICE}{J} 감지되면 집의 모든 {DEVICE}{J} 끄다'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실 모션이 감지되면 집의 모든 안방 조명을 끄다
+- pattern: '{DEVICE}{J} 감지되면 집의 모든 {ROOM}등을 꺼'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션이 감지되면 집의 모든 거실등을 꺼
+- pattern: '{DEVICE}{J} 감지되면 모든 {DEVICE}{J} 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 모션이 감지되면 모든 베란다 조명을 꺼줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜고 {DEVICE}{J} 틀어줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임이 감지되면 거실등을 켜고 욕실 환풍기를 틀어줘
+- pattern: '{ROOM} {DEVICE}{J} 감지되면 {ROOM}등을 켜고 {DEVICE}{J} 켜주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임이 감지되면 거실등을 켜고 욕실 환풍기를 켜주세요
+- pattern: 취침모드 켜지면 {ROOM}등도 같이 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드 켜지면 거실등도 같이 켜줘
+- pattern: '{DEVICE} 들어가면 {DEVICE} 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드 들어가면 안방 조명 켜줘
+- pattern: '{DEVICE}{J} 켜질 때 {ROOM} {DEVICE} 켜 줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 켜질 때 주방 불 켜 줘
+- pattern: 취침 모드 시작되면 {DEVICE} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드 시작되면 베란다 조명 켜줘
+- pattern: '{DEVICE}{J} 바뀌면 {ROOM} {DEVICE} 켜놔'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드로 바뀌면 현관 불 켜놔
+- pattern: 취침모드가 켜지자마자 {ROOM} {DEVICE} 켜주라
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드가 켜지자마자 거실 전등 켜주라
+- pattern: 취침 모드 꺼지거든 {ROOM}등 꺼주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드 꺼지거든 거실등 꺼주세요
+- pattern: '{DEVICE} 꺼지는 순간 {DEVICE} 꺼줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드 꺼지는 순간 주방 조명 꺼줘
+- pattern: 취침모드 켜지면 {ROOM} {DEVICE} 포함 집의 모든 {DEVICE} 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드 켜지면 거실 불 포함 집의 모든 조명 꺼줘
+- pattern: '{DEVICE} 켜지면 {ROOM}등이고 뭐고 모든 {DEVICE} 다 꺼버려'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - extra_node
+  examples:
+  - 슬립모드 켜지면 거실등이고 뭐고 모든 조명 다 꺼버려
+- pattern: 취침모드이고 {ROOM} {DEVICE} 있으면 {ROOM} {DEVICE} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드이고 거실 인기척 있으면 거실 불 켜줘
+- pattern: 취침 모드일 때 {ROOM} {DEVICE} 있으면 {DEVICE} 켜주세요
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침 모드일 때 욕실 움직임 있으면 욕실 조명 켜주세요
+- pattern: '{DEVICE}인 상태로 {DEVICE} 잡히면 {ROOM} {DEVICE} 켜'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드인 상태로 거실 모션 잡히면 거실 전등 켜
+- pattern: 취침모드 중에 {ROOM} {DEVICE} 보이면 {ROOM} {DEVICE} 좀 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드 중에 거실 움직임 보이면 거실 조명 좀 켜줘
+- pattern: 취침모드이고 {ROOM} {DEVICE} 감지되면 {ROOM}등 꺼줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드이고 거실 인기척 감지되면 거실등 꺼줘
+- pattern: '{DEVICE} 중에 {ROOM} {DEVICE} 잡히면 {DEVICE} 꺼줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드 중에 안방 움직임 잡히면 안방 조명 꺼줘
+- pattern: '{SEG}{J} 취침모드이고 {ROOM} {DEVICE} 감지되면 {ROOM}등 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 새벽에 취침모드이고 거실 움직임 감지되면 거실등 켜줘
+- pattern: '{SEG}{J} 취침모드 상태로 {DEVICE} 감지되면 {ROOM} {DEVICE} 켜주세요'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 아침에 취침모드 상태로 거실 모션 감지되면 거실 전등 켜주세요
+- pattern: 취침모드일 때 {ROOM} {DEVICE} 감지되면 {ROOM} {DEVICE} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드일 때 욕실 움직임 감지되면 욕실 불 켜줘
+- pattern: '{DEVICE}일 때만 {ROOM} {DEVICE} 있으면 {ROOM}등 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립 모드일 때만 거실 인기척 있으면 거실등 켜줘
+- pattern: '{DEVICE} 해제되면 {ROOM} {DEVICE} 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드 해제되면 거실 조명 켜줘
+- pattern: 취침모드가 해제될 때 {DEVICE} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드가 해제될 때 안방 조명 켜줘
+- pattern: '{DEVICE} 해제되는 대로 {ROOM} {DEVICE} 켜줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드 해제되는 대로 거실 불 켜줘
+- pattern: '{SEG}{J} 취침모드일 때 {ROOM} {DEVICE} 뜨면 {ROOM}등 {PERCENT} 켜고 {DUR}간 {DEVICE}
+    없으면 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  - wrong_node_type
+  examples:
+  - 새벽에 취침모드일 때 거실 움직임 뜨면 거실등 10프로 켜고 3분간 인기척 없으면 꺼
+- pattern: '{SEG}{J} {DEVICE}{J} {ROOM} {DEVICE} 감지되면 {ROOM} {DEVICE} {PERCENT}{J}
+    켜 주고 {DUR} 동안 {DEVICE} 없으면 꺼 줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 새벽에 슬립모드이고 거실 인기척 감지되면 거실 조명 10퍼센트로 켜 주고 5분 동안 움직임 없으면 꺼 줘
+- pattern: 취침모드 켜져 있고 {SEG}{J} {DEVICE} 뜨면 {ROOM} {DEVICE} {PERCENT} 밝기로 켰다가 {DUR}
+    지{DEVICE}{J} {DEVICE} 없으면 다시 꺼
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드 켜져 있고 새벽에 거실 모션 뜨면 거실 불 10% 밝기로 켰다가 3분 지나도 인기척 없으면 다시 꺼
+- pattern: '{SEG}시간에 {DEVICE}{J} {ROOM} {DEVICE} 잡힐 때 {ROOM}등 {PERCENT}{J} 켜고 {DUR}
+    동안 잠잠하면 꺼줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽시간에 슬립모드면 거실 움직임 잡힐 때 거실등 30%로 켜고 10분 동안 잠잠하면 꺼줘
+- pattern: '{SEG}{J} 취침 모드 상태에서 {ROOM} {DEVICE} 감지되면 {DEVICE} {PERCENT}{J} 켜 주고 {DUR}간
+    {DEVICE} 없으면 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 새벽에 취침 모드 상태에서 안방 움직임 감지되면 안방 조명 10프로로 켜 주고 3분간 움직임 없으면 꺼
+- pattern: '{DEVICE}{J} {SEG}{J} {ROOM} {DEVICE} 뜨면 {ROOM} {DEVICE} {PERCENT}{J} 켜고
+    {DUR} 뒤에도 {DEVICE} 없으면 꺼주라'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - wrong_node_type
+  examples:
+  - 슬립모드고 새벽에 거실 인기척 뜨면 거실 전등 10프로만 켜고 5분 뒤에도 움직임 없으면 꺼주라
+- pattern: '{SEG}{J} {ROOM} {DEVICE} 감지되면 {ROOM} {DEVICE} {PERCENT}{J} 켜 주고 {DUR}
+    동안 {DEVICE} 없으면 꺼줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 저녁에 거실 움직임 감지되면 거실 조명 50프로로 켜 주고 10분 동안 인기척 없으면 꺼줘
+- pattern: '{SEG}{J} {DEVICE} 뜨면 {ROOM}등 {PERCENT}{J} 켜고 {DUR}간 아무 {DEVICE} 없으면 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  - wrong_node_type
+  examples:
+  - 밤에 거실 모션 뜨면 거실등 30퍼센트로 켜고 5분간 아무 움직임 없으면 꺼
+- pattern: '{SEG}{J} {ROOM} {DEVICE} 있으면 {DEVICE} {PERCENT}{J} 켜 주고 {DUR} 동안 없으면 다시
+    꺼줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 새벽에 욕실 움직임 있으면 욕실 조명 10프로로 켜 주고 3분 동안 없으면 다시 꺼줘
+- pattern: '{SEG}{J} {DEVICE} 감지되면 {ROOM} {DEVICE} {PERCENT}{J} 켜고 {DUR} 지{DEVICE}{J}록
+    {DEVICE} 없으면 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  - wrong_node_type
+  examples:
+  - 아침에 안방 모션 감지되면 안방 불 50%로 켜고 10분 지나도록 움직임 없으면 꺼주세요
+- pattern: '{ROOM} {DEVICE} 감지되면 {ROOM}등 {PERCENT}{J} 켜 주고 {DUR} 동안 조용하면 꺼줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 인기척 감지되면 거실등 10프로로 켜 주고 3분 동안 조용하면 꺼줘
+- pattern: '{ROOM} {DEVICE} 잡히면 {ROOM} {DEVICE} {PERCENT} 밝기로 켜고 {DUR}간 {DEVICE} 없으면
+    꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  - value_mismatch
+  examples:
+  - 거실 움직임 잡히면 거실 조명 30% 밝기로 켜고 5분간 인기척 없으면 꺼
+- pattern: '{ROOM} {DEVICE} 뜨면 {ROOM}등 켜고 {DUR} 동안 {DEVICE} 없으면 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 움직임 뜨면 거실등 켜고 10분 동안 인기척 없으면 꺼
+- pattern: '{ROOM} {DEVICE} 감지되면 {DEVICE} 켜 주고 {DUR} 동안 없으면 꺼줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 움직임 감지되면 욕실 조명 켜 주고 3분 동안 없으면 꺼줘
+- pattern: '{DEVICE} 잡히면 {ROOM} {DEVICE} 켜주고 {DUR} 동안 {DEVICE}{J} 없으면 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 안방 모션 잡히면 안방 불 켜주고 30분 동안 움직임이 없으면 꺼주세요
+- pattern: '{ROOM} {DEVICE} 있으면 {ROOM} {DEVICE} 켜 줬다가 {DUR} 동안 잠잠하면 꺼 줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 인기척 있으면 거실 전등 켜 줬다가 5분 동안 잠잠하면 꺼 줘
+- pattern: 취침모드일 때 {ROOM} {DEVICE} 뜨면 {ROOM}등 켜고 {DUR} 동안 {DEVICE} 없으면 꺼
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드일 때 거실 움직임 뜨면 거실등 켜고 5분 동안 인기척 없으면 꺼
+- pattern: '{DEVICE} 중에 {ROOM} {DEVICE} 감지되면 {DEVICE} 켜 주고 {DUR} 동안 없으면 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 슬립 모드 중에 안방 움직임 감지되면 안방 조명 켜 주고 10분 동안 없으면 꺼주세요
+- pattern: 취침모드 상태에서 {DEVICE} 잡히면 {ROOM} {DEVICE} 켜고 {DUR} 동안 {DEVICE} 없으면 도로 꺼줘
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드 상태에서 욕실 모션 잡히면 욕실 불 켜고 3분 동안 움직임 없으면 도로 꺼줘
+- pattern: '{ROOM} {DEVICE} 뜨면 {ROOM}등 켜고 {DUR} 동안 {DEVICE} 없으면 {ROOM}등 끄고 {DEVICE}
+    켜지면 모든 {DEVICE} 다 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임 뜨면 거실등 켜고 5분 동안 인기척 없으면 거실등 끄고 슬립모드 켜지면 모든 불 다 꺼
+- pattern: '{DEVICE} 뜨면 {ROOM} {DEVICE} 켜 주고, {DEVICE} 뜨면 {DEVICE} 켜 줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 모션 뜨면 거실 조명 켜 주고, 안방 모션 뜨면 안방 조명 켜 줘
+- pattern: '{ROOM}{J} {DEVICE} 뜨면 {ROOM} {DEVICE} 켜고, {ROOM}{J} {DEVICE} 뜨면 {DEVICE}
+    켜줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실에 움직임 뜨면 거실 조명 켜고, 안방에 움직임 뜨면 안방 조명 켜줘
+- pattern: '{DEVICE} 감지되면 {ROOM} {DEVICE} 켜 주고 {DUR}간 {DEVICE} 없으면 꺼줘'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 모션 감지되면 거실 조명 켜 주고 5분간 움직임 없으면 꺼줘
+- pattern: '{ROOM} {DEVICE} 뜨면 {ROOM}등 켜고 {DUR}간 {DEVICE} 없으면 다시 꺼'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  - wrong_node_type
+  examples:
+  - 거실 움직임 뜨면 거실등 켜고 5분간 인기척 없으면 다시 꺼
+- pattern: '{DEVICE} 잡히면 {ROOM} {DEVICE} 켜 주고 {DUR}간 아무도 없으면 꺼주세요'
+  count: 1
+  area: multiclause
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  - value_mismatch
+  examples:
+  - 욕실 모션 잡히면 욕실 불 켜 주고 5분간 아무도 없으면 꺼주세요
+- pattern: '{ROOM} {DEVICE} 감지되는 순간 {ROOM}등 켜줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 인기척 감지되는 순간 거실등 켜줘
+- pattern: '{DEVICE} 잡히면 {DEVICE} 켜지게 해줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 모션 잡히면 욕실 조명 켜지게 해줘
+- pattern: '{DEVICE} 감지되거든 {DEVICE} 켜 주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 안방 모션 감지되거든 안방 조명 켜 주세요
+- pattern: '{ROOM} {DEVICE} 안 잡히면 {ROOM}등 꺼 줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 인기척 안 잡히면 거실등 꺼 줘
+- pattern: '{ROOM} {DEVICE} 감지되면 {ROOM} {DEVICE} 포함 모든 {DEVICE} 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 움직임 감지되면 거실 불 포함 모든 조명 꺼줘
+- pattern: '{ROOM} {DEVICE} 뜨면 {ROOM}등 비롯해서 집의 모든 {DEVICE} 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 인기척 뜨면 거실등 비롯해서 집의 모든 조명 꺼줘
+- pattern: '{ROOM} {DEVICE} 감지되면 {DEVICE} 포함 모든 {DEVICE} 꺼주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 안방 움직임 감지되면 안방 조명 포함 모든 불 꺼주세요
+- pattern: '{ROOM} {DEVICE} 잡히면 {ROOM} {DEVICE} 켜고 {DEVICE} 켜 줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 움직임 잡히면 거실 조명 켜고 환풍기 켜 줘
+- pattern: '{DEVICE} 뜨면 {ROOM}등 {PERCENT} 밝기로 켜 줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션 뜨면 거실등 30% 밝기로 켜 줘
+- pattern: '{DEVICE} 잡히면 {DEVICE} {PERCENT}{J} 켜 주세요'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 욕실 모션 잡히면 욕실 조명 70%로 켜 주세요
+- pattern: '{ROOM} {DEVICE} 감지되면 무드등 켜줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 움직임 감지되면 무드등 켜줘
+- pattern: '{DEVICE} 뜨면 무드등만 살짝 켜 줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 모션 뜨면 무드등만 살짝 켜 줘
+- pattern: '{ROOM} {DEVICE} 있으면 무드등 켜지게 해줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 거실 인기척 있으면 무드등 켜지게 해줘
+- pattern: '{ROOM}{J} {DUR} 동안 {DEVICE} 없으면 {DEVICE}랑 {DEVICE} 꺼줘'
+  count: 1
+  area: single
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 욕실에 5분 동안 인기척 없으면 환풍기랑 불 꺼줘
+- pattern: '{ROOM}{J} {DUR}간 {DEVICE} 없으면 {DEVICE}{J} {DEVICE} 꺼 줘'
+  count: 1
+  area: single
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - wrong_node_type
+  examples:
+  - 화장실에 5분간 움직임 없으면 환풍기하고 조명 꺼 줘
+- pattern: '{DEVICE}랑 {DEVICE} 둘 다 집에 오면 {ROOM} {DEVICE} 켜줘'
+  count: 1
+  area: single
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 나랑 와이프 둘 다 집에 오면 현관 불 켜줘
+- pattern: '{DEVICE}랑 내가 집에 도착하면 {DEVICE} 켜 줘'
+  count: 1
+  area: single
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 와이프랑 내가 집에 도착하면 현관 조명 켜 줘
+- pattern: 여름에 {ROOM}{J} {TEMP} 넘으면 {DEVICE} 켜줘
+  count: 1
+  area: single
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 여름에 거실이 28도 넘으면 에어컨 켜줘
+- pattern: '{SEG}{J} 되거든 {ROOM} {DEVICE} 켜 주세요'
+  count: 1
+  area: single
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 저녁이 되거든 거실 불 켜 주세요
+- pattern: '{DEVICE}{J} 열리면 {ROOM} {DEVICE} 켜주고, {DUR} 뒤에 꺼줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 현관문이 열리면 현관 불 켜주고, 3분 뒤에 꺼줘
+- pattern: '{DEVICE} 열리면 {DEVICE} 켜 줬다가, {DUR} 후에 꺼 줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 현관문 열리면 현관 조명 켜 줬다가, 3분 후에 꺼 줘
+- pattern: '{DEVICE} 감지되면 {ROOM}등 켜 주고, {DUR} 동안 {DEVICE} 없으면 꺼 줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 거실 모션 감지되면 거실등 켜 주고, 10분 동안 움직임 없으면 꺼 줘
+- pattern: 취침모드 켜지면 {DEVICE} 끄고, {ROOM} {DEVICE}{J} 꺼줘
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드 켜지면 티비 끄고, 거실 조명도 꺼줘
+- pattern: '{DEVICE} 열릴 때 {DEVICE} 켜줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 현관문 열릴 때 현관 조명 켜줘
+- pattern: '{DEVICE}{J} 열리거든 {ROOM} {DEVICE}{J} 켜줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 현관문이 열리거든 현관 불을 켜줘
+- pattern: '{DEVICE}{J} 열린다면 {DEVICE}{J} 켜 줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 현관문이 열린다면 현관 조명을 켜 줘
+- pattern: '{DEVICE}{J} 풀리면 {DEVICE} 열어줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립 모드가 풀리면 거실 커튼 열어줘
+- pattern: 취침모드 풀리면 {DEVICE} 걷어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 취침모드 풀리면 거실 커튼 걷어줘
+- pattern: '{SEG} {NUM}시가 되면 {DEVICE} 취소해줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 밤 11시가 되면 슬립모드 취소해줘
+- pattern: 매일 {SEG} {NUM}시에 취침모드 취소해 줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 매일 밤 11시에 취침모드 취소해 줘
+- pattern: 매일 {SEG} {NUM}시에 취침모드 풀어줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 매일 아침 7시에 취침모드 풀어줘
+- pattern: '{SEG} {NUM}시가 되면 {DEVICE} 풀어 줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 아침 7시가 되면 슬립모드 풀어 줘
+- pattern: '{DEVICE}{J} {DEVICE} 감지될 때 {ROOM} {DEVICE} 켜 줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드면 거실 모션 감지될 때 거실 조명 켜 줘
+- pattern: 취침모드면 {ROOM} {DEVICE} 뜰 때 {ROOM} {DEVICE} 켜줘
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 취침모드면 거실 움직임 뜰 때 거실 조명 켜줘
+- pattern: '{DEVICE}{J} {DEVICE} 꺼줘'
+  count: 1
+  area: mode
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - missing_node
+  examples:
+  - 슬립모드면 티비 꺼줘
+- pattern: '{ROOM}{J} {DUR}간 {DEVICE} 없으면 {ROOM}등 꺼줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - wrong_node_type
+  examples:
+  - 거실에 10분간 인기척 없으면 거실등 꺼줘
+- pattern: '{ROOM}{J} {DUR}간 아무 {DEVICE} 없으면 {ROOM} {DEVICE} 꺼 줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - wrong_node_type
+  examples:
+  - 거실에 10분간 아무 움직임 없으면 거실 조명 꺼 줘
+- pattern: '{ROOM}{J} {DUR}간 {DEVICE} 없으면 {ROOM} {DEVICE}{J} {DEVICE} 꺼줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - wrong_node_type
+  examples:
+  - 욕실에 5분간 움직임 없으면 욕실 불이랑 환풍기 꺼줘
+- pattern: '{ROOM}{J}{TIME}간 반 동안 {DEVICE}{J} 없으면 {DEVICE} 꺼줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - extra_node
+  - wrong_node_type
+  examples:
+  - 안방에 1시간 반 동안 움직임이 없으면 안방 조명 꺼줘
+- pattern: 한 시간 반 동안 {ROOM}{J} {DEVICE} 없으면 {ROOM} {DEVICE} 꺼 줘
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - wrong_node_type
+  examples:
+  - 한 시간 반 동안 안방에 인기척 없으면 안방 불 꺼 줘
+- pattern: '{DEVICE}{J} {DUR} 넘게 열려 있으면 {DEVICE} 켜줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - wrong_node_type
+  examples:
+  - 현관문이 30분 넘게 열려 있으면 현관 조명 켜줘
+- pattern: '{ROOM}{J} 아무도 움직이지 않으면 {ROOM} {DEVICE} 꺼줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실에서 아무도 움직이지 않으면 거실 불 꺼줘
+- pattern: '{ROOM}{J} {DUR} 동안 아무도 움직이지 않으면 {ROOM} {DEVICE} 꺼줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실에 5분 동안 아무도 움직이지 않으면 거실 조명 꺼줘
+- pattern: '{ROOM}{J} 더우면 {DEVICE} 켜줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실이 더우면 에어컨 켜줘
+- pattern: 집이 더우면 {DEVICE} 좀 틀어줘
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 집이 더우면 에어컨 좀 틀어줘
+- pattern: '{ROOM}{J} 추우면 {DEVICE} 켜줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실이 추우면 보일러 켜줘
+- pattern: '{ROOM}{J} 습하면 {DEVICE} 틀어줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 안방이 습하면 전열교환기 틀어줘
+- pattern: '{DEVICE} 많으면 {DEVICE} 꺼줘'
+  count: 1
+  area: misparse
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 베란다 미세먼지 많으면 전열교환기 꺼줘
+- pattern: '{DEVICE} 열리면 {ROOM} 천장등 켜줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 현관문 열리면 거실 천장등 켜줘
+- pattern: '{ROOM}{J} {TEMP} 넘으면 선풍기 틀어줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 거실이 28도 넘으면 선풍기 틀어줘
+- pattern: '{SEG} {NUM}시가 되면 다 꺼줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 밤 11시가 되면 다 꺼줘
+- pattern: 매일 {SEG} {NUM}시에 {DEVICE} 다 꺼줘
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 매일 밤 11시에 불 다 꺼줘
+- pattern: '{SEG} {NUM}시 되면 집안 {DEVICE} 전부 꺼 줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 밤 11시 되면 집안 조명 전부 꺼 줘
+- pattern: 취침모드 켜지면 {ROOM} 빼고 다 꺼줘
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - extra_node
+  - missing_node
+  examples:
+  - 취침모드 켜지면 거실 빼고 다 꺼줘
+- pattern: '{DEVICE} 켜지면 {ROOM}{J} 놔두고 {DEVICE} 전부 꺼 줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 슬립모드 켜지면 거실만 놔두고 불 전부 꺼 줘
+- pattern: 매일 {SEG} {NUM}시에 아이방 {DEVICE} 켜줘
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 매일 저녁 8시에 아이방 불 켜줘
+- pattern: '{SEG}{J} 되면 무드등 켜줘'
+  count: 1
+  area: target
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 저녁이 되면 무드등 켜줘
+- pattern: '{SEG}{J} 되면 {ROOM} {DEVICE} 밝기 절반으로 해줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 저녁이 되면 거실 조명 밝기 절반으로 해줘
+- pattern: '{SEG} 되면 {ROOM}등 밝기를 절반으로 {SEG}춰줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 저녁 되면 거실등 밝기를 절반으로 낮춰줘
+- pattern: '{DEVICE} 감지되면 {ROOM}등 최대 밝기로 켜줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 거실 모션 감지되면 거실등 최대 밝기로 켜줘
+- pattern: '{ROOM} {DEVICE} 뜨면 {ROOM} {DEVICE} 제일 밝게 켜 줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 거실 움직임 뜨면 거실 조명 제일 밝게 켜 줘
+- pattern: 겨울에 {DEVICE}{J} {TEMP} 아래로 떨어지면 {DEVICE} {TEMP}{J} 맞춰줘
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 겨울에 거실 온도가 20도 아래로 떨어지면 보일러 26도로 맞춰줘
+- pattern: '{DEVICE} {TEMP} 넘으면 {DEVICE} {TEMP}{J} 해줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 거실 온도 28도 넘으면 에어컨 26도로 해줘
+- pattern: '{DEVICE}{J} 영하 {TEMP} 밑으로 내려가면 {DEVICE} 켜줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - value_mismatch
+  examples:
+  - 온도가 영하 5도 밑으로 내려가면 보일러 켜줘
+- pattern: '{SEG}{J} {ROOM} {DEVICE} 있으면 {ROOM}등 {NUM}{J} 켜줘'
+  count: 1
+  area: value
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  examples:
+  - 새벽에 거실 움직임 있으면 거실등 10으로 켜줘
+- pattern: '{SEG} {NUM}시부터 {SEG} {NUM}시까지 {ROOM}{J} {DEVICE}{J} 감지되면 {ROOM} {DEVICE}{J}
+    {PERCENT}{J} 켜줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - value_mismatch
+  examples:
+  - 밤 10시부터 아침 7시까지 거실에 움직임이 감지되면 거실 조명을 10%로 켜줘
+- pattern: '{SEG} {NUM}시부터 {SEG} {NUM}시 사이에 {ROOM} {DEVICE} 뜨면 {ROOM}등 {PERCENT}{J}
+    켜 줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - entity_confusion
+  - value_mismatch
+  examples:
+  - 밤 10시부터 아침 7시 사이에 거실 움직임 뜨면 거실등 10프로로 켜 줘
+- pattern: '{SEG} {NUM}시부터 {SEG} {NUM}시까지는 {ROOM} {DEVICE} 감지돼도 {ROOM}등 {PERCENT}{J}만
+    켜줘'
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - entity_confusion
+  - missing_node
+  examples:
+  - 밤 10시부터 아침 7시까지는 거실 인기척 감지돼도 거실등 10퍼센트로만 켜줘
+- pattern: 주말마다 {SEG} {NUM}시에 {DEVICE} 열어줘
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 주말마다 아침 9시에 거실 커튼 열어줘
+- pattern: 월수금 {SEG} {NUM}시에 {ROOM} {DEVICE} 켜줘
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 1
+    partial: 0
+  error_tags:
+  - missing_node
+  examples:
+  - 월수금 아침 7시에 안방 불 켜줘
+- pattern: 월요일 수요일 금요일 {SEG} {NUM}시가 되면 {DEVICE} 켜 줘
+  count: 1
+  area: time
+  verdict_mix:
+    fail: 0
+    partial: 1
+  error_tags:
+  - missing_node
+  examples:
+  - 월요일 수요일 금요일 아침 7시가 되면 안방 조명 켜 줘

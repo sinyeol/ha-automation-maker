@@ -1,0 +1,1083 @@
+- id: mode_trig_on_light
+  area: mode
+  template: '{mode}{가} 켜지면 {device_light}{을} <on>'
+  tags:
+  - mode-trigger
+  status: partial
+  counts:
+    exact: 23
+    partial: 3
+    fail: 20
+  examples:
+  - 취침모드가 켜지면 주방 조명을 켜주세요
+  - 취침 모드가 켜지면 현관 조명을 켜줘
+  - 슬립 모드가 켜지면 안방등을 켜주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: mode_trig_off_light
+  area: mode
+  template: '{mode}{가} 꺼지면 {device_light}{을} <off>'
+  tags:
+  - mode-trigger
+  status: gap
+  counts:
+    exact: 20
+    partial: 1
+    fail: 23
+  examples:
+  - 취침모드가 꺼지면 안방등을 꺼
+  - 슬립모드가 꺼지면 안방 불을 꺼줘
+  - 취침 모드가 꺼지면 현관 불을 꺼
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: mode_trig_scope_off
+  area: mode
+  template: '{mode}{가} 켜지면 {scope} {device_light}{을} <off>'
+  tags:
+  - mode-trigger
+  - scope-all
+  status: gap
+  counts:
+    exact: 9
+    partial: 13
+    fail: 21
+  examples:
+  - 슬립모드가 켜지면 다 주방 불을 꺼
+  - 슬립모드가 켜지면 전부 부엌 조명을 꺼주세요
+  - 취침모드가 켜지면 전부 거실등을 꺼주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id: '{scope.expand}'
+- id: mode_cond_motion_on
+  area: mode
+  template: '{mode}이고 {motion}{가} 감지되면 {device_light}{을} <on>'
+  tags:
+  - mode-condition
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 20
+    partial: 24
+    fail: 1
+  examples:
+  - 취침 모드이고 거실 움직임이 감지되면 베란다 조명을 켜
+  - 슬립 모드이고 거실 모션이 감지되면 작은방 조명을 켜주세요
+  - 슬립 모드이고 거실 모션이 감지되면 주방 조명을 켜주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: mode
+        mode: '{mode.value}'
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: mode_cond_motion_off
+  area: mode
+  template: '{mode}이고 {motion}{가} 작동하면 {device_light}{을} <off>'
+  tags:
+  - mode-condition
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 15
+    partial: 27
+    fail: 1
+  examples:
+  - 슬립 모드이고 안방 모션이 작동하면 거실 불을 꺼
+  - 슬립모드이고 거실 인기척이 작동하면 안방 조명을 꺼주세요
+  - 취침 모드이고 거실 움직임이 작동하면 거실 불을 꺼줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: mode
+        mode: '{mode.value}'
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: mode_seg_cond_motion_on
+  area: mode
+  template: '{segment} {mode}이고 {motion}{가} 감지되면 {device_light}{을} <on>'
+  tags:
+  - mode-condition
+  - time-segment
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 7
+    partial: 24
+    fail: 13
+  examples:
+  - 밤에 취침모드이고 거실 모션이 감지되면 안방 조명을 켜
+  - 저녁에 슬립모드이고 거실 인기척이 감지되면 안방 불을 켜줘
+  - 밤에 취침 모드이고 욕실 움직임이 감지되면 현관 불을 켜
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: time_segment
+        segments:
+        - '{segment.value}'
+      - type: mode
+        mode: '{mode.value}'
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: mode_cond_whenclause
+  area: mode
+  template: '{mode}일 때 {motion}{가} 감지되면 {device_light}{을} <on>'
+  tags:
+  - mode-condition
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 19
+    partial: 24
+    fail: 0
+  examples:
+  - 취침 모드일 때 욕실 움직임이 감지되면 작은방 조명을 켜줘
+  - 취침모드일 때 안방 움직임이 감지되면 거실 불을 켜줘
+  - 슬립 모드일 때 거실 모션이 감지되면 주방 조명을 켜
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: mode
+        mode: '{mode.value}'
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: mode_qm_release_off
+  area: mode
+  template: '{mode}{가} 해제되면 {device_light}{을} <on>'
+  tags:
+  - mode-trigger
+  - misparse
+  status: gap
+  counts:
+    exact: 0
+    partial: 0
+    fail: 43
+  examples:
+  - 취침 모드가 해제되면 부엌 조명을 켜줘
+  - 취침 모드가 해제되면 작은방 불을 켜줘
+  - 슬립 모드가 해제되면 거실 조명을 틀어줘
+  gold:
+    subrules:
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: multiclause_golden_b
+  area: multiclause
+  template: '{segment} {mode}이고 {motion}{가} 작동하면 {device_light}{을} {percent} 켜주고 {duration}
+    동안 모션이 없으면 <off>'
+  tags:
+  - multiclause
+  - context-inherit
+  - mode-condition
+  status: partial
+  counts:
+    exact: 20
+    partial: 20
+    fail: 6
+  examples:
+  - 새벽에 취침 모드이고 안방 움직임이 작동하면 베란다 조명을 10퍼센트 켜주고 3분 동안 모션이 없으면 끄다
+  - 아침에 취침 모드이고 안방 움직임이 작동하면 욕실 불을 30% 켜주고 3분 동안 모션이 없으면 꺼줘
+  - 밤에 슬립모드이고 욕실 움직임이 작동하면 안방 불을 30퍼센트 켜주고 10분 동안 모션이 없으면 꺼주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: time_segment
+        segments:
+        - '{segment.value}'
+      - type: mode
+        mode: '{mode.value}'
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+        data:
+          brightness_pct: '{percent.value}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for: '{duration.dur}'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: multiclause_seg_dim_off
+  area: multiclause
+  template: '{segment} {motion}{가} 작동하면 {device_light}{을} {percent} 켜주고 {duration}
+    동안 움직임이 없으면 <off>'
+  tags:
+  - multiclause
+  - context-inherit
+  - time-segment
+  status: partial
+  counts:
+    exact: 36
+    partial: 4
+    fail: 4
+  examples:
+  - 아침에 안방 모션이 작동하면 거실 불을 50프로 켜주고 10분 동안 움직임이 없으면 꺼
+  - 저녁에 거실 인기척이 작동하면 욕실 조명을 50프로 켜주고 10분 동안 움직임이 없으면 꺼
+  - 새벽에 거실 움직임이 작동하면 현관 조명을 30퍼센트 켜주고 3분 동안 움직임이 없으면 끄다
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: time_segment
+        segments:
+        - '{segment.value}'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+        data:
+          brightness_pct: '{percent.value}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for: '{duration.dur}'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: multiclause_dim_off
+  area: multiclause
+  template: '{motion}{가} 감지되면 {device_light}{을} {percent} 켜주고 {duration} 동안 움직임이 없으면
+    <off>'
+  tags:
+  - multiclause
+  - context-inherit
+  status: partial
+  counts:
+    exact: 39
+    partial: 3
+    fail: 2
+  examples:
+  - 안방 움직임이 감지되면 현관 조명을 30% 켜주고 5분 동안 움직임이 없으면 꺼주세요
+  - 거실 움직임이 감지되면 안방등을 10프로 켜주고 5분 동안 움직임이 없으면 꺼주세요
+  - 욕실 모션이 감지되면 부엌 조명을 70% 켜주고 10분 동안 움직임이 없으면 끄다
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+        data:
+          brightness_pct: '{percent.value}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for: '{duration.dur}'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: multiclause_plain_onoff
+  area: multiclause
+  template: '{motion}{가} 감지되면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면 <off>'
+  tags:
+  - multiclause
+  - context-inherit
+  status: partial
+  counts:
+    exact: 35
+    partial: 7
+    fail: 3
+  examples:
+  - 안방 모션이 감지되면 거실 불을 켜주고 3분 동안 움직임이 없으면 꺼
+  - 안방 움직임이 감지되면 안방등을 켜주고 10분 동안 움직임이 없으면 끄다
+  - 욕실 움직임이 감지되면 욕실 불을 켜주고 5분 동안 움직임이 없으면 끄다
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for: '{duration.dur}'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: multiclause_mode_cond_onoff
+  area: multiclause
+  template: '{mode}이고 {motion}{가} 작동하면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면
+    <off>'
+  tags:
+  - multiclause
+  - context-inherit
+  - mode-condition
+  status: partial
+  counts:
+    exact: 18
+    partial: 24
+    fail: 2
+  examples:
+  - 취침모드이고 거실 인기척이 작동하면 베란다 조명을 켜주고 30분 동안 움직임이 없으면 꺼
+  - 취침모드이고 거실 모션이 작동하면 욕실 불을 켜주고 30분 동안 움직임이 없으면 꺼주세요
+  - 취침모드이고 거실 모션이 작동하면 주방 불을 켜주고 3분 동안 움직임이 없으면 꺼주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions:
+      - type: mode
+        mode: '{mode.value}'
+        state: 'on'
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for: '{duration.dur}'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: multiclause_three_rules
+  area: multiclause
+  template: '{motion}{가} 감지되면 {device_light}{을} 켜주고 {duration} 동안 움직임이 없으면 {device_light}{을}
+    꺼주고 {mode}{가} 켜지면 {scope} 조명을 <off>'
+  tags:
+  - multiclause
+  - three-rules
+  - mode-trigger
+  - scope-all
+  status: gap
+  counts:
+    exact: 0
+    partial: 20
+    fail: 23
+  examples:
+  - 거실 움직임이 감지되면 안방등을 켜주고 5분 동안 움직임이 없으면 안방등을 꺼주고 슬립모드가 켜지면 집의 모든 조명을 끄다
+  - 거실 인기척이 감지되면 욕실 조명을 켜주고 10분 동안 움직임이 없으면 욕실 조명을 꺼주고 취침 모드가 켜지면 다 조명을 꺼줘
+  - 거실 인기척이 감지되면 부엌 조명을 켜주고 30분 동안 움직임이 없으면 부엌 조명을 꺼주고 취침모드가 켜지면 모든 조명을 꺼
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for: '{duration.dur}'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+    - triggers:
+      - type: mode
+        mode: '{mode.value}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id: '{scope.expand}'
+- id: multiclause_qm_comma
+  area: multiclause
+  template: 거실 모션이 감지되면 거실 조명을 켜주고, 안방 모션이 감지되면 안방 조명을 켜줘
+  tags:
+  - multiclause
+  - two-rules
+  - misparse
+  status: gap
+  counts:
+    exact: 0
+    partial: 0
+    fail: 3
+  examples:
+  - 거실 모션이 감지되면 거실 조명을 켜주고, 안방 모션이 감지되면 안방 조명을 켜줘
+  - 거실 모션 뜨면 거실 조명 켜 주고, 안방 모션 뜨면 안방 조명 켜 줘
+  - 거실에 움직임 뜨면 거실 조명 켜고, 안방에 움직임 뜨면 안방 조명 켜줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+- id: multiclause_qm_5bungan
+  area: multiclause
+  template: '{motion}{가} 감지되면 {device_light}{을} 켜주고 5분간 움직임이 없으면 <off>'
+  tags:
+  - multiclause
+  - context-inherit
+  - misparse
+  status: gap
+  counts:
+    exact: 0
+    partial: 0
+    fail: 43
+  examples:
+  - 욕실 움직임이 감지되면 베란다 조명을 켜주고 5분간 움직임이 없으면 꺼
+  - 욕실 모션이 감지되면 거실등을 켜주고 5분간 움직임이 없으면 꺼주세요
+  - 안방 모션이 감지되면 작은방 조명을 켜주고 5분간 움직임이 없으면 꺼
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+    - triggers:
+      - type: state_held
+        entity_id: '{motion.entity}'
+        to: 'off'
+        for:
+          hours: 0
+          minutes: 5
+          seconds: 0
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: target_basic_on
+  area: target
+  template: '{motion}{가} 감지되면 {device_light}{을} <on>'
+  tags:
+  - target
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 38
+    partial: 5
+    fail: 3
+  examples:
+  - 욕실 모션이 감지되면 작은방 조명을 켜주세요
+  - 욕실 움직임이 감지되면 안방 조명을 켜주세요
+  - 욕실 움직임이 감지되면 안방등을 켜줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: target_basic_off
+  area: target
+  template: '{motion}{가} 없으면 {device_light}{을} <off>'
+  tags:
+  - target
+  - motion-trigger
+  status: partial
+  counts:
+    exact: 40
+    partial: 3
+    fail: 1
+  examples:
+  - 거실 모션이 없으면 거실 전등을 꺼줘
+  - 욕실 움직임이 없으면 욕실 불을 꺼주세요
+  - 거실 모션이 없으면 거실등을 꺼줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'off'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - '{device_light.entity}'
+- id: target_scope_all
+  area: target
+  template: '{motion}{가} 감지되면 {scope} {device_light}{을} <off>'
+  tags:
+  - target
+  - scope-all
+  status: partial
+  counts:
+    exact: 0
+    partial: 43
+    fail: 0
+  examples:
+  - 거실 움직임이 감지되면 모든 거실 조명을 꺼줘
+  - 거실 움직임이 감지되면 집의 모든 거실 전등을 끄다
+  - 욕실 모션이 감지되면 전부 거실 불을 꺼줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id: '{scope.expand}'
+- id: target_fan_on
+  area: target
+  template: '{motion}{가} 감지되면 {device_fan}{을} <on>'
+  tags:
+  - target
+  - fan
+  status: covered
+  counts:
+    exact: 44
+    partial: 0
+    fail: 0
+  examples:
+  - 욕실 모션이 감지되면 욕실 환풍기를 켜
+  - 욕실 모션이 감지되면 욕실 환풍기를 켜주세요
+  - 욕실 모션이 감지되면 욕실 환기팬을 켜
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - '{device_fan.entity}'
+- id: target_climate_on
+  area: target
+  template: '{motion}{가} 감지되면 {device_climate}{을} <on>'
+  tags:
+  - target
+  - climate
+  status: covered
+  counts:
+    exact: 43
+    partial: 0
+    fail: 0
+  examples:
+  - 욕실 모션이 감지되면 거실 냉방을 틀어줘
+  - 안방 모션이 감지되면 에어컨을 틀어줘
+  - 욕실 모션이 감지되면 에어컨을 켜주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - '{device_climate.entity}'
+- id: target_two_actions
+  area: target
+  template: '{motion}{가} 감지되면 {device_light}{을} 켜고 {device_fan}{을} <on>'
+  tags:
+  - target
+  - multi-action
+  status: partial
+  counts:
+    exact: 36
+    partial: 7
+    fail: 1
+  examples:
+  - 욕실 움직임이 감지되면 현관 불을 켜고 환풍기를 켜
+  - 안방 움직임이 감지되면 현관 조명을 켜고 욕실 환풍기를 켜줘
+  - 욕실 모션이 감지되면 부엌 조명을 켜고 욕실 환기팬을 틀어줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+      - type: service
+        action: fan.turn_on
+        target:
+          entity_id:
+          - '{device_fan.entity}'
+- id: target_percent
+  area: target
+  template: '{motion}{가} 감지되면 {device_light}{을} {percent} 켜줘'
+  tags:
+  - target
+  - brightness
+  status: partial
+  counts:
+    exact: 40
+    partial: 4
+    fail: 1
+  examples:
+  - 거실 모션이 감지되면 현관 불을 10퍼센트 켜줘
+  - 거실 모션이 감지되면 작은방 조명을 10% 켜줘
+  - 거실 인기척이 감지되면 거실 불을 70% 켜줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - '{device_light.entity}'
+        data:
+          brightness_pct: '{percent.value}'
+- id: target_qm_moodlight
+  area: target
+  template: '{motion}{가} 감지되면 무드등을 <on>'
+  tags:
+  - target
+  - manual-mapping
+  - misparse
+  status: partial
+  counts:
+    exact: 0
+    partial: 31
+    fail: 0
+  examples:
+  - 욕실 움직임이 감지되면 무드등을 틀어줘
+  - 안방 모션이 감지되면 무드등을 켜줘
+  - 안방 움직임이 감지되면 무드등을 틀어줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: '{motion.entity}'
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_mood
+- id: single_golden_1_bathroom_fan_off
+  area: single
+  template: 화장실은 5분 동안 움직임이 없으면 환풍기와 조명을 꺼줘
+  tags:
+  - single
+  - regression
+  - held
+  - multi-action
+  status: gap
+  counts:
+    exact: 1
+    partial: 1
+    fail: 1
+  examples:
+  - 화장실은 5분 동안 움직임이 없으면 환풍기와 조명을 꺼줘
+  - 욕실에 5분 동안 인기척 없으면 환풍기랑 불 꺼줘
+  - 화장실에 5분간 움직임 없으면 환풍기하고 조명 꺼 줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state_held
+        entity_id: binary_sensor.bathroom_motion
+        to: 'off'
+        for:
+          hours: 0
+          minutes: 5
+          seconds: 0
+      conditions: []
+      actions:
+      - type: service
+        action: fan.turn_off
+        target:
+          entity_id:
+          - fan.bathroom_fan
+      - type: service
+        action: light.turn_off
+        target:
+          entity_id:
+          - light.bathroom
+- id: single_golden_2_arrival_two_persons
+  area: single
+  template: 나와 와이프가 집에 도착하면 현관 조명을 켜줘
+  tags:
+  - single
+  - regression
+  - zone
+  status: gap
+  counts:
+    exact: 1
+    partial: 1
+    fail: 1
+  examples:
+  - 나와 와이프가 집에 도착하면 현관 조명을 켜줘
+  - 나랑 와이프 둘 다 집에 오면 현관 불 켜줘
+  - 와이프랑 내가 집에 도착하면 현관 조명 켜 줘
+  gold:
+    subrules:
+    - triggers:
+      - type: zone
+        entity_id: person.wife
+        zone: zone.home
+        event: enter
+      conditions:
+      - type: state
+        entity_id: person.user
+        state: home
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.entrance
+- id: single_golden_3_numeric_ac_on
+  area: single
+  template: 여름에 거실 온도가 28도 이상이면 에어컨을 켜줘
+  tags:
+  - single
+  - regression
+  - numeric
+  - season
+  status: partial
+  counts:
+    exact: 2
+    partial: 0
+    fail: 1
+  examples:
+  - 여름에 거실 온도가 28도 이상이면 에어컨을 켜줘
+  - 여름에 거실이 28도 넘으면 에어컨 켜줘
+  - 여름철에 거실 온도가 28도 이상으로 올라가면 에어컨 틀어줘
+  gold:
+    subrules:
+    - triggers:
+      - type: numeric_state
+        entity_id: sensor.living_room_temperature
+        above: 28.0
+      conditions:
+      - type: season
+        seasons:
+        - summer
+      actions:
+      - type: service
+        action: climate.turn_on
+        target:
+          entity_id:
+          - climate.living_room_ac
+- id: single_golden_4_loop_basic
+  area: single
+  template: 거실에 움직임이 감지되면 거실 조명을 켜줘
+  tags:
+  - single
+  - regression
+  - motion-trigger
+  status: covered
+  counts:
+    exact: 3
+    partial: 0
+    fail: 0
+  examples:
+  - 거실에 움직임이 감지되면 거실 조명을 켜줘
+  - 거실에서 움직임이 감지되면 거실 조명을 켜 주세요
+  - 거실에 인기척이 보이면 거실 조명 켜 줄래
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+- id: single_golden_5_segment_brightness
+  area: single
+  template: 거실 조명은 새벽시간에 거실에 움직임이 있으면 10%로 켜줘
+  tags:
+  - single
+  - regression
+  - time-segment
+  - brightness
+  status: covered
+  counts:
+    exact: 3
+    partial: 0
+    fail: 0
+  examples:
+  - 거실 조명은 새벽시간에 거실에 움직임이 있으면 10%로 켜줘
+  - 새벽시간에 거실 움직임 있으면 거실 조명 10%로 켜줘
+  - 거실 조명은 새벽에 인기척 있으면 10프로로 켜 줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.living_room_motion
+        to: 'on'
+      conditions:
+      - type: time_segment
+        segments:
+        - dawn
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main
+        data:
+          brightness_pct: 10
+- id: single_golden_6_bedroom_loop
+  area: single
+  template: 안방에 움직임이 감지되면 안방 조명을 켜줘
+  tags:
+  - single
+  - regression
+  - motion-trigger
+  status: covered
+  counts:
+    exact: 2
+    partial: 0
+    fail: 0
+  examples:
+  - 안방에 움직임이 감지되면 안방 조명을 켜줘
+  - 안방에서 움직임 감지되면 안방 불 켜줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.master_bedroom
+- id: single_golden_7_bathroom_loop
+  area: single
+  template: 욕실에 움직임이 감지되면 욕실 조명을 켜줘
+  tags:
+  - single
+  - regression
+  - motion-trigger
+  status: covered
+  counts:
+    exact: 2
+    partial: 0
+    fail: 0
+  examples:
+  - 욕실에 움직임이 감지되면 욕실 조명을 켜줘
+  - 화장실에 움직임이 보이면 욕실 조명 켜 줘
+  gold:
+    subrules:
+    - triggers:
+      - type: state
+        entity_id: binary_sensor.bathroom_motion
+        to: 'on'
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.bathroom
+- id: single_golden_8_segment_trigger
+  area: single
+  template: 저녁이 되면 거실 조명을 켜줘
+  tags:
+  - single
+  - regression
+  - segment-trigger
+  status: partial
+  counts:
+    exact: 2
+    partial: 0
+    fail: 1
+  examples:
+  - 저녁이 되면 거실 조명을 켜줘
+  - 저녁 되면 거실 조명 켜줘
+  - 저녁이 되거든 거실 불 켜 주세요
+  gold:
+    subrules:
+    - triggers:
+      - type: segment
+        to: evening
+      conditions: []
+      actions:
+      - type: service
+        action: light.turn_on
+        target:
+          entity_id:
+          - light.living_room_main

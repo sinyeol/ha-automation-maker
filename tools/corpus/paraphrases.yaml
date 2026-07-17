@@ -1,0 +1,847 @@
+# paraphrases.yaml — 자연 변형 코퍼스 (SPEC-CORPUS §2.3 + 명시 gold 확장)
+#
+# 목적: 문법 생성(templates.yaml, 템플릿 동형·낙관적)과 달리 실제 사용자가 말할 법한
+# 자연스러운 한국어 변형으로 파서의 진짜 커버리지·갭을 드러내는 정직한 테스트셋.
+# 이 파일은 '정답셋'이다 — gold 는 파서 출력이 아니라 **사용자 의도**를 기술한다.
+#
+# 두 가지 항목 형식:
+#
+# (1) gold_ref 상속형(§2.3): 시드 템플릿의 gold 를 그대로 상속한 자연 변형.
+#     - gold_ref: <templates.yaml 의 id>
+#       area: <참고용 — 실제 area 는 템플릿에서 상속>
+#       bind: {슬롯: 표면형}            # 선택: gold 구체화에 쓸 필러(기본=첫 필러)
+#       variants:
+#         - "문장"                        # 엔트리 bind 사용
+#         - {text: "문장", bind: {...}}   # 변형별 bind override
+#     * augment.label_preservation_ok 의 슬롯 앵커링 때문에, 각 변형은 선택된 필러와
+#       같은 값/엔티티의 표면 이형태(slots.yaml)를 **연속 부분문자열**로 포함해야 한다.
+#       자유 어순/조사 분리형("거실에서 움직임")은 앵커를 깨므로 (2) 명시 gold 형으로 뺐다.
+#
+# (2) 명시 gold 형(hard cases, §2.3 확장): 한국 가정에서 실제 쓰지만 현재 파서가
+#     놓치거나 틀리기 쉬운 표현에 사용자 의도 gold 를 직접 부여.
+#     - id: <영문 식별자>
+#       area: mode|multiclause|target|time|value|misparse
+#       tags: [...]
+#       gold: {subrules: [...]}          # 구체 RuleModel(실존 entity_id, "on"/"off" 인용)
+#       warnings: ["..."]                # 의도가 모호한 부분 명시(선택)
+#       variants: ["문장", ...]
+#     * 주의: 현행 augment.load_paraphrases 는 gold_ref 없는 항목을 건너뛴다.
+#       파이프라인 편입 시 로더 확장 필요 — entry 에 gold 가 있으면 템플릿 없이
+#       CorpusItem 생성(template_id=id, anchors=[], bool→"on"/"off" 정규화 동일 적용).
+#
+# 결정적(고정 텍스트, 난수 없음). 사용자 문자열 한국어, 식별자 영어.
+
+# ===========================================================================
+# 1부. gold_ref 상속형 — MODE 영역 (모드 트리거/조건)
+# ===========================================================================
+- gold_ref: mode_trig_on_light
+  area: mode
+  variants:
+    - "취침모드 켜지면 거실등도 같이 켜줘"
+    - {text: "슬립모드 들어가면 안방 조명 켜줘", bind: {device_light: "안방 조명"}}
+    - {text: "슬립 모드가 켜질 때 주방 불 켜 줘", bind: {device_light: "주방 불"}}
+    - {text: "취침 모드 시작되면 베란다 조명 켜줘", bind: {device_light: "베란다 조명"}}
+    - {text: "슬립모드로 바뀌면 현관 불 켜놔", bind: {device_light: "현관 불"}}
+    - "취침모드가 켜지자마자 거실 전등 켜주라"
+
+- gold_ref: mode_trig_off_light
+  area: mode
+  variants:
+    - {text: "슬립모드가 꺼지면 안방 조명도 꺼줘", bind: {device_light: "안방 조명"}}
+    - "취침 모드 꺼지거든 거실등 꺼주세요"
+    - {text: "슬립모드 꺼지는 순간 주방 조명 꺼줘", bind: {device_light: "주방 조명"}}
+    - {text: "슬립 모드가 꺼지면 베란다 조명 마저 꺼줘", bind: {device_light: "베란다 조명"}}
+
+- gold_ref: mode_trig_scope_off
+  area: mode
+  variants:
+    - {text: "취침모드 켜지면 거실 불 포함 집의 모든 조명 꺼줘", bind: {scope: "집의 모든"}}
+    - "슬립모드 켜지면 거실등이고 뭐고 모든 조명 다 꺼버려"
+    - {text: "슬립 모드 켜지면 안방 조명까지 모든 불을 꺼줘", bind: {device_light: "안방 조명"}}
+
+- gold_ref: mode_cond_motion_on
+  area: mode
+  variants:
+    - "취침모드이고 거실 인기척 있으면 거실 불 켜줘"
+    - {text: "슬립모드 상태에서 안방 움직임 감지되면 안방 불 켜줘",
+       bind: {motion: "안방 모션", device_light: "안방 불"}}
+    - {text: "취침 모드일 때 욕실 움직임 있으면 욕실 조명 켜주세요",
+       bind: {motion: "욕실 모션", device_light: "욕실 조명"}}
+    - "슬립모드인 상태로 거실 모션 잡히면 거실 전등 켜"
+    - "취침모드 중에 거실 움직임 보이면 거실 조명 좀 켜줘"
+
+- gold_ref: mode_cond_motion_off
+  area: mode
+  variants:
+    - "취침모드이고 거실 인기척 감지되면 거실등 꺼줘"
+    - {text: "슬립모드 중에 안방 움직임 잡히면 안방 조명 꺼줘",
+       bind: {motion: "안방 모션", device_light: "안방 조명"}}
+    - "슬립 모드일 때 거실 모션 반응하면 거실 불 꺼주라"
+
+- gold_ref: mode_seg_cond_motion_on
+  area: mode
+  variants:
+    - "새벽에 취침모드이고 거실 움직임 감지되면 거실등 켜줘"
+    - {text: "밤에 슬립모드일 때 거실 인기척 있으면 거실 조명 켜줘", bind: {segment: "밤에"}}
+    - {text: "새벽시간에 슬립모드이고 안방 움직임 뜨면 안방 조명 켜줘",
+       bind: {motion: "안방 모션", device_light: "안방 조명"}}
+    - {text: "아침에 취침모드 상태로 거실 모션 감지되면 거실 전등 켜주세요",
+       bind: {segment: "아침에"}}
+
+- gold_ref: mode_cond_whenclause
+  area: mode
+  variants:
+    - "슬립모드일 때 거실 모션 뜨면 거실 조명 켜줘"
+    - {text: "취침모드일 때 욕실 움직임 감지되면 욕실 불 켜줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 불"}}
+    - "슬립 모드일 때만 거실 인기척 있으면 거실등 켜줘"
+
+- gold_ref: mode_qm_release_off
+  area: mode
+  variants:
+    - "슬립모드 해제되면 거실 조명 켜줘"
+    - {text: "취침모드가 해제될 때 안방 조명 켜줘", bind: {device_light: "안방 조명"}}
+    - "슬립 모드 해제되는 대로 거실 불 켜줘"
+
+# ===========================================================================
+# 1부. gold_ref 상속형 — MULTICLAUSE 영역 (다중 규칙쌍 + 컨텍스트 상속)
+# ===========================================================================
+- gold_ref: multiclause_golden_b
+  area: multiclause
+  variants:
+    - "새벽에 취침모드일 때 거실 움직임 뜨면 거실등 10프로 켜고 3분간 인기척 없으면 꺼"
+    - {text: "새벽에 슬립모드이고 거실 인기척 감지되면 거실 조명 10퍼센트로 켜 주고 5분 동안 움직임 없으면 꺼 줘",
+       bind: {duration: "5분"}}
+    - "취침모드 켜져 있고 새벽에 거실 모션 뜨면 거실 불 10% 밝기로 켰다가 3분 지나도 인기척 없으면 다시 꺼"
+    - {text: "새벽시간에 슬립모드면 거실 움직임 잡힐 때 거실등 30%로 켜고 10분 동안 잠잠하면 꺼줘",
+       bind: {percent: "30%", duration: "10분"}}
+    - {text: "새벽에 취침 모드 상태에서 안방 움직임 감지되면 안방 조명 10프로로 켜 주고 3분간 움직임 없으면 꺼",
+       bind: {motion: "안방 모션", device_light: "안방 조명"}}
+    - {text: "슬립모드고 새벽에 거실 인기척 뜨면 거실 전등 10프로만 켜고 5분 뒤에도 움직임 없으면 꺼주라",
+       bind: {duration: "5분"}}
+
+- gold_ref: multiclause_seg_dim_off
+  area: multiclause
+  variants:
+    - {text: "저녁에 거실 움직임 감지되면 거실 조명 50프로로 켜 주고 10분 동안 인기척 없으면 꺼줘",
+       bind: {segment: "저녁에", percent: "50프로", duration: "10분"}}
+    - {text: "밤에 거실 모션 뜨면 거실등 30퍼센트로 켜고 5분간 아무 움직임 없으면 꺼",
+       bind: {segment: "밤에", percent: "30퍼센트", duration: "5분"}}
+    - {text: "새벽에 욕실 움직임 있으면 욕실 조명 10프로로 켜 주고 3분 동안 없으면 다시 꺼줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 조명"}}
+    - {text: "아침에 안방 모션 감지되면 안방 불 50%로 켜고 10분 지나도록 움직임 없으면 꺼주세요",
+       bind: {segment: "아침에", motion: "안방 모션", device_light: "안방 불",
+              percent: "50%", duration: "10분"}}
+
+- gold_ref: multiclause_dim_off
+  area: multiclause
+  variants:
+    - "거실 인기척 감지되면 거실등 10프로로 켜 주고 3분 동안 조용하면 꺼줘"
+    - {text: "거실 움직임 잡히면 거실 조명 30% 밝기로 켜고 5분간 인기척 없으면 꺼",
+       bind: {percent: "30%", duration: "5분"}}
+    - {text: "욕실 모션 뜨면 욕실 불 50프로로 켜 주고 10분 동안 움직임 없으면 알아서 꺼줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 불", percent: "50프로", duration: "10분"}}
+    - {text: "안방 움직임 감지되면 안방 조명 10퍼센트로 켜놨다가 3분 동안 아무도 없으면 꺼주라",
+       bind: {motion: "안방 모션", device_light: "안방 조명", percent: "10퍼센트"}}
+
+- gold_ref: multiclause_plain_onoff
+  area: multiclause
+  variants:
+    - {text: "거실 모션 감지되면 거실 조명 켜 주고 5분 동안 움직임 없으면 다시 꺼줘",
+       bind: {duration: "5분"}}
+    - {text: "거실 움직임 뜨면 거실등 켜고 10분 동안 인기척 없으면 꺼", bind: {duration: "10분"}}
+    - {text: "욕실 움직임 감지되면 욕실 조명 켜 주고 3분 동안 없으면 꺼줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 조명"}}
+    - {text: "안방 모션 잡히면 안방 불 켜주고 30분 동안 움직임이 없으면 꺼주세요",
+       bind: {motion: "안방 모션", device_light: "안방 불", duration: "30분"}}
+    - {text: "거실 인기척 있으면 거실 전등 켜 줬다가 5분 동안 잠잠하면 꺼 줘",
+       bind: {duration: "5분"}}
+
+- gold_ref: multiclause_mode_cond_onoff
+  area: multiclause
+  variants:
+    - "슬립모드이고 거실 모션 감지되면 거실 조명 켜 주고 3분 동안 움직임 없으면 꺼줘"
+    - {text: "취침모드일 때 거실 움직임 뜨면 거실등 켜고 5분 동안 인기척 없으면 꺼",
+       bind: {duration: "5분"}}
+    - {text: "슬립 모드 중에 안방 움직임 감지되면 안방 조명 켜 주고 10분 동안 없으면 꺼주세요",
+       bind: {motion: "안방 모션", device_light: "안방 조명", duration: "10분"}}
+    - {text: "취침모드 상태에서 욕실 모션 잡히면 욕실 불 켜고 3분 동안 움직임 없으면 도로 꺼줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 불"}}
+
+- gold_ref: multiclause_three_rules
+  area: multiclause
+  variants:
+    - "거실 모션 감지되면 거실 조명 켜 주고 3분 동안 움직임 없으면 거실 조명 꺼 주고 취침모드 켜지면 모든 조명 꺼줘"
+    - {text: "거실 움직임 뜨면 거실등 켜고 5분 동안 인기척 없으면 거실등 끄고 슬립모드 켜지면 모든 불 다 꺼",
+       bind: {duration: "5분"}}
+    - {text: "안방 움직임 감지되면 안방 조명 켜 주고 10분 동안 없으면 안방 조명 꺼 주고 슬립 모드 켜지면 집의 모든 조명 꺼줘",
+       bind: {motion: "안방 모션", device_light: "안방 조명", duration: "10분",
+              scope: "집의 모든"}}
+
+- gold_ref: multiclause_qm_comma
+  area: multiclause
+  variants:
+    - "거실 모션 뜨면 거실 조명 켜 주고, 안방 모션 뜨면 안방 조명 켜 줘"
+    - "거실에 움직임 뜨면 거실 조명 켜고, 안방에 움직임 뜨면 안방 조명 켜줘"
+
+- gold_ref: multiclause_qm_5bungan
+  area: multiclause
+  variants:
+    - "거실 모션 감지되면 거실 조명 켜 주고 5분간 움직임 없으면 꺼줘"
+    - "거실 움직임 뜨면 거실등 켜고 5분간 인기척 없으면 다시 꺼"
+    - {text: "욕실 모션 잡히면 욕실 불 켜 주고 5분간 아무도 없으면 꺼주세요",
+       bind: {motion: "욕실 모션", device_light: "욕실 불"}}
+
+# ===========================================================================
+# 1부. gold_ref 상속형 — TARGET 영역 (단일 규칙 대상 해석)
+# ===========================================================================
+- gold_ref: target_basic_on
+  area: target
+  variants:
+    - "거실 움직임 보이면 거실 조명 켜 줘"
+    - "거실 인기척 감지되는 순간 거실등 켜줘"
+    - {text: "안방 움직임 뜨면 안방 불 좀 켜줄래", bind: {motion: "안방 모션", device_light: "안방 불"}}
+    - {text: "욕실 모션 잡히면 욕실 조명 켜지게 해줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 조명"}}
+    - "거실 모션 반응하면 거실 전등 켜주면 좋겠어"
+    - {text: "안방 모션 감지되거든 안방 조명 켜 주세요",
+       bind: {motion: "안방 모션", device_light: "안방 조명"}}
+
+- gold_ref: target_basic_off
+  area: target
+  variants:
+    - "거실 움직임 없으면 거실 조명 꺼줘"
+    - "거실 인기척 안 잡히면 거실등 꺼 줘"
+    - {text: "안방 움직임 없으면 안방 불 꺼주세요", bind: {motion: "안방 모션", device_light: "안방 불"}}
+    - {text: "욕실 모션 없으면 욕실 불 꺼", bind: {motion: "욕실 모션", device_light: "욕실 불"}}
+
+- gold_ref: target_scope_all
+  area: target
+  variants:
+    - "거실 움직임 감지되면 거실 불 포함 모든 조명 꺼줘"
+    - {text: "거실 인기척 뜨면 거실등 비롯해서 집의 모든 조명 꺼줘", bind: {scope: "집의 모든"}}
+    - {text: "안방 움직임 감지되면 안방 조명 포함 모든 불 꺼주세요",
+       bind: {motion: "안방 모션", device_light: "안방 조명"}}
+
+- gold_ref: target_fan_on
+  area: target
+  bind: {motion: "욕실 모션"}
+  variants:
+    - "욕실 움직임 감지되면 환풍기 켜줘"
+    - "욕실 모션 뜨면 욕실 환풍기 돌려줘"
+    - {text: "욕실 움직임 있으면 욕실 환기팬 좀 틀어줘", bind: {device_fan: "욕실 환기팬"}}
+    - "욕실 모션 반응하면 환풍기 가동해줘"
+
+- gold_ref: target_climate_on
+  area: target
+  variants:
+    - "거실 움직임 감지되면 에어컨 켜줘"
+    - "거실 모션 뜨면 거실 에어컨 틀어줘"
+    - "거실 인기척 있으면 거실 에어컨 좀 켜 주라"
+
+- gold_ref: target_two_actions
+  area: target
+  variants:
+    - {text: "욕실 움직임 감지되면 욕실 조명 켜고 환풍기도 켜줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 조명"}}
+    - {text: "욕실 모션 뜨면 욕실 불 켜고 욕실 환풍기 같이 틀어줘",
+       bind: {motion: "욕실 모션", device_light: "욕실 불"}}
+    - "거실 움직임 잡히면 거실 조명 켜고 환풍기 켜 줘"
+    - {text: "안방 움직임 뜨면 안방 조명 켜고 환풍기도 돌려줘",
+       bind: {motion: "안방 모션", device_light: "안방 조명"}}
+
+- gold_ref: target_percent
+  area: target
+  variants:
+    - {text: "거실 움직임 감지되면 거실 조명 10프로로 켜줘", bind: {percent: "10프로"}}
+    - {text: "거실 모션 뜨면 거실등 30% 밝기로 켜 줘", bind: {percent: "30%"}}
+    - {text: "거실 인기척 있으면 거실 불 50프로만 켜줘", bind: {percent: "50프로"}}
+    - {text: "안방 움직임 감지되면 안방 조명 10퍼센트로 은은하게 켜줘",
+       bind: {motion: "안방 모션", device_light: "안방 조명", percent: "10퍼센트"}}
+    - {text: "욕실 모션 잡히면 욕실 조명 70%로 켜 주세요",
+       bind: {motion: "욕실 모션", device_light: "욕실 조명", percent: "70%"}}
+
+- gold_ref: target_qm_moodlight
+  area: target
+  variants:
+    - "거실 움직임 감지되면 무드등 켜줘"
+    - "거실 모션 뜨면 무드등만 살짝 켜 줘"
+    - "거실 인기척 있으면 무드등 켜지게 해줘"
+
+# ===========================================================================
+# 1부. gold_ref 상속형 — SINGLE 영역 (v2 골든 회귀, 고정 gold)
+# ===========================================================================
+- gold_ref: single_golden_1_bathroom_fan_off
+  area: single
+  variants:
+    - "욕실에 5분 동안 인기척 없으면 환풍기랑 불 꺼줘"
+    - "화장실에 5분간 움직임 없으면 환풍기하고 조명 꺼 줘"
+
+- gold_ref: single_golden_2_arrival_two_persons
+  area: single
+  variants:
+    - "나랑 와이프 둘 다 집에 오면 현관 불 켜줘"
+    - "와이프랑 내가 집에 도착하면 현관 조명 켜 줘"
+
+- gold_ref: single_golden_3_numeric_ac_on
+  area: single
+  variants:
+    - "여름에 거실이 28도 넘으면 에어컨 켜줘"
+    - "여름철에 거실 온도가 28도 이상으로 올라가면 에어컨 틀어줘"
+
+- gold_ref: single_golden_4_loop_basic
+  area: single
+  variants:
+    - "거실에서 움직임이 감지되면 거실 조명을 켜 주세요"
+    - "거실에 인기척이 보이면 거실 조명 켜 줄래"
+
+- gold_ref: single_golden_5_segment_brightness
+  area: single
+  variants:
+    - "새벽시간에 거실 움직임 있으면 거실 조명 10%로 켜줘"
+    - "거실 조명은 새벽에 인기척 있으면 10프로로 켜 줘"
+
+- gold_ref: single_golden_6_bedroom_loop
+  area: single
+  variants:
+    - "안방에서 움직임 감지되면 안방 불 켜줘"
+
+- gold_ref: single_golden_7_bathroom_loop
+  area: single
+  variants:
+    - "화장실에 움직임이 보이면 욕실 조명 켜 줘"
+
+- gold_ref: single_golden_8_segment_trigger
+  area: single
+  variants:
+    - "저녁 되면 거실 조명 켜줘"
+    - "저녁이 되거든 거실 불 켜 주세요"
+
+# ===========================================================================
+# 2부. 명시 gold 형 (hard cases) — 구두점 부착 경계 / 대체 종결
+# ===========================================================================
+- id: hard_comma_delay_off
+  area: misparse
+  tags: [punctuation, delay]
+  note: "액션 경계에 쉼표가 붙으면('켜주고,') '-고' 종결 인식이 깨지는지 검증."
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "on"}]
+        conditions: []
+        actions:
+          - {type: service, action: "light.turn_on", target: {entity_id: ["light.entrance"]}}
+          - {type: delay, duration: {hours: 0, minutes: 3, seconds: 0}}
+          - {type: service, action: "light.turn_off", target: {entity_id: ["light.entrance"]}}
+  variants:
+    - "현관문이 열리면 현관 불 켜주고, 3분 뒤에 꺼줘"
+    - "현관문 열리면 현관 조명 켜 줬다가, 3분 후에 꺼 줘"
+
+- id: hard_comma_held_off
+  area: misparse
+  tags: [punctuation, multiclause]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 10, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "거실 모션 감지되면 거실등 켜 주고, 10분 동안 움직임 없으면 꺼 줘"
+
+- id: hard_comma_two_actions
+  area: misparse
+  tags: [punctuation, multi-action]
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions:
+          - {type: service, action: "media_player.turn_off",
+             target: {entity_id: ["media_player.living_room_tv"]}}
+          - {type: service, action: "light.turn_off",
+             target: {entity_id: ["light.living_room_main"]}}
+  variants:
+    - "취침모드 켜지면 티비 끄고, 거실 조명도 꺼줘"
+
+- id: hard_alt_endings_door
+  area: misparse
+  tags: [alt-ending]
+  note: "'열릴 때/열리거든/열린다면' — '면' 이외 종결의 트리거 인식."
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.entrance"]}}]
+  variants:
+    - "현관문 열릴 때 현관 조명 켜줘"
+    - "현관문이 열리거든 현관 불을 켜줘"
+    - "현관문이 열린다면 현관 조명을 켜 줘"
+
+# ===========================================================================
+# 2부. 명시 gold 형 — 모드 극성반전 ('해제/취소/풀리다' = off)
+# ===========================================================================
+- id: hard_mode_unlock_trigger
+  area: mode
+  tags: [mode-polarity]
+  note: "'풀리면' = 모드 off 트리거(현행 파서는 켜지/꺼지/아니만 인식)."
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "슬립 모드가 풀리면 거실 커튼 열어줘"
+    - "취침모드 풀리면 거실 커튼 걷어줘"
+
+- id: hard_mode_cancel_action
+  area: mode
+  tags: [mode-polarity, set-mode]
+  note: "'취소해줘' = 모드 off 설정(액션 극성)."
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:00"}]
+        conditions: []
+        actions: [{type: set_mode, mode: "슬립 모드", to: "off"}]
+  variants:
+    - "밤 11시가 되면 슬립모드 취소해줘"
+    - "매일 밤 11시에 취침모드 취소해 줘"
+
+- id: hard_mode_release_action
+  area: mode
+  tags: [mode-polarity, set-mode]
+  warnings:
+    - "'아침 7시가 되면'은 반복(매일) 의도로 해석 — 1회성일 가능성은 낮다고 봄."
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "07:00"}]
+        conditions: []
+        actions: [{type: set_mode, mode: "슬립 모드", to: "off"}]
+  variants:
+    - "매일 아침 7시에 취침모드 풀어줘"
+    - "아침 7시가 되면 슬립모드 풀어 줘"
+
+# ===========================================================================
+# 2부. 명시 gold 형 — 계사 생략 조건("슬립모드면") / 지속시간 이형태
+# ===========================================================================
+- id: hard_mode_copula_condition
+  area: mode
+  tags: [copula-omitted, mode-condition]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: mode, mode: "슬립 모드", state: "on"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "슬립모드면 거실 모션 감지될 때 거실 조명 켜 줘"
+    - "취침모드면 거실 움직임 뜰 때 거실 조명 켜줘"
+
+- id: hard_mode_copula_trigger_ambiguous
+  area: mode
+  tags: [copula-omitted, mode-trigger]
+  warnings:
+    - "'슬립모드면 티비 꺼줘'는 모드 전환 트리거(켜질 때)로 해석했지만, 상시 조건('모드인 동안')으로도 읽힐 수 있음 — 사용자 확인 필요."
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "슬립모드면 티비 꺼줘"
+
+- id: hard_duration_gan_living
+  area: time
+  tags: [duration-variant, held]
+  note: "'N분간' — 현행 P1 패턴은 '동안'을 요구해 지속시간이 유실됨."
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 10, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "거실에 10분간 인기척 없으면 거실등 꺼줘"
+    - "거실에 10분간 아무 움직임 없으면 거실 조명 꺼 줘"
+
+- id: hard_duration_gan_bath
+  area: time
+  tags: [duration-variant, held, multi-action]
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.bathroom_motion",
+                    to: "off", for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions:
+          - {type: service, action: "light.turn_off", target: {entity_id: ["light.bathroom"]}}
+          - {type: service, action: "fan.turn_off", target: {entity_id: ["fan.bathroom_fan"]}}
+  variants:
+    - "욕실에 5분간 움직임 없으면 욕실 불이랑 환풍기 꺼줘"
+
+- id: hard_duration_hour_half
+  area: time
+  tags: [duration-variant, held]
+  note: "'1시간 반' = 90분 — 숫자+단위 정규식이 '반'을 못 읽음."
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.master_bedroom_motion",
+                    to: "off", for: {hours: 1, minutes: 30, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "안방에 1시간 반 동안 움직임이 없으면 안방 조명 꺼줘"
+    - "한 시간 반 동안 안방에 인기척 없으면 안방 불 꺼 줘"
+
+- id: hard_held_door_open
+  area: time
+  tags: [duration-variant, held]
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.entrance_door",
+                    to: "on", for: {hours: 0, minutes: 30, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.entrance"]}}]
+  variants:
+    - "현관문이 30분 넘게 열려 있으면 현관 조명 켜줘"
+
+# ===========================================================================
+# 2부. 명시 gold 형 — 어간 구멍 (움직이지 않으면 / 더우면 / 습하면 …)
+# ===========================================================================
+- id: hard_stem_not_moving
+  area: misparse
+  tags: [stem-gap, negation]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "off"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "거실에서 아무도 움직이지 않으면 거실 불 꺼줘"
+
+- id: hard_stem_not_moving_held
+  area: misparse
+  tags: [stem-gap, negation, held]
+  gold:
+    subrules:
+      - triggers: [{type: state_held, entity_id: "binary_sensor.living_room_motion",
+                    to: "off", for: {hours: 0, minutes: 5, seconds: 0}}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_off",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "거실에 5분 동안 아무도 움직이지 않으면 거실 조명 꺼줘"
+
+- id: hard_stem_hot
+  area: misparse
+  tags: [stem-gap, numeric]
+  warnings:
+    - "'더우면'의 기준 온도 미지정 — 28도(한국 냉방 관례)로 가정. 센서는 거실 온도로 가정."
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    above: 28.0}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_ac"]}}]
+  variants:
+    - "거실이 더우면 에어컨 켜줘"
+    - "집이 더우면 에어컨 좀 틀어줘"
+
+- id: hard_stem_cold
+  area: misparse
+  tags: [stem-gap, numeric]
+  warnings:
+    - "'추우면'의 기준 온도 미지정 — 18도로 가정. 센서는 거실 온도로 가정."
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    below: 18.0}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_boiler"]}}]
+  variants:
+    - "거실이 추우면 보일러 켜줘"
+
+- id: hard_stem_humid
+  area: misparse
+  tags: [stem-gap, numeric]
+  warnings:
+    - "'습하면'의 기준 습도 미지정 — 70%로 가정."
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.master_bedroom_humidity",
+                    above: 70.0}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.veranda_erv"]}}]
+  variants:
+    - "안방이 습하면 전열교환기 틀어줘"
+
+- id: hard_stem_dusty
+  area: misparse
+  tags: [stem-gap, numeric]
+  warnings:
+    - "'많으면'의 기준 농도 미지정 — 35µg/m³(나쁨 기준)로 가정."
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.veranda_pm25", above: 35.0}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_off",
+                   target: {entity_id: ["fan.veranda_erv"]}}]
+  variants:
+    - "베란다 미세먼지 많으면 전열교환기 꺼줘"
+
+# ===========================================================================
+# 2부. 명시 gold 형 — 대상 미해석 (천장등/선풍기/다/거실 빼고/아이방/무드등)
+# ===========================================================================
+- id: hard_target_ceiling
+  area: target
+  tags: [target-unresolved]
+  warnings:
+    - "'천장등' 표면형이 어휘에 없음 — 거실 메인등(light.living_room_main)으로 가정."
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.entrance_door", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]}}]
+  variants:
+    - "현관문 열리면 거실 천장등 켜줘"
+
+- id: hard_target_seonpunggi
+  area: target
+  tags: [target-unresolved]
+  warnings:
+    - "'선풍기' 엔티티가 인벤토리에 없음 — fan 도메인의 전열교환기로 가정(실사용자는 수동매핑 필요)."
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    above: 28.0}]
+        conditions: []
+        actions: [{type: service, action: "fan.turn_on",
+                   target: {entity_id: ["fan.veranda_erv"]}}]
+  variants:
+    - "거실이 28도 넘으면 선풍기 틀어줘"
+
+- id: hard_target_all_off
+  area: target
+  tags: [target-unresolved, scope-all]
+  warnings:
+    - "'다/전부'의 범위를 조명 전체(8개)로 가정 — 스위치·TV 포함 여부는 모호."
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:00"}]
+        conditions: []
+        actions:
+          - {type: service, action: "light.turn_off",
+             target: {entity_id: ["light.bathroom", "light.entrance", "light.kitchen",
+                                  "light.living_room_main", "light.living_room_mood",
+                                  "light.master_bedroom", "light.small_room",
+                                  "light.veranda"]}}
+  variants:
+    - "밤 11시가 되면 다 꺼줘"
+    - "매일 밤 11시에 불 다 꺼줘"
+    - "밤 11시 되면 집안 조명 전부 꺼 줘"
+
+- id: hard_target_except_living
+  area: target
+  tags: [target-unresolved, scope-except]
+  warnings:
+    - "'다'의 범위를 조명으로 가정. '거실 빼고' = 거실 소속 조명(메인등·무드등) 제외."
+  gold:
+    subrules:
+      - triggers: [{type: mode, mode: "슬립 모드", to: "on"}]
+        conditions: []
+        actions:
+          - {type: service, action: "light.turn_off",
+             target: {entity_id: ["light.bathroom", "light.entrance", "light.kitchen",
+                                  "light.master_bedroom", "light.small_room",
+                                  "light.veranda"]}}
+  variants:
+    - "취침모드 켜지면 거실 빼고 다 꺼줘"
+    - "슬립모드 켜지면 거실만 놔두고 불 전부 꺼 줘"
+
+- id: hard_target_kidsroom
+  area: target
+  tags: [target-unresolved]
+  warnings:
+    - "'아이방'이 어휘에 없음 — 작은방(light.small_room)으로 가정(사용자 확인 필요)."
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "20:00"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.small_room"]}}]
+  variants:
+    - "매일 저녁 8시에 아이방 불 켜줘"
+
+- id: hard_target_mood_evening
+  area: target
+  tags: [target-unresolved]
+  note: "'무드등' — 이름 사전에 없는 별칭형(거실 무드등의 축약)."
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: "evening"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_mood"]}}]
+  variants:
+    - "저녁이 되면 무드등 켜줘"
+
+# ===========================================================================
+# 2부. 명시 gold 형 — 값 (절반/최대/온도 설정/영하/단위 생략)
+# ===========================================================================
+- id: hard_value_half
+  area: value
+  tags: [value, brightness]
+  gold:
+    subrules:
+      - triggers: [{type: segment, to: "evening"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]},
+                   data: {brightness_pct: 50}}]
+  variants:
+    - "저녁이 되면 거실 조명 밝기 절반으로 해줘"
+    - "저녁 되면 거실등 밝기를 절반으로 낮춰줘"
+
+- id: hard_value_max
+  area: value
+  tags: [value, brightness]
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: []
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]},
+                   data: {brightness_pct: 100}}]
+  variants:
+    - "거실 모션 감지되면 거실등 최대 밝기로 켜줘"
+    - "거실 움직임 뜨면 거실 조명 제일 밝게 켜 줘"
+
+- id: hard_value_boiler_settemp
+  area: value
+  tags: [value, temperature, set-temperature]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    below: 20.0}]
+        conditions: [{type: season, seasons: ["winter"]}]
+        actions: [{type: service, action: "climate.set_temperature",
+                   target: {entity_id: ["climate.living_room_boiler"]},
+                   data: {temperature: 26}}]
+  variants:
+    - "겨울에 거실 온도가 20도 아래로 떨어지면 보일러 26도로 맞춰줘"
+
+- id: hard_value_ac_settemp
+  area: value
+  tags: [value, temperature, set-temperature]
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    above: 28.0}]
+        conditions: []
+        actions: [{type: service, action: "climate.set_temperature",
+                   target: {entity_id: ["climate.living_room_ac"]},
+                   data: {temperature: 26}}]
+  variants:
+    - "거실 온도 28도 넘으면 에어컨 26도로 해줘"
+
+- id: hard_value_negative
+  area: value
+  tags: [value, negative-number]
+  warnings:
+    - "실외 온도 센서 부재 — 거실 온도 센서로 가정(음수 값 '영하 5도' 파싱 검증 목적)."
+  gold:
+    subrules:
+      - triggers: [{type: numeric_state, entity_id: "sensor.living_room_temperature",
+                    below: -5.0}]
+        conditions: []
+        actions: [{type: service, action: "climate.turn_on",
+                   target: {entity_id: ["climate.living_room_boiler"]}}]
+  variants:
+    - "온도가 영하 5도 밑으로 내려가면 보일러 켜줘"
+
+- id: hard_value_bare_number
+  area: value
+  tags: [value, brightness]
+  warnings:
+    - "'10'의 단위 생략 — %로 가정."
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: time_segment, segments: ["dawn"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]},
+                   data: {brightness_pct: 10}}]
+  variants:
+    - "새벽에 거실 움직임 있으면 거실등 10으로 켜줘"
+
+# ===========================================================================
+# 2부. 명시 gold 형 — 시간범위 / 요일
+# ===========================================================================
+- id: hard_time_range
+  area: time
+  tags: [time-range]
+  note: "'N시부터 M시까지' — 현행 파서는 첫 시각+한 방향(after)만 취해 범위가 유실됨."
+  gold:
+    subrules:
+      - triggers: [{type: state, entity_id: "binary_sensor.living_room_motion", to: "on"}]
+        conditions: [{type: time, after: "22:00:00", before: "07:00:00"}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.living_room_main"]},
+                   data: {brightness_pct: 10}}]
+  variants:
+    - "밤 10시부터 아침 7시까지 거실에 움직임이 감지되면 거실 조명을 10%로 켜줘"
+    - "밤 10시부터 아침 7시 사이에 거실 움직임 뜨면 거실등 10프로로 켜 줘"
+    - "밤 10시부터 아침 7시까지는 거실 인기척 감지돼도 거실등 10퍼센트로만 켜줘"
+
+- id: hard_time_weekend
+  area: time
+  tags: [weekday, day-type]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "09:00"}]
+        conditions: [{type: day_type, types: ["weekend"]}]
+        actions: [{type: service, action: "cover.open_cover",
+                   target: {entity_id: ["cover.living_room_curtain"]}}]
+  variants:
+    - "주말마다 아침 9시에 거실 커튼 열어줘"
+    - "주말 아침 9시가 되면 거실 커튼 걷어줘"
+
+- id: hard_time_mwf
+  area: time
+  tags: [weekday]
+  note: "'월수금' 축약 요일 — day_type(주말/평일)에 없는 개별 요일 지정."
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "07:00"}]
+        conditions: [{type: time, weekday: ["mon", "wed", "fri"]}]
+        actions: [{type: service, action: "light.turn_on",
+                   target: {entity_id: ["light.master_bedroom"]}}]
+  variants:
+    - "월수금 아침 7시에 안방 불 켜줘"
+    - "월요일 수요일 금요일 아침 7시가 되면 안방 조명 켜 줘"
+
+- id: hard_time_weekday_tv
+  area: time
+  tags: [weekday, day-type]
+  gold:
+    subrules:
+      - triggers: [{type: daily, at: "23:30"}]
+        conditions: [{type: day_type, types: ["weekday"]}]
+        actions: [{type: service, action: "media_player.turn_off",
+                   target: {entity_id: ["media_player.living_room_tv"]}}]
+  variants:
+    - "평일 밤 11시 반이 되면 티비 꺼줘"

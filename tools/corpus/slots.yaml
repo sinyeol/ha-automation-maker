@@ -1,0 +1,129 @@
+# slots.yaml — 공유 슬롯 필러 사전 (SPEC-CORPUS §2.1)
+#
+# 각 슬롯: 표면형(surface) → 값/엔티티. 표면형은 여러 이형태를 망라한다.
+# 엔티티는 mock_data.py 의 실존 entity_id 만 사용(evaluate 가 그 인벤토리로 파서를 돌린다).
+# 사용자 노출 문자열은 한국어, 코드 식별자(entity/area/value)는 영어.
+#
+# 조사(이/가·을/를)와 어미/존대 변이는 슬롯이 아니라 templates.yaml 의 조사 토큰({가}/{을})과
+# 아래 expansion_rules(<off>/<on>)로 처리해 슬롯 수를 줄인다(리서치 델타 §7.1·§7.2).
+
+# ---------------------------------------------------------------------------
+# 공용 expansion_rules (SPEC-CORPUS §7.1) — 예약 키(슬롯 아님).
+# templates 문장부의 <off>/<on> 을 hassil 식 대안 그룹으로 전개한다. 어느 대안이 선택돼도
+# gold 의 동작(turn_off/turn_on)은 동일하므로 라벨은 템플릿별로 고정된다.
+# ---------------------------------------------------------------------------
+expansion_rules:
+  "<off>": "(꺼|꺼줘|꺼주세요|끄다)"
+  "<on>": "(켜|켜줘|틀어줘|켜주세요)"
+
+# ---------------------------------------------------------------------------
+# device_light — 방별 조명. 개념(조명/불/등/전등) × 방 이형태.
+#   "거실 조명"[OK] · "거실 불"[OK] · "거실 전등"[OK] 은 파서가 해석,
+#   "거실등"(붙여쓰기, 개념어 미등록)은 의도적 오판 유발(커버리지 갭 신호).
+# ---------------------------------------------------------------------------
+device_light:
+  - {surface: "거실 조명", entity: "light.living_room_main", area: living_room}
+  - {surface: "거실 불", entity: "light.living_room_main", area: living_room}
+  - {surface: "거실 전등", entity: "light.living_room_main", area: living_room}
+  - {surface: "거실등", entity: "light.living_room_main", area: living_room}
+  - {surface: "안방 조명", entity: "light.master_bedroom", area: master_bedroom}
+  - {surface: "안방 불", entity: "light.master_bedroom", area: master_bedroom}
+  - {surface: "안방등", entity: "light.master_bedroom", area: master_bedroom}
+  - {surface: "작은방 조명", entity: "light.small_room", area: small_room}
+  - {surface: "작은방 불", entity: "light.small_room", area: small_room}
+  - {surface: "주방 조명", entity: "light.kitchen", area: kitchen}
+  - {surface: "부엌 조명", entity: "light.kitchen", area: kitchen}
+  - {surface: "주방 불", entity: "light.kitchen", area: kitchen}
+  - {surface: "현관 조명", entity: "light.entrance", area: entrance}
+  - {surface: "현관 불", entity: "light.entrance", area: entrance}
+  - {surface: "베란다 조명", entity: "light.veranda", area: veranda}
+  - {surface: "욕실 조명", entity: "light.bathroom", area: bathroom}
+  - {surface: "화장실 조명", entity: "light.bathroom", area: bathroom}
+  - {surface: "욕실 불", entity: "light.bathroom", area: bathroom}
+
+# ---------------------------------------------------------------------------
+# device_fan / device_climate — 환풍기·에어컨(실존 엔티티 소수)
+# ---------------------------------------------------------------------------
+device_fan:
+  - {surface: "욕실 환풍기", entity: "fan.bathroom_fan", area: bathroom}
+  - {surface: "욕실 환기팬", entity: "fan.bathroom_fan", area: bathroom}
+  - {surface: "환풍기", entity: "fan.bathroom_fan", area: bathroom}
+
+device_climate:
+  - {surface: "거실 에어컨", entity: "climate.living_room_ac", area: living_room}
+  - {surface: "거실 냉방", entity: "climate.living_room_ac", area: living_room}
+  - {surface: "에어컨", entity: "climate.living_room_ac", area: living_room}
+
+# ---------------------------------------------------------------------------
+# motion — 모션/움직임/인기척 이형태 × 방. (트리거 절 "감지되면/작동하면" 용)
+#   held(지속) 절 "N분 동안 (모션/움직임)이 없으면" 은 앞 절 센서를 재참조하므로
+#   슬롯이 아니라 templates 에서 bare "모션"/"움직임" 으로 쓴다.
+# ---------------------------------------------------------------------------
+motion:
+  - {surface: "거실 모션", entity: "binary_sensor.living_room_motion", area: living_room}
+  - {surface: "거실 움직임", entity: "binary_sensor.living_room_motion", area: living_room}
+  - {surface: "거실 인기척", entity: "binary_sensor.living_room_motion", area: living_room}
+  - {surface: "안방 모션", entity: "binary_sensor.master_bedroom_motion", area: master_bedroom}
+  - {surface: "안방 움직임", entity: "binary_sensor.master_bedroom_motion", area: master_bedroom}
+  - {surface: "욕실 모션", entity: "binary_sensor.bathroom_motion", area: bathroom}
+  - {surface: "욕실 움직임", entity: "binary_sensor.bathroom_motion", area: bathroom}
+
+# ---------------------------------------------------------------------------
+# mode — 모든 표면 이형태를 정규명 "슬립 모드" 로 정규화(settings.modes 키와 일치).
+# ---------------------------------------------------------------------------
+mode:
+  - {surface: "슬립 모드", value: "슬립 모드"}
+  - {surface: "슬립모드", value: "슬립 모드"}
+  - {surface: "취침 모드", value: "슬립 모드"}
+  - {surface: "취침모드", value: "슬립 모드"}
+
+# ---------------------------------------------------------------------------
+# segment — 시간대. 표면형에 처소격(에) 포함, value 는 파서/엔진 키.
+# ---------------------------------------------------------------------------
+segment:
+  - {surface: "새벽에", value: dawn}
+  - {surface: "새벽시간에", value: dawn}
+  - {surface: "아침에", value: morning}
+  - {surface: "저녁에", value: evening}
+  - {surface: "밤에", value: night}
+
+# ---------------------------------------------------------------------------
+# percent — 밝기/세기. %/퍼센트/프로 이형태.
+# ---------------------------------------------------------------------------
+percent:
+  - {surface: "10%", value: 10}
+  - {surface: "10퍼센트", value: 10}
+  - {surface: "10프로", value: 10}
+  - {surface: "30%", value: 30}
+  - {surface: "30퍼센트", value: 30}
+  - {surface: "50%", value: 50}
+  - {surface: "50프로", value: 50}
+  - {surface: "70%", value: 70}
+
+# ---------------------------------------------------------------------------
+# duration — 지속시간 표면형 → dur 객체(hours/minutes/seconds). "N분 동안" 절에서 사용.
+# ---------------------------------------------------------------------------
+duration:
+  - {surface: "3분", dur: {hours: 0, minutes: 3, seconds: 0}}
+  - {surface: "5분", dur: {hours: 0, minutes: 5, seconds: 0}}
+  - {surface: "10분", dur: {hours: 0, minutes: 10, seconds: 0}}
+  - {surface: "30분", dur: {hours: 0, minutes: 30, seconds: 0}}
+
+# ---------------------------------------------------------------------------
+# scope — 스코프 전개. "{scope.expand}" 는 문맥 도메인(여기선 light) 전체 entity_id 로
+#   확장(evaluate 가 인벤토리로 계산). "모든" 만 파서가 스코프로 인식,
+#   "전부"/"다" 는 의도적 오판 유발(파서가 스코프로 안 봄).
+# ---------------------------------------------------------------------------
+scope:
+  - {surface: "모든", expand: true}
+  - {surface: "집의 모든", expand: true}
+  - {surface: "전부", expand: true}
+  - {surface: "다", expand: true}
+
+# ---------------------------------------------------------------------------
+# connective_pair — 다중 규칙 경계·액션 연결 이형태(§2.1). templates 인라인 참고용.
+# ---------------------------------------------------------------------------
+connective_pair:
+  - {surface: "켜주고", kind: action_then_boundary}
+  - {surface: "꺼주고", kind: action_then_boundary}
+  - {surface: "켜고", kind: action_then_boundary}
