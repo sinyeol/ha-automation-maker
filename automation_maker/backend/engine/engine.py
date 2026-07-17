@@ -271,6 +271,9 @@ class RuleEngine:
             elif typ == "sun":
                 self._schedule_sun(rid, flat, t)
                 has_trigger = True
+            elif typ == "time_pattern":
+                self._schedule_pattern(rid, flat, t)
+                has_trigger = True
             elif typ == "segment":
                 has_trigger = True
             elif typ == "mode":
@@ -612,6 +615,72 @@ class RuleEngine:
         finally:
             if loc is not None:
                 self._schedule_sun(rid, flat, loc[2])  # 익일 재장전(next_event 가 내일 반환)
+
+    @staticmethod
+    def _next_pattern_time(now: datetime, unit: str, n: int) -> datetime:
+        """벽시계 필드가 N 배수인 **now 보다 엄격히 이후**의 다음 시각(HA `/N` 동형).
+
+        seconds: second%N==0(시/분 무관) · minutes: minute%N==0·second=0 ·
+        hours: hour%N==0·minute=second=0. 분/초 경계에서 롤오버 시 하위 필드 0 은 항상
+        N 의 배수(0%N==0)라 자연히 다음 슬롯으로 넘어간다. 결정적(주입 now 로만 통제).
+        """
+        cand = now.replace(microsecond=0)
+        if unit == "minutes":
+            cand = cand.replace(second=0)
+            step, field = timedelta(minutes=1), "minute"
+        elif unit == "hours":
+            cand = cand.replace(minute=0, second=0)
+            step, field = timedelta(hours=1), "hour"
+        else:  # seconds
+            step, field = timedelta(seconds=1), "second"
+        for _ in range(1500):  # 안전 상한(최악 60틱이면 충분, 무한루프 방지)
+            if cand > now and getattr(cand, field) % n == 0:
+                return cand
+            cand += step
+        return cand
+
+    def _schedule_pattern(self, rid, flat, t) -> None:
+        """time_pattern 트리거의 다음 배수 시각으로 타이머를 무장한다(APP-PORT-PLAN §2.3).
+
+        hours|minutes|seconds 중 정수 N(≥1) 하나를 읽어 다음 배수 시각을 계산한다(HA `/N`).
+        _daily_timers 를 재사용하므로 stop/_unindex_rule/_compile_all 의 취소 경로가 그대로
+        적용된다. 재시작(_compile_all)·재연결(resync)은 재계산만 하며 이 콜백을 직접 호출하지
+        않으므로 자동 발화가 없다(§4.2 게이트4). 발화 시 조건 재평가는 _try_fire 가 담당.
+        """
+        unit = n = None
+        for k in ("seconds", "minutes", "hours"):
+            v = t.get(k)
+            if v is None:
+                continue
+            try:
+                cand_n = int(str(v).lstrip("/"))  # 정수 또는 "/N" 문자열 모두 허용
+            except (TypeError, ValueError):
+                return
+            if cand_n >= 1:
+                unit, n = k, cand_n
+                break
+        if unit is None:
+            return
+        now = self._now_fn()
+        when = self._next_pattern_time(now, unit, n)
+        delay = (when - now).total_seconds()
+        self._daily_timers[(rid, flat)] = self._loop.call_later(
+            max(1.0, delay), self._on_pattern, rid, flat)
+
+    def _on_pattern(self, rid, flat) -> None:
+        self._daily_timers.pop((rid, flat), None)
+        rule = self._rules.get(rid)
+        if rule is None:
+            return
+        loc = _locate(rule.get("model") or {}, flat)
+        try:
+            if loc is not None:
+                self._try_fire(rule, loc[0], loc[1])
+        except Exception:
+            log.exception("time_pattern 트리거 처리 오류")
+        finally:
+            if loc is not None:
+                self._schedule_pattern(rid, flat, loc[2])  # 다음 배수 시각으로 재장전
 
     # ------------------------------------------------------------------ 발화
     def _ctx(self, fired_index=None) -> EvalContext:

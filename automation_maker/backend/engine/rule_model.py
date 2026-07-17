@@ -35,6 +35,26 @@ def _check_int_offset(v, path, errors) -> None:
     elif abs(v) > _MAX_SUN_OFFSET:
         errors.append({"path": path, "message": "오프셋은 ±12시간(43200초) 이내여야 합니다."})
 
+
+def _check_time_pattern(t, path, errors) -> None:
+    """time_pattern 주기: hours|minutes|seconds 중 **정확히 1개**, 정수 N≥1,
+    minutes/seconds ≤59, hours ≤23(HA `/N` 동형, 엔진 v2 방언은 정수로 저장)."""
+    present = [k for k in ("hours", "minutes", "seconds") if t.get(k) is not None]
+    if len(present) != 1:
+        errors.append({"path": path,
+                       "message": "시/분/초 주기 중 정확히 하나만 지정해 주세요."})
+        return
+    key = present[0]
+    v = t.get(key)
+    if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+        errors.append({"path": path + "." + key,
+                       "message": "주기는 1 이상의 정수여야 합니다."})
+        return
+    limit = 23 if key == "hours" else 59
+    if v > limit:
+        errors.append({"path": path + "." + key,
+                       "message": f"주기는 {limit} 이하여야 합니다."})
+
 # 액션에서 실행을 허용하는 서비스 도메인 화이트리스트(보안). API 직접 호출 시 임의 서비스
 # (hassio.addon_stop 등)가 admin 권한으로 실행되는 것을 막는다.
 # KNOWN_SERVICES 의 도메인 + scene/script/input_boolean/notify.
@@ -123,6 +143,8 @@ def _validate_trigger(t, path, errors, valid_ids, mode_names=None) -> None:
         if t.get("event") not in _SUN_EVENTS:
             errors.append({"path": path + ".event", "message": "일출 또는 일몰을 선택해 주세요."})
         _check_int_offset(t.get("offset"), path + ".offset", errors)
+    elif typ == "time_pattern":
+        _check_time_pattern(t, path, errors)
     elif typ == "segment":
         if t.get("to") not in _SEGMENT_KEYS:
             errors.append({"path": path + ".to", "message": "시간대 값이 올바르지 않습니다."})

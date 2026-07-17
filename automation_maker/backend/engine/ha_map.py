@@ -42,10 +42,19 @@ def _map_trigger(t: dict, warnings: list) -> dict | None:
     if typ == "daily":
         at = str(t.get("at") or "")
         return {"type": "time", "at": at if at.count(":") == 2 else at + ":00"}
+    if typ == "time_pattern":
+        # §2.6: 엔진 v2 방언(정수 N)을 HA `/N` 표기로. 이미 "/N" 문자열이면 그대로 둔다.
+        out = {"type": "time_pattern"}
+        for k in ("hours", "minutes", "seconds"):
+            v = t.get(k)
+            if v in (None, ""):
+                continue
+            out[k] = v if (isinstance(v, str) and v.startswith("/")) else f"/{int(v)}"
+        return out
     if typ in _UNMAPPABLE_TRIGGERS:
         warnings.append(f"HA 자동화로 변환할 수 없는 트리거 유형: {typ}")
         return None
-    # pass-through: state/numeric_state/zone/time/time_pattern/template/homeassistant
+    # pass-through: state/numeric_state/zone/time/template/homeassistant
     return dict(t) if isinstance(t, dict) else None
 
 
